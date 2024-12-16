@@ -234,9 +234,9 @@ class Mirror_Descent(Solver):
 		mirror_map = self.factors['mirror map']
 		diff = [i - j for (i,j) in zip(value_1, value_2)]
 
-		taylor_exp = self.mirror_map(value_2) + np.dot(gradient,diff)
+		taylor_exp = mirror_map(value_2) + np.dot(gradient,diff)
 
-		return self.mirror_map(value_1) - taylor_exp
+		return mirror_map(value_1) - taylor_exp
 
 	#TODO: remove this and add gradient function to fixed factors
 	def mirror_finite_diff(self, new_solution, BdsCheck, problem) :
@@ -261,7 +261,7 @@ class Mirror_Descent(Solver):
 		new_x = list(new_solution.x)
 		lower_bound = problem.lower_bounds
 		upper_bound = problem.upper_bounds
-		fn = self.mirror_map
+		fn = self.factors['mirror map']
 		dim = len(new_x) 
 		FnPlusMinus = np.zeros((dim, 3))
 		grad = np.zeros(dim)
