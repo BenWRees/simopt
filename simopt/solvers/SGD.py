@@ -3,11 +3,19 @@
 TODO: add bounds in
 
 """
+from __future__ import annotations
+from typing import Callable
+
 import numpy as np
 import warnings
 warnings.filterwarnings("ignore")
 
-from ..base import Solver
+from simopt.base import (
+    ConstraintType,
+    ObjectiveType,
+    Solver,
+    VariableType,
+)
 
 class SGD(Solver):
 	"""
@@ -37,26 +45,26 @@ class SGD(Solver):
 	check_factor_list : dict 
 		functions to check each fixed factor is performing
 	"""
+
+	@property
+	def objective_type(self) -> ObjectiveType: 
+		return ObjectiveType.SINGLE
 	
-	def __init__(self, name="SGD", fixed_factors=None):
-		"""
-			Initialisation of ths SGD solver see base.Solver 
-		
-		Parameters
-		----------
-		name : str, optional
-			user-specified name for solver
-		fixed_factors : None, optional
-			fixed_factors of the solver
-		"""
-		if fixed_factors is None:
-			fixed_factors = {}
-		self.name = name
-		self.objective_type = "single"
-		self.constraint_type = "box"
-		self.variable_type = "continuous"
-		self.gradient_needed = False
-		self.specifications = {
+	@property
+	def constraint_type(self) -> ConstraintType : 
+		return ConstraintType.BOX
+	
+	@property
+	def variable_type(self) -> VariableType :
+		return VariableType.CONTINUOUS
+	
+	@property
+	def gradient_needed(self) -> bool:
+		return False 
+	
+	@property 
+	def specifications(self) -> dict[str, dict] :
+		return {
 			"crn_across_solns": {
 				"description": "use CRN across solutions?",
 				"datatype": bool,
@@ -70,7 +78,7 @@ class SGD(Solver):
 			"alpha": {
 				"description": "step size",
 				"datatype": float,
-				"default": 1.5  # Changing the step size matters a lot.
+				"default": 0.9  # Changing the step size matters a lot.
 			},
 			"gradient clipping check" : {
 				"description": "checks if gradient clipping is in use",
@@ -85,28 +93,40 @@ class SGD(Solver):
 			"SPSA-like gradient": {
 				"description": "flag for using an spsa-like gradient",
 				"datatype": bool, 
-				"default": False
+				"default": False #Haven't got this working
 			}
 		}
-		self.check_factor_list = {
+	
+	@property 
+	def check_factor_list(self) -> dict[str, Callable] : 
+		return {
 			"crn_across_solns": self.check_crn_across_solns,
 			"r": self.check_r,
 			"alpha": self.check_alpha,
-			"sensitivity": self.check_sensitivity,
 			"gradient clipping check": self.check_gradient_clipping_bool,
 			"gradient clipping": self.check_gradient_clipping,
 			"SPSA-like gradient": self.check_spsa_gradient
 		}
-		super().__init__(fixed_factors)
+
+
+	def __init__(self, name="SGD", fixed_factors: dict | None =None) -> None:
+		"""
+			Initialisation of ths SGD solver see base.Solver 
+		
+		Parameters
+		----------
+		name : str, optional
+			user-specified name for solver
+		fixed_factors : None, optional
+			fixed_factors of the solver
+		"""
+		super().__init__(name, fixed_factors)
 
 	def check_r(self):
 		return self.factors["r"] > 0
 
 	def check_alpha(self):
 		return self.factors["alpha"] > 0
-
-	def check_sensitivity(self):
-		return self.factors["sensitivity"] > 0
 
 	def check_gradient_clipping(self) :
 		return True
@@ -192,6 +212,7 @@ class SGD(Solver):
 
 			# Create new solution based on new x
 			new_solution = self.create_new_solution(tuple(new_x), problem)
+			print('new solution: ', new_solution.x)
 			recommended_solns.append(new_solution)
 			intermediate_budgets.append(expended_budget)
 		return recommended_solns, intermediate_budgets
@@ -243,7 +264,7 @@ class SGD(Solver):
 			for i in range(len(grad)) : 
 				grad[i] = numerator/(2*delta[i])
 
-		grads[:,batch] = grad
+			grads[:,batch] = grad
 		grad_mean = np.mean(grads,axis=1)
 
 		return grad_mean
@@ -310,12 +331,16 @@ class SGD(Solver):
 				else:
 					FnPlusMinus[i, 2] = steph2
 					x2[i] = x2[i] - FnPlusMinus[i, 2]
+
+				fn1 = 0 
+				fn2 = 0
 				x1_solution = self.create_new_solution(tuple(x1), problem)
 				if BdsCheck[i] != -1:
 					problem.simulate_up_to([x1_solution], 1)
 					fn1 = -1 * problem.minmax[0] * x1_solution.objectives_mean
 					# First column is f(x+h,y).
 					FnPlusMinus[i, 0] = fn1
+				
 				x2_solution = self.create_new_solution(tuple(x2), problem)
 				if BdsCheck[i] != 1:
 					problem.simulate_up_to([x2_solution], 1)
