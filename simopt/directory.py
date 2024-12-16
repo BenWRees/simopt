@@ -33,6 +33,7 @@ from simopt.models.rmitd import RMITD, RMITDMaxRevenue
 from simopt.models.san import SAN, SANLongestPath
 from simopt.models.sscont import SSCont, SSContMinCost
 from simopt.models.tableallocation import TableAllocation, TableAllocationMaxRev
+from simopt.models.simple_function import SimpleFunctionModel, SimpleFunctionProblem
 
 # Import Solvers
 from simopt.solvers.adam import ADAM
@@ -42,6 +43,7 @@ from simopt.solvers.neldmd import NelderMead
 from simopt.solvers.randomsearch import RandomSearch
 from simopt.solvers.spsa import SPSA
 from simopt.solvers.strong import STRONG
+from simopt.solvers.trust_region_class import trust_region
 
 # directory dictionaries
 solver_directory: dict[str, type[Solver]] = {
@@ -52,6 +54,7 @@ solver_directory: dict[str, type[Solver]] = {
     "SPSA": SPSA,
     "ADAM": ADAM,
     "ALOE": ALOE,
+    "TRUSTREGION": trust_region
 }
 
 solver_unabbreviated_directory: dict[str, type[Solver]] = {
@@ -62,6 +65,7 @@ solver_unabbreviated_directory: dict[str, type[Solver]] = {
     "SPSA (SBCN)": SPSA,
     "ADAM (SBCN)": ADAM,
     "ALOE (SBCN)": ALOE,
+    "Trust Region Solver": trust_region,
 }
 
 problem_directory: dict[str, type[Problem]] = {
@@ -86,6 +90,7 @@ problem_directory: dict[str, type[Problem]] = {
     "FIXEDSAN-1": FixedSANLongestPath,
     "NETWORK-1": NetworkMinTotalCost,
     "AMUSEMENTPARK-1": AmusementParkMinDepart,
+    "SIMPLEFUNC-1": SimpleFunctionProblem,
 }
 
 problem_unabbreviated_directory: dict[str, type[Problem]] = {
@@ -110,6 +115,7 @@ problem_unabbreviated_directory: dict[str, type[Problem]] = {
     "Min Mean Longest Path for Fixed Stochastic Activity Network (SBCG)": FixedSANLongestPath,
     "Min Total Cost for Communication Networks System (SDCN)": NetworkMinTotalCost,
     "Min Total Departed Visitors for Amusement Park (SDDN)": AmusementParkMinDepart,
+    "Minimise a Deterministic Function with Additive Noise": SimpleFunctionProblem,
 }
 model_directory: dict[str, type[Model]] = {
     "EXAMPLE": ExampleModel,
@@ -130,6 +136,7 @@ model_directory: dict[str, type[Model]] = {
     "FIXEDSAN": FixedSAN,
     "NETWORK": Network,
     "AMUSEMENTPARK": AmusementPark,
+    "SIMEPLFUNC": SimpleFunctionModel,
 }
 model_problem_unabbreviated_directory: dict[str, str] = {
     "Min Deterministic Function + Noise (SUCG)": "EXAMPLE",
@@ -153,6 +160,7 @@ model_problem_unabbreviated_directory: dict[str, str] = {
     "Min Mean Longest Path for Fixed Stochastic Activity Network (SBCG)": "FIXEDSAN",
     "Min Total Cost for Communication Networks System (SDCN)": "NETWORK",
     "Min Total Departed Visitors for Amusement Park (SDDN)": "AMUSEMENTPARK",
+    "Minimise a Deterministic Function with Additive Noise": "SIMPLEFUNC",
 }
 model_problem_class_directory: dict[str, type[Model]] = {
     "Min Deterministic Function + Noise (SUCG)": ExampleModel,
@@ -176,6 +184,7 @@ model_problem_class_directory: dict[str, type[Model]] = {
     "Min Mean Longest Path for Fixed Stochastic Activity Network (SBCG)": FixedSAN,
     "Min Total Cost for Communication Networks System (SDCN)": Network,
     "Min Total Departed Visitors for Amusement Park (SDDN)": AmusementPark,
+    "Minimise a Deterministic Function with Additive Noise": SimpleFunctionModel
 }
 model_unabbreviated_directory: dict[str, type[Model]] = {
     "Deterministic Function + Noise": ExampleModel,
@@ -196,4 +205,5 @@ model_unabbreviated_directory: dict[str, type[Model]] = {
     "Fixed Stochastic Activity Network": FixedSAN,
     "Communication Networks System": Network,
     "Amusement Park (SDDN)": AmusementPark,
+    "Deterministic Function with Additive Noise": SimpleFunctionModel,
 }
