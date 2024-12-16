@@ -8,7 +8,15 @@ Created on Mon Feb 26 15:22:54 2024
 TODO: add bounds in
 """
 
-from ..base import Solver 
+from __future__ import annotations
+from typing import Callable
+
+from simopt.base import (
+    ConstraintType,
+    ObjectiveType,
+    Solver,
+    VariableType,
+)
 import numpy as np 
 
 class KieferWolfowitz(Solver):
@@ -39,26 +47,26 @@ class KieferWolfowitz(Solver):
 	check_factor_list : dict 
 		functions to check each fixed factor is performing
 	"""
-	def __init__(self, name="KIEFERWOLFOWITZ", fixed_factors=None) :
-		"""
-			Initialisation of FDSA. see base.Solver
-		
-		Parameters
-		----------
-		name : str, optional
-			user-specified name for solver
-		fixed_factors : None, optional
-			fixed_factors of the solver
-		"""
-		if fixed_factors is None:
-			fixed_factors = {}
-		self.name = name
-		self.objective_type = "single"
-		self.constraint_type = "unconstrained"
-		self.variable_type = "continuous"
-		self.gradient_needed = False
-		self.specifications = {
 
+	@property
+	def objective_type(self) -> ObjectiveType: 
+		return ObjectiveType.SINGLE
+	
+	@property
+	def constraint_type(self) -> ConstraintType : 
+		return ConstraintType.UNCONSTRAINED
+	
+	@property
+	def variable_type(self) -> VariableType :
+		return VariableType.CONTINUOUS
+	
+	@property
+	def gradient_needed(self) -> bool:
+		return False 
+	
+	@property
+	def specifications(self) -> dict[str, dict] : 
+		return {
 			"crn_across_solns": {
 				"description": "use CRN across solutions?",
 				"datatype": bool,
@@ -85,16 +93,30 @@ class KieferWolfowitz(Solver):
 				"datatype": float, 
 				"default": 5.0
 			}
-
 		}
-		self.check_factor_list = {
+
+	@property 
+	def check_factor_list(self) -> dict[str, Callable] : 
+		return {
 			"crn_across_solns": self.check_crn_across_solns,
 			"stepsize function a" : self.stepsize_fn_a,
 			"stepsize function c": self.stepsize_fn_c,
 			"gradient clipping check": self.check_gradient_clipping_bool,
 			"gradient clipping": self.check_gradient_clipping
 		}
-		super().__init__(fixed_factors)
+
+	def __init__(self, name="KIEFERWOLFOWITZ", fixed_factors: dict | None =None) -> None:
+		"""
+			Initialisation of FDSA. see base.Solver
+		
+		Parameters
+		----------
+		name : str, optional
+			user-specified name for solver
+		fixed_factors : None, optional
+			fixed_factors of the solver
+		"""
+		super().__init__(name, fixed_factors)
 
 
 	def stepsize_fn_a(self, n) :
@@ -236,6 +258,8 @@ class KieferWolfowitz(Solver):
 			else:
 				FnPlusMinus[i, 2] = steph2
 				x2[i] = x2[i] - FnPlusMinus[i, 2]
+
+			fn1, fn2 = 0,0 
 			x1_solution = self.create_new_solution(tuple(x1), problem)
 			if BdsCheck[i] != -1:
 				problem.simulate_up_to([x1_solution], 1)
