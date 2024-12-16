@@ -84,7 +84,7 @@ class adaptive_sampling(sampling_rule) :
 				return used_budget
 	
 	def get_sig_2(self, solution) :
-		return solution.objectives_var
+		return solution.objectives_var[0]
 	
 	#this is sample_type = 'conditional after'
 	def adaptive_sampling_1(self, problem, new_solution, k, delta_k, used_budget, sample_size) :
