@@ -73,7 +73,7 @@ class RobbinsMonro(Solver):
 				},
 				"stepsize function" : {
 					"description": "the gain function for each iteration",
-					"datatype": callable, 
+					"datatype": Callable, 
 					"default": self.stepsize_fn
 				},
 				"alpha" : {
@@ -87,7 +87,7 @@ class RobbinsMonro(Solver):
 	def check_factor_list(self) -> dict[str, Callable] : 
 		return {
 			"crn_across_solns": self.check_crn_across_solns,
-			"stepsize function" : self.stepsize_fn,
+			"stepsize function" : self.check_stepsize_fn,
 			"alpha": self.check_alpha
 		}
 
@@ -105,11 +105,14 @@ class RobbinsMonro(Solver):
 		super().__init__(name, fixed_factors)
 
 
-	def stepsize_fn(self, n) :
-		return 1/n
+	def check_stepsize_fn(self) : 
+		return True
 
-	def check_alpha(self, alpha) :
-		return isinstance(alpha, float)
+	def stepsize_fn(self, n) :
+		return 1/(3*n)
+
+	def check_alpha(self) :
+		return isinstance(self.factors['alpha'], float)
 
 		
 	def solve(self, problem) :
