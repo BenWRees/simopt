@@ -45,6 +45,9 @@ from simopt.solvers.spsa import SPSA
 from simopt.solvers.strong import STRONG
 from simopt.solvers.trust_region_class import trust_region
 from simopt.solvers.SGD import SGD
+from simopt.solvers.kiefer_wolfowitz import KieferWolfowitz
+from simopt.solvers.robbins_monro import RobbinsMonro
+from simopt.solvers.mirror_descent import Mirror_Descent
 
 # directory dictionaries
 solver_directory: dict[str, type[Solver]] = {
@@ -57,6 +60,9 @@ solver_directory: dict[str, type[Solver]] = {
     "ALOE": ALOE,
     "TRUSTREGION": trust_region,
     "SGD": SGD,
+    "KIEFERWOLFOWITZ": KieferWolfowitz,
+    "ROBBINSMONRO": RobbinsMonro, 
+    "MIRRORDESCENT": Mirror_Descent,
 }
 
 solver_unabbreviated_directory: dict[str, type[Solver]] = {
@@ -69,6 +75,9 @@ solver_unabbreviated_directory: dict[str, type[Solver]] = {
     "ALOE (SBCN)": ALOE,
     "Trust Region Solver": trust_region,
     "Stochastic Gradient Descent": SGD,
+    "Kiefer-Wolfowitz Algorithm": KieferWolfowitz, 
+    "Robbins-Monro Root-Finding": RobbinsMonro,
+    "Stochastic Mirror Descent": Mirror_Descent,
 }
 
 problem_directory: dict[str, type[Problem]] = {
