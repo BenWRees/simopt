@@ -8,8 +8,15 @@ Created on Mon Feb 26 15:22:54 2024
 TODO: add bounds in
 """
 
-from ..base import Solver 
-import numpy as np 
+from __future__ import annotations
+from typing import Callable
+
+from simopt.base import (
+    ConstraintType,
+    ObjectiveType,
+    Solver,
+    VariableType,
+)
 
 class RobbinsMonro(Solver):
 	"""
@@ -39,7 +46,52 @@ class RobbinsMonro(Solver):
 	check_factor_list : dict 
 		functions to check each fixed factor is performing
 	"""
-	def __init__(self, name="ROBBINSMONRO", fixed_factors=None) :
+
+	@property
+	def objective_type(self) -> ObjectiveType: 
+		return ObjectiveType.SINGLE
+	
+	@property
+	def constraint_type(self) -> ConstraintType : 
+		return ConstraintType.UNCONSTRAINED
+	
+	@property
+	def variable_type(self) -> VariableType :
+		return VariableType.CONTINUOUS
+	
+	@property
+	def gradient_needed(self) -> bool:
+		return False 
+
+	@property 
+	def specifications(self) -> dict[str, dict] :
+		return {
+			"crn_across_solns": {
+					"description": "use CRN across solutions?",
+					"datatype": bool,
+					"default": False
+				},
+				"stepsize function" : {
+					"description": "the gain function for each iteration",
+					"datatype": callable, 
+					"default": self.stepsize_fn
+				},
+				"alpha" : {
+					"description": "the value of the function at the root",
+					"datatype": float,
+					"default": 0.0
+				}
+		}
+	
+	@property
+	def check_factor_list(self) -> dict[str, Callable] : 
+		return {
+			"crn_across_solns": self.check_crn_across_solns,
+			"stepsize function" : self.stepsize_fn,
+			"alpha": self.check_alpha
+		}
+
+	def __init__(self, name="ROBBINSMONRO", fixed_factors: dict | None =None) -> None:
 		"""
 			Initialisation of the Robbins-Monro solver. see base.Solver
 		
@@ -50,38 +102,7 @@ class RobbinsMonro(Solver):
 		fixed_factors : None, optional
 			fixed_factors of the solver
 		"""
-		if fixed_factors is None:
-			fixed_factors = {}
-		self.name = name
-		self.objective_type = "single"
-		self.constraint_type = "unconstrained"
-		self.variable_type = "continuous"
-		self.gradient_needed = False
-		self.specifications = {
-
-			"crn_across_solns": {
-				"description": "use CRN across solutions?",
-				"datatype": bool,
-				"default": False
-			},
-			"stepsize function" : {
-				"description": "the gain function for each iteration",
-				"datatype": callable, 
-				"default": self.stepsize_fn
-			},
-			"alpha" : {
-				"description": "the value of the function at the root",
-				"datatype": float,
-				"default": 0.0
-			}
-
-		}
-		self.check_factor_list = {
-			"crn_across_solns": self.check_crn_across_solns,
-			"stepsize function" : self.stepsize_fn,
-			"alpha": self.check_alpha
-		}
-		super().__init__(fixed_factors)
+		super().__init__(name, fixed_factors)
 
 
 	def stepsize_fn(self, n) :
