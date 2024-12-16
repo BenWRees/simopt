@@ -44,6 +44,7 @@ from simopt.solvers.randomsearch import RandomSearch
 from simopt.solvers.spsa import SPSA
 from simopt.solvers.strong import STRONG
 from simopt.solvers.trust_region_class import trust_region
+from simopt.solvers.SGD import SGD
 
 # directory dictionaries
 solver_directory: dict[str, type[Solver]] = {
@@ -54,7 +55,8 @@ solver_directory: dict[str, type[Solver]] = {
     "SPSA": SPSA,
     "ADAM": ADAM,
     "ALOE": ALOE,
-    "TRUSTREGION": trust_region
+    "TRUSTREGION": trust_region,
+    "SGD": SGD,
 }
 
 solver_unabbreviated_directory: dict[str, type[Solver]] = {
@@ -66,6 +68,7 @@ solver_unabbreviated_directory: dict[str, type[Solver]] = {
     "ADAM (SBCN)": ADAM,
     "ALOE (SBCN)": ALOE,
     "Trust Region Solver": trust_region,
+    "Stochastic Gradient Descent": SGD,
 }
 
 problem_directory: dict[str, type[Problem]] = {
