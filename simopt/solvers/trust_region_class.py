@@ -284,12 +284,12 @@ class trust_region(Solver) :
 		else:
 			def subproblem(s) : 
 				Hessian_matrix = self.construct_symmetric_matrix(Hessian)
-				return fval[0] + np.dot(s,grad) + 0.5*np.dot(s,np.matmul(Hessian_matrix,s))
+				return fval[0] + np.dot(s,grad) + np.dot(np.matmul(s,Hessian_matrix),s)
 			
-			con_f = lambda s: norm(np.subtract(s,np.array(new_x)))
+			con_f = lambda s: norm(s)
 			nlc = NonlinearConstraint(con_f, 0, delta)
-			solve_subproblem = minimize(subproblem, np.array(new_x), method='trust-constr', constraints=nlc)
-			candidate_x =  solve_subproblem.x
+			solve_subproblem = minimize(subproblem, np.zeros(problem.dim), method='trust-constr', constraints=nlc)
+			candidate_x =  new_x + solve_subproblem.x
 
 
 
@@ -322,31 +322,33 @@ class trust_region(Solver) :
 		stepsize = np.subtract(candidate_solution.x, current_solution.x)
 		#TODO: Here we are seeing that for 2d legendre, this condition is being satisfied almost all the time.
 		# Problem with calculating step size?
-		if (model.local_model_evaluate(np.zeros(problem.dim), delta_k) - model.local_model_evaluate(stepsize, delta_k)) <= 0:
+		model_reduction = model.local_model_evaluate(np.zeros(problem.dim), delta_k) - model.local_model_evaluate(stepsize, delta_k)
+		if model_reduction <= 0:
 			rho = 0
 		else:
 			# difference = np.subtract(candidate_solution.x, current_solution.x)
-			rho = (np.array(fval[0]) - np.array(fval_tilde)) / (model.local_model_evaluate(np.array(current_solution.x), delta_k) - model.local_model_evaluate(np.array(candidate_solution.x), delta_k))
+			rho = (np.array(fval[0]) - np.array(fval_tilde)) / model_reduction
 
 		self.rho.append(rho)
-		# very successful: expand and accept
-		if rho >= self.factors['eta_2'] :
-			# new_x = candidate_x
-			current_solution = candidate_solution
-			# final_ob = candidate_solution.objectives_mean
-			recommended_solns.append(candidate_solution)
-			# intermediate_budgets.append(expended_budget)
-			delta_k = min(self.factors['gamma_1'] * delta_k, self.factors['delta_max'])
-		
+
 		# successful: accept
-		elif rho >= self.factors['eta_1']:
+		if rho >= self.factors['eta_1']:
 			# new_x = candidate_x
 			current_solution = candidate_solution
 			# final_ob = candidate_solution.objectives_mean
 			recommended_solns.append(candidate_solution)
 			# intermediate_budgets.append(expended_budget)
 			delta_k = min(delta_k, self.factors['delta_max'])
-		
+			
+			# very successful: expand and accept
+			if rho >= self.factors['eta_2'] :
+				# new_x = candidate_x
+				# current_solution = candidate_solution
+				# final_ob = candidate_solution.objectives_mean
+				# recommended_solns.append(candidate_solution)
+				# intermediate_budgets.append(expended_budget)
+				delta_k = min(self.factors['gamma_1'] * delta_k, self.factors['delta_max'])
+			
 		# unsuccessful: shrink and reject
 		else:
 			delta_k = min(self.factors['gamma_2'] * delta_k, self.factors['delta_max'])
@@ -415,6 +417,7 @@ class trust_region(Solver) :
 
 			intermediate_budgets.append(expended_budget)
 
+			print('new solution: ', new_solution.x)
 
 		return recommended_solns, intermediate_budgets
 
