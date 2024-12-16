@@ -1,19 +1,29 @@
+from __future__ import annotations
+from typing import Callable
+from abc import abstractmethod
+
 from numpy.linalg import pinv
 from numpy.linalg import norm
 import numpy as np
-from math import log, ceil, sqrt, factorial
+from math import ceil, factorial
 import warnings
 from scipy.optimize import NonlinearConstraint
 from scipy.optimize import minimize
-from scipy.special import legendre, eval_legendre
+from scipy.special import eval_legendre
 warnings.filterwarnings("ignore")
 import importlib
 import copy
 
-import sys
 from itertools import combinations_with_replacement
 
-from ..base import Solver, Problem
+from simopt.base import (
+    ConstraintType,
+    ObjectiveType,
+    Problem,
+	Solution,
+    Solver,
+    VariableType,
+)
 # from .astrodf_ext import adaptive_sampling
 # from .tr_with_reuse_pts import random_model_reuse
 
@@ -23,15 +33,26 @@ from ..base import Solver, Problem
 """
 #TODO: Provide data for starting delta
 class trust_region(Solver) :
-	def __init__(self, name="TRUSTREGION", fixed_factors=None) :
-		if fixed_factors is None:
-			fixed_factors = {}
-		self.name = name
-		self.objective_type = "single"
-		self.constraint_type = "box"
-		self.variable_type = "continuous"
-		self.gradient_needed = False
-		self.specifications = {
+
+	@property
+	def objective_type(self) -> ObjectiveType:
+		return ObjectiveType.SINGLE
+
+	@property
+	def constraint_type(self) -> ConstraintType:
+		return ConstraintType.BOX
+
+	@property
+	def variable_type(self) -> VariableType:
+		return VariableType.CONTINUOUS
+
+	@property
+	def gradient_needed(self) -> bool:
+		return False
+	
+	@property
+	def specifications(self) -> dict[str, dict] :
+		return {
 			"crn_across_solns": {
 				"description": "CRN across solutions?",
 				"datatype": bool,
@@ -95,7 +116,7 @@ class trust_region(Solver) :
 			"poly_basis": {
 				"description": "Polynomial basis to use in model construction",
 				"datatype": str, 
-				"default": "simopt.solvers.trust_region_class:legendre_basis"
+				"default": "simopt.solvers.trust_region_class:natural_basis"
 			}, 
 			"random_model type" : {
 				"description": "The type of random model used",
@@ -103,7 +124,10 @@ class trust_region(Solver) :
 				"default": "simopt.solvers.trust_region_class:random_model" 
 			}
 		}
-		self.check_factor_list = {
+	
+	@property
+	def check_factor_list(self) -> dict[str, Callable] : 
+		return {
 			"crn_across_solns": self.check_crn_across_solns,
 			"eta_1": self.check_eta_1,
 			"eta_2": self.check_eta_2,
@@ -112,8 +136,14 @@ class trust_region(Solver) :
 			"delta_max": self.check_delta_max,
 			"delta": self.check_delta,
 			"lambda_min": self.check_lambda_min,
+			"geometry instance": self.check_geometry_instance, 
+			"poly_basis": self.check_poly_basis, 
+			"random_model type": self.check_random_model_type,
+			"sampling_rule": self.check_sampling_rule,
 		}
-		super().__init__(fixed_factors)
+	
+	def __init__(self, name="TRUSTREGION", fixed_factors: dict | None = None) -> None :
+		super().__init__(name, fixed_factors)
 		self.rho = []
 
 	def check_eta_1(self):
@@ -136,6 +166,18 @@ class trust_region(Solver) :
 
 	def check_lambda_min(self):
 		return self.factors["lambda_min"] > 2
+	
+	def check_geometry_instance(self) -> bool:
+		return True 
+	
+	def check_poly_basis(self) -> bool:
+		return True 
+	
+	def check_random_model_type(self) -> bool:
+		return True 
+	
+	def check_sampling_rule(self) -> bool:
+		return True 
 
 	#nice way to allow for different types of random models
 	def model_instantiation(self) :
@@ -183,8 +225,6 @@ class trust_region(Solver) :
 		""" 
 		vals = []
 		for i in range(len(tensor)) :
-			# print('tensor at position ',i,': ',tensor[i][0].shape)
-			# print('vector at position ',i,': ',vector[i][0])
 			vals.append(vector[i][0]*tensor[i][0])
 		# res1 = np.tensordot(vector, tensor, axes=([0, 1], [0, 1]))
 		# res2 = np.tensordot(vector, tensor, axes=([0, 1], [2, 3]))
@@ -249,7 +289,6 @@ class trust_region(Solver) :
 			con_f = lambda s: norm(np.subtract(s,np.array(new_x)))
 			nlc = NonlinearConstraint(con_f, 0, delta)
 			solve_subproblem = minimize(subproblem, np.array(new_x), method='trust-constr', constraints=nlc)
-			print('new stepsize: ', solve_subproblem.x)
 			candidate_x =  solve_subproblem.x
 
 
@@ -320,7 +359,7 @@ class trust_region(Solver) :
 	#solve the problem - inherited from base.Solver
 	#TODO: implement the adaptive solving rule
 	#TODO: ensure that the kappa is being handled by the sampling instance correctly
-	def solve(self,problem) :
+	def solve(self, problem: Problem) -> tuple[list[Solution], list[int]] :
 		recommended_solns = []
 		intermediate_budgets = []
 		expended_budget = 0
@@ -358,7 +397,6 @@ class trust_region(Solver) :
 
 			#solve random model 
 			candidate_solution, visited_pts_list = self.solve_subproblem(delta_k, model, problem, current_solution, visited_pts_list)
-			# print('candidate solution after solving subproblem: ', candidate_solution.x)
 			#adaptive sampling - need way to include additional parameters 
 			if sampling_instance.sampling_rule.__class__.__name__ == 'adaptive_sampling' :
 				problem.simulate(candidate_solution, 1)
@@ -376,7 +414,6 @@ class trust_region(Solver) :
 
 			intermediate_budgets.append(expended_budget)
 
-		print('rho vals: ', self.rho)
 
 		return recommended_solns, intermediate_budgets
 
@@ -439,7 +476,7 @@ class trust_region_geometry :
 		return Y
 	
 
-class chebyshev_interpolation(trust_region_geometry) : 
+"""class chebyshev_interpolation(trust_region_geometry) : 
 	def __init__(self, problem):
 		super().__init__(problem)
 
@@ -482,7 +519,7 @@ class chebyshev_interpolation(trust_region_geometry) :
 		
 	def interpolation_points(self, current_solution, delta):
 		int_set = self.generate_chebyshev_nodes(current_solution, delta)
-		return self.transform_interpolation_set(int_set, delta)
+		return self.transform_interpolation_set(int_set, delta)"""
 	
 
 class random_model :
@@ -502,7 +539,7 @@ class random_model :
 	"""
 
 	def __init__(self, geometry_instance, tr_instance, poly_basis, problem, sampling_instance, model_construction_parameters) :
-		self.coefficients = None 
+		self.coefficients = [] 
 		self.geometry_instance = geometry_instance
 		self.tr_instance = tr_instance
 		self.problem = problem
@@ -547,7 +584,6 @@ class random_model :
 			Z = empty_geometry.interpolation_points(np.zeros(self.problem.dim), delta_k)
 			Y = self.geometry_instance.interpolation_points(np.array(current_solution.x), delta_k)
 
-			# [print('Y val at index ', idx, ' ', i[0]) for idx,i in enumerate(Y)]
 
 			for i in range(len(Y)):
 				# For X_0, we don't need to simulate the system
@@ -586,11 +622,9 @@ class random_model :
 				break
 
 		self.coefficients = [q, grad, Hessian]
-		# print('fval after model construction: ', fval)
 		self.fval = fval
 		delta_k = min(max(self.model_construction_parameters['beta'] * norm(grad), delta_k), delta)
 
-		# print('expended budget at iteration ', k, ': ', expended_budget)
 
 		return current_solution, delta_k, expended_budget, interpolation_solns, visited_pts_list, 1
 
@@ -599,10 +633,7 @@ class random_model :
 	def coefficient(self, Y, fval, delta):
 		d = self.problem.dim
 		M = self.poly_basis.construct_matrix(Y, delta) # now constructs M based on the polynomial basis being used
-		print('shape of M: ', M.shape) 
 		q = np.matmul(pinv(M), fval)
-		# print('number of samples: ', len(fval))
-		# print('shape of M: ', M.shape)
 				
 		grad = q[1:d + 1]
 		grad = np.reshape(grad, d)
@@ -613,52 +644,6 @@ class random_model :
 		else : 
 			Hessian = []
 			# self.M = M
-		if (M.shape[0] < M.shape[1]) and (len(Hessian) > 0) :
-			#separate the matrix into linear and quadratic parts - linear is up to d+1 
-			linear = M[:, :d+1]
-			quad = M[:, d+1:]
-			alpha_lin = q.flatten()[:d+1]
-			alpha_quad = q.flatten()[d+1:]
-			print('linear matrix shape: ', linear.shape)
-			print('quadratic matrix shape: ', quad.shape)
-			def objective_fn(q) : 
-				hessian = q[d+1:]
-				hessian_matrix = self.construct_symmetric_matrix(hessian)
-				return 0.5*norm(hessian_matrix)**2
-			
-			def cons_model_eval(q) : 
-				#Ensure that the model equals the fvals
-				model_evals = []
-				for i in range(len(Y)) : 
-					print('shape of Y: ', Y[i][0].shape)
-					grad = q[1:d]
-					print('shape of Grad: ', grad)
-					Hessian = q[d+1:len(fval)]
-					Hessian_matrix = self.construct_symmetric_matrix(Hessian) 
-					print('Hessian Matrix Shape: ', Hessian_matrix.shape)
-					model_eval = fval[0] + np.dot(grad,Y[i][0]) + 0.5*np.dot(Y[i][0],np.matmul(Hessian_matrix,Y[i][0]))
-					model_evals.append(model_eval)
-				
-				return mp.norm(np.subtract(model_evals,fval)) #as the norm is 0 iff the matrix is 0
-					
-			def cons_symm_hess(q) : 
-				#Ensure that the Hessian is Symmetric
-				hessian = q[d+1:]
-				hessian_matrix = self.construct_symmetric_matrix(hessian)
-				return np.norm(np.subtract(hessian_matrix, hessian_matrix.T)) #as the norm is 0 iff the matrix is 0
-			
-			con = [{'type': 'eq', 'fun': cons_model_eval}, {'type': 'eq', 'fun': cons_symm_hess}]
-			min_frob_norm = minimize(objective_fn, q.flatten(), constraints=con)
-			print('new q val: ', min_frob_norm.x)
-			q = min_frob_norm.x
-		
-			grad = q[1:d + 1]
-			grad = np.reshape(grad, d)
-		
-			Hessian = q[d + 1:len(fval)]
-			Hessian = np.reshape(Hessian, d)
-		
-
 		return q, grad, Hessian
 	
 	def collapse_tensor(self, tensor) :
@@ -679,7 +664,6 @@ class random_model :
 		if len(X[0].shape) == 2 : 
 			X = [i[0,0] for i in X]
 		evaluation = np.dot(X,q)
-		print('eval: ', evaluation)
 		return evaluation
 
 	def construct_symmetric_matrix(self,column_vector) : 
@@ -724,32 +708,6 @@ class random_model :
 
 		return sum
 
-	"""
-		def dot_prod_tensor(self, vector1, vector2) : 
-			# print('vector 1 shape: ', vector1.shape)
-			# print('vector 2 shape: ', vector2.shape)
-			sum = 0
-			for i in range(min(vector1.shape[0], vector2.shape[0])) : 
-				# print('vector 1 at ', i, ' shape: ', vector1[i].shape)
-				# print('vector 2 at ', i, ' shape: ', vector2[i].T.shape)
-				sum += np.matmul(vector1[i].T,vector2[i])[0,0]
-
-			#Loop around again 
-			if vector1.shape[0] != vector2.shape[0] : 
-				diff = abs(vector1.shape[0] - vector2.shape[0])
-				#the elements in vector 1 are smaller than in vector 2
-				if vector1.shape[0] < vector2.shape[0] :
-					# print('vector 1 is shorter than vector 2')
-					for i in range(vector1.shape[0]-1,diff-1,-1) :
-						sum += np.matmul(vector1[i].T,vector2[i+diff])[0,0]
-				else : 
-					# print('vector 2 is shorter than vector 1')
-					for i in range(vector2.shape[0]-1,diff-1,-1) :
-						sum += np.matmul(vector1[i+diff].T,vector2[i])[0,0]
-
-			return sum
-	"""
-
 	def matmul_tensor(self, tensor, vector) : 
 		tensor_shape = tensor.shape 
 
@@ -757,13 +715,9 @@ class random_model :
 		for j in range(tensor_shape[0]) : 
 			sum_vect = np.zeros((tensor_shape[2], tensor_shape[3]))
 			for i in range(tensor_shape[1]) :
-				# print('vector at the ', i, 'th position: ', vector[i][0])
-				# print('vector at the (', j,i, ') element in the tensor: ', tensor[j,i])
 				sum_vect += vector[i][0]*tensor[j,i]
-				# print('length of sum vector at position ', j, ' : ', len(sum_vect))
 			res_vect.append(sum_vect) 
 
-		# print('length of result vector: ', len(res_vect))
 		res = np.array(res_vect).reshape((len(res_vect),1, *res_vect[0].shape))
 		return res
 
@@ -831,28 +785,27 @@ class polynomial_basis :
 		self.assign_interpolation_set(interpolation_set)
 		no_rows = len(interpolation_set)
 		no_cols = self.solve_no_cols(interpolation_set)
-		print('number of rows: ', no_rows)
-		print('number of columns: ', no_cols)
 		matrix = []
 		for i in range(no_rows) :
 			row = []
 			for j in range(no_cols) : 
 				val = self.poly_basis_fn(interpolation_set,i,j, delta)	
-				row.append(val) #this should be a numpy vector
+				row.append(val) 
 			matrix.append(row)
 
 		X = np.array(matrix)
-		print('X: \n', X.shape)
 		return X
 	
-	def poly_basis_fn(self, interpolation_set, row_num, col_num, delta) : 
-		pass
-
+	@abstractmethod
+	def poly_basis_fn(self, interpolation_set, row_num, col_num, delta): 
+		raise NotImplementedError
+	
 	def assign_interpolation_set(self,interpolation_set) : 
 		self.interpolation_set = interpolation_set
 
-	def solve_no_cols(self,interpolation_set) : 
-		pass
+	@abstractmethod
+	def solve_no_cols(self,interpolation_set) -> int: 
+		raise NotImplementedError
 
 class monimal_basis(polynomial_basis) : 
 	def __init__(self, problem, max_degree):
@@ -880,7 +833,6 @@ class natural_basis(polynomial_basis) :
 	#No of cols needed: 1 + len(current_solution.x) +  
 	def poly_basis_fn(self, interpolation_set, row_num, col_num, delta) : 
 		val = interpolation_set[row_num][0]
-		# print('val: ', val[0])
 		p = len(val)
 		# Step 1: Define the full list of basis terms, up to max_degree
 		basis_terms = []
@@ -901,7 +853,7 @@ class natural_basis(polynomial_basis) :
 					for idx in comb:
 						result *= v[idx]
 					inner_result = result / factorial(degree)
-					return inner_result.astype(np.float64).item()
+					return inner_result
 				basis_terms.append(term_func)
 		# Evaluate the basis term at the given row (vector)
 		res = basis_terms[col_num](val)
@@ -911,7 +863,6 @@ class natural_basis(polynomial_basis) :
 	def solve_no_cols(self, interpolation_set):
 		val = interpolation_set[0][0]
 		no_higher_order_terms = len([a for degree in range(2,self.max_degree+1) for a in combinations_with_replacement(range(len(val)), degree)]) 
-		print('number of higher_order_terms: ', no_higher_order_terms)
 		return no_higher_order_terms*(self.max_degree - 1) + len(val) + 1
 		# return len(interpolation_set)
 	
@@ -922,9 +873,8 @@ class lagrange_basis(polynomial_basis) :
 	#lagrange polynomical function for each element in the matrix
 	def poly_basis_fn(self, interpolation_set, row_num, col_num, delta) :
 		current_val = interpolation_set[row_num][0]
-		denom_val = self.interpolation_set[col_num][0]
+		denom_val = interpolation_set[col_num][0]
 
-		# print('interpolation set: ', interpolation_set)
 		def basis_fn(x) :
 			denominator = np.linalg.norm(denom_val - x)
 			numerator = np.linalg.norm(current_val - x)
@@ -948,7 +898,7 @@ class NFP(polynomial_basis) :
 			return 1
 		val = np.array(interpolation_set[row_num])
 		res = np.prod([(val-np.array(a)) for a in interpolation_set[:col_num]])
-		return res
+		return float(res)
 	
 	def solve_no_cols(self, interpolation_set):
 		return len(interpolation_set)
@@ -973,14 +923,11 @@ class legendre_basis(polynomial_basis) :
 			if np.array_equal(val, np.zeros(val.shape)) :
 				v1_u = np.zeros(v1_u.shape)
 
-			# print('rad: ', rad)	
-			# print('v1_u: ', v1_u)
 
 			angle = np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
 
 			
 			projected_set.append(angle)
-		# print('projected set: ', projected_set)
 		return projected_set
 
 	def project_to_current_trust_region(self, res) : 
@@ -994,11 +941,9 @@ class legendre_basis(polynomial_basis) :
 		row = [] 
 		for i in range(no_of_cols) :
 			row.extend(eval_legendre(i, np.cos(val)).flatten())
-		print(row)
 		return row[col_num]
 	
 	def solve_no_cols(self, interpolation_set):
-		# print('length of interpolation set: ', len(interpolation_set))
 		return len(interpolation_set)*self.problem.dim
 	
 
