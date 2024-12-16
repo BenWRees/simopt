@@ -1,6 +1,15 @@
+from __future__ import annotations
+from typing import Callable
+
 import numpy as np 
 from scipy.optimize import minimize
-from ..base import Solver
+from simopt.base import (
+    ConstraintType,
+    ObjectiveType,
+    Solver,
+    VariableType,
+)
+
 
 
 
@@ -33,7 +42,79 @@ class Mirror_Descent(Solver):
 	check_factor_list : dict 
 		functions to check each fixed factor is performing
 	"""
-	def __init__(self, name="MIRRORDESCENT", fixed_factors=None):
+	
+	@property
+	def objective_type(self) -> ObjectiveType: 
+		return ObjectiveType.SINGLE
+	
+	@property
+	def constraint_type(self) -> ConstraintType : 
+		return ConstraintType.BOX
+	
+	@property
+	def variable_type(self) -> VariableType :
+		return VariableType.CONTINUOUS
+	
+	@property
+	def gradient_needed(self) -> bool:
+		return False 
+	
+	@property 
+	def specifications(self) -> dict[str, dict] :
+		return {
+			"crn_across_solns": {
+				"description": "use CRN across solutions?",
+				"datatype": bool,
+				"default": True
+			},
+			"r": {
+				"description": "number of replications taken at each solution",
+				"datatype": int,
+				"default": 30
+			},
+
+			"mirror map" : {
+				"description": "a map that takes values from the dual space to the\
+				original vector space",
+				"datatype": Callable,
+				"default": self.mirror_map
+			},
+
+			"alpha": {
+				"description": "step size",
+				"datatype": float,
+				"default": 0.9  # Changing the step size matters a lot.
+			},
+			"gradient clipping check" : {
+				"description": "checks if gradient clipping is in use",
+				"datatype": bool, 
+				"default": True
+			},
+			"gradient clipping" : {
+				"description": "gives a gradient clipping value",
+				"datatype": float, 
+				"default": 20.0
+			}, 
+			"SPSA-like gradient": {
+				"description": "flag for using an spsa-like gradient",
+				"datatype": bool, 
+				"default": False #Haven't got this working
+			}
+		}
+	
+	@property 
+	def check_factor_list(self) -> dict[str, Callable] : 
+		return {
+			"crn_across_solns": self.check_crn_across_solns,
+			"r": self.check_r,
+			"alpha": self.check_alpha,
+			"mirror map": self.check_mirror_map,
+			"gradient clipping check": self.check_gradient_clipping_bool,
+			"gradient clipping": self.check_gradient_clipping,
+			"SPSA-like gradient": self.check_spsa_gradient
+		}
+	
+	def __init__(self, name="MIRRORDESCENT", fixed_factors: dict | None = None) -> None:
 		"""
 			Initialisation of SMD. see base.Solver
 		
@@ -44,74 +125,16 @@ class Mirror_Descent(Solver):
 		fixed_factors : None, optional
 			fixed_factors of the solver
 		"""
-		if fixed_factors is None:
-			fixed_factors = {}
-		self.name = name
-		self.objective_type = "single"
-		self.constraint_type = "box"
-		self.variable_type = "continuous"
-		self.gradient_needed = False
-		self.specifications = {
-			"crn_across_solns": {
-				"description": "use CRN across solutions?",
-				"datatype": bool,
-				"default": True
-			},
-			"alpha": {
-				"description": "the learning rate", 
-				"datatype": float,
-				"default": 1.5
-			},
-
-			"r": {
-				"description": "number of replications taken at each solution",
-				"datatype": int,
-				"default": 30
-			},
-
-			"mirror map" : {
-				"description": "a map that takes values from the dual space to the\
-				original vector space",
-				"datatype": callable,
-				"default": self.mirror_map
-			},
-			"gradient clipping check" : {
-				"description": "checks if gradient clipping is in use",
-				"datatype": bool, 
-				"default": True
-			},
-			"gradient clipping" : {
-				"description": "gives a gradient clipping value",
-				"datatype": float, 
-				"default": 5.0
-			}, 
-			"SPSA-like gradient": {
-				"description": "flag for using an spsa-like gradient",
-				"datatype": bool, 
-				"default": False
-			}
-			
-		}
-		self.check_factor_list = {
-			"crn_across_solns": self.check_crn_across_solns,
-			"r": self.check_r,
-			"alpha": self.check_alpha,
-			"initial_y_value": self.check_y_val,
-			"mirror map": self.mirror_map,
-			"gradient clipping check": self.check_gradient_clipping_bool,
-			"gradient clipping": self.check_gradient_clipping,
-			"SPSA-like gradient": self.check_spsa_gradient
-		}
-		super().__init__(fixed_factors)
+		super().__init__(name, fixed_factors)
 
 	def check_r(self):
 		return self.factors["r"] > 0
 
-	def check_alpha(self, n) :
+	def check_alpha(self) :
 		return self.factors["alpha"] > 0
 
-	def check_y_val(self) :
-		return self.factors['initial_y_value']
+	def check_mirror_map(self) : 
+		return True
 
 	def mirror_map(self, x) :
 		# return sum([i*np.log(i) for i in x])
@@ -211,9 +234,9 @@ class Mirror_Descent(Solver):
 		mirror_map = self.factors['mirror map']
 		diff = [i - j for (i,j) in zip(value_1, value_2)]
 
-		taylor_exp = mirror_map(value_2) + np.dot(gradient,diff)
+		taylor_exp = self.mirror_map(value_2) + np.dot(gradient,diff)
 
-		return mirror_map(value_1) - taylor_exp
+		return self.mirror_map(value_1) - taylor_exp
 
 	#TODO: remove this and add gradient function to fixed factors
 	def mirror_finite_diff(self, new_solution, BdsCheck, problem) :
@@ -238,7 +261,7 @@ class Mirror_Descent(Solver):
 		new_x = list(new_solution.x)
 		lower_bound = problem.lower_bounds
 		upper_bound = problem.upper_bounds
-		fn = self.factors['mirror map']
+		fn = self.mirror_map
 		dim = len(new_x) 
 		FnPlusMinus = np.zeros((dim, 3))
 		grad = np.zeros(dim)
@@ -272,6 +295,7 @@ class Mirror_Descent(Solver):
 				FnPlusMinus[i, 2] = steph2
 				x2[i] = x2[i] - FnPlusMinus[i, 2]
 
+			fn1, fn2 = 0,0
 			if BdsCheck[i] != -1:
 				fn1 = fn(x1)
 				# print('fn1: ', fn1)
@@ -341,7 +365,7 @@ class Mirror_Descent(Solver):
 			for i in range(len(grad)) : 
 				grad[i] = numerator/(2*delta[i])
 
-		grads[:,batch] = grad
+			grads[:,batch] = grad
 		grad_mean = np.mean(grads,axis=1)
 
 		return grad_mean
@@ -410,6 +434,7 @@ class Mirror_Descent(Solver):
 					FnPlusMinus[i, 2] = steph2
 					x2[i] = x2[i] - FnPlusMinus[i, 2]
 
+				fn1, fn2 = 0,0
 				x1_solution = self.create_new_solution(tuple(x1), problem)
 				if BdsCheck[i] != -1:
 					problem.simulate(x1_solution, 1)
