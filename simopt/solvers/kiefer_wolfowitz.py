@@ -74,13 +74,13 @@ class KieferWolfowitz(Solver):
 			},
 			"stepsize function a" : {
 				"description": "the gain function for each iteration",
-				"datatype": callable, 
+				"datatype": Callable, 
 				"default": self.stepsize_fn_a
 			},
 			
 			"stepsize function c" : {
 				"description": "the gain function for each gradient approximation",
-				"datatype": callable, 
+				"datatype": Callable, 
 				"default": self.stepsize_fn_c              
 			},
 			"gradient clipping check" : {
@@ -99,8 +99,8 @@ class KieferWolfowitz(Solver):
 	def check_factor_list(self) -> dict[str, Callable] : 
 		return {
 			"crn_across_solns": self.check_crn_across_solns,
-			"stepsize function a" : self.stepsize_fn_a,
-			"stepsize function c": self.stepsize_fn_c,
+			"stepsize function a" : self.check_stepsize_fn_a,
+			"stepsize function c": self.check_stepsize_fn_c,
 			"gradient clipping check": self.check_gradient_clipping_bool,
 			"gradient clipping": self.check_gradient_clipping
 		}
@@ -118,6 +118,12 @@ class KieferWolfowitz(Solver):
 		"""
 		super().__init__(name, fixed_factors)
 
+
+	def check_stepsize_fn_a(self) : 
+		return True
+	
+	def check_stepsize_fn_c(self) : 
+		return True
 
 	def stepsize_fn_a(self, n) :
 		return 1/(4 *n)
