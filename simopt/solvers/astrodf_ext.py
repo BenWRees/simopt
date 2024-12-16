@@ -1,14 +1,8 @@
-from numpy.linalg import pinv
-from numpy.linalg import norm
-import numpy as np
-from math import log, ceil, sqrt
+from math import log, ceil
 import warnings
-from scipy.optimize import NonlinearConstraint
-from scipy.optimize import minimize
 warnings.filterwarnings("ignore")
 
-from simopt.solvers.trust_region_class import sampling_rule, trust_region, trust_region_geometry
-from ..base import Solver
+from simopt.solvers.trust_region_class import sampling_rule
 
 """
 	ASTRODF is a trust-region solver with an adaptive sampling rule on the SAA
