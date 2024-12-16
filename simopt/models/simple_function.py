@@ -240,7 +240,7 @@ class SimpleFunctionProblem(Problem) :
 			"initial_solution": {
 				"description": "initial solution",
 				"datatype": tuple,
-				"default": (2.0, 2.0),
+				"default": (2.0,),
 			},
 			"budget": {
 				"description": "max # of replications for a solver to take",
