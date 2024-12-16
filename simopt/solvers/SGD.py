@@ -17,6 +17,7 @@ from simopt.base import (
     VariableType,
 )
 
+
 class SGD(Solver):
 	"""
 		The mini-batch Stochastic Gradient Descent (SGD) solver
@@ -193,8 +194,8 @@ class SGD(Solver):
 
 			# Use finite difference to estimate gradient if IPA gradient is not available.
 			if spsa_check :
-				grad = self.finite_diff_spsa(new_solution, BdsCheck, problem)
-				expended_budget += 2
+				grad = self.finite_diff_spsa(new_solution, t, BdsCheck, problem)
+				expended_budget += 2* r
 			else :
 				grad = self.finite_diff(new_solution, BdsCheck, problem)
 				expended_budget += (2 * problem.dim) * r
@@ -219,7 +220,7 @@ class SGD(Solver):
 
 
 	#gradient approximation of 
-	def finite_diff_spsa(self, new_solution, BdsCheck, problem) : 
+	def finite_diff_spsa(self, new_solution, k, BdsCheck, problem) : 
 		"""
 			SPSA-like finite difference approximation of the simulation model
 		
@@ -227,6 +228,8 @@ class SGD(Solver):
 		----------
 		new_solution : base.Solution
 			the current iterations solution 
+		k : int 
+			the current iteration value
 		BdsCheck : np.array([float])
 			check location of current solution to boundary to decide on type of finite difference approximation
 		problem : base.Problem
@@ -237,37 +240,40 @@ class SGD(Solver):
 		np.array([float])
 			The averaged gradient approximation from a number of gradient approximations at the current solutions value
 		"""
-		#calculate delta 
-		delta = self.rng_list[2].choices([-1, 1], [.5, .5], k=problem.dim)
 		r = self.factors['r']
-		alpha = self.factors['alpha']
+		x_k = new_solution.x
+		c_k = self.factors['alpha']/(k+1)**0.101
 		lower_bound = problem.lower_bounds
 		upper_bound = problem.upper_bounds
-		grads = np.zeros((problem.dim,r)) #Take r gradient approximations
-		
-		new_x = list(new_solution.x)
-		for batch in range(r) :
-			grad = np.zeros(problem.dim)
-			new_val = [a+b for a,b in zip(new_x, delta)]
-			x_plus = self.create_new_solution(tuple(new_val), problem)
-			problem.simulate(x_plus, 1)
-			fn1 = -1 * problem.minmax[0] * x_plus.objectives_mean
+		gbar = []
+		for _ in range(r) :
+			delta = self.rng_list[2].choices([-1, 1], [0.5, 0.5], k=problem.dim)
 
-			new_val = [a-b for a,b in zip(new_x, delta)]
-			x_minus = self.create_new_solution(tuple(new_val), problem)
-			problem.simulate(x_minus, 1)
-			fn2 = -1 * problem.minmax[0] * x_minus.objectives_mean
+			thetaplus = np.add(x_k, np.multiply(c_k, delta))
+			thetaminus = np.subtract(x_k, np.multiply(c_k, delta))
 
-			numerator = fn1 - fn2 
+			#check bounds
+			if np.any(np.multiply(c_k,delta) < np.array(lower_bound)) :
+				new_displacement = np.abs(np.subtract(lower_bound, x_k))
+				thetaminus = np.subtract(x_k,new_displacement)
 
-			#create gradient estimate 
-			for i in range(len(grad)) : 
-				grad[i] = numerator/(2*delta[i])
+			if np.any(np.multiply(c_k,delta) > np.array(upper_bound)) : 
+				new_displacement = np.abs(np.subtract(upper_bound, x_k))
+				thetaplus = np.add(x_k, new_displacement)
 
-			grads[:,batch] = grad
-		grad_mean = np.mean(grads,axis=1)
 
-		return grad_mean
+			thetaplus_sol = self.create_new_solution(tuple(thetaplus), problem)
+			thetaminus_sol = self.create_new_solution(tuple(thetaminus), problem)
+
+			problem.simulate(thetaplus_sol, 1)
+			problem.simulate(thetaminus_sol, 1)
+
+
+			finite_diff = np.divide(np.subtract(thetaplus_sol.objectives_mean, thetaminus_sol.objectives_mean),(2*c_k))
+			ghat = np.dot(-1, problem.minmax) * np.multiply(finite_diff,delta)
+			gbar.append(ghat)
+		# ghat = np.dot(-1, problem.minmax) * np.divide((thetaplus_sol.objectives_mean - thetaminus_sol.objectives_mean)/((step_weight_plus + step_weight_minus) * c), delta)
+		return np.mean(gbar,axis=0)
 
 
 	# Finite difference for approximating gradients.
