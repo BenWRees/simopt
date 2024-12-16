@@ -554,7 +554,14 @@ class random_model :
 	#nice way to allow for different types of random models
 
 	#Constructs the model
-	def construct_model(self, current_solution, delta, k, expended_budget, visited_pts_list) :
+	def construct_model(self, current_solution, delta, k, expended_budget, visited_pts_list) -> tuple[
+        Solution,
+        float,
+        int,
+        list[Solution],
+        list[Solution],
+		int
+    ]:
 		interpolation_solns = []
 		j = 0
 		# interpolation_sets = self.geometry_type_instantiation()(self.problem, current_solution.x)
@@ -577,9 +584,7 @@ class random_model :
 				expended_budget = self.sampling_instance.sampling_rule.calculate_kappa(self.problem, current_solution, delta_k, k, expended_budget, sample_size)
 
 			# construct the interpolation set
-			# self.geometry_instance.assign_current_val(current_solution.x)
 			empty_geometry = copy.deepcopy(self.geometry_instance)
-			# empty_geometry.assign_current_val(np.zeros(self.problem.dim))
 			
 			Z = empty_geometry.interpolation_points(np.zeros(self.problem.dim), delta_k)
 			Y = self.geometry_instance.interpolation_points(np.array(current_solution.x), delta_k)
