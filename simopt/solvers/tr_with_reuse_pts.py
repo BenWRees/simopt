@@ -1,15 +1,15 @@
-from numpy.linalg import pinv
 from numpy.linalg import norm
 import numpy as np
-from math import log, ceil, sqrt
+from math import ceil
 import warnings
-from scipy.optimize import NonlinearConstraint
-from scipy.optimize import minimize
 warnings.filterwarnings("ignore")
 import copy
 
-from simopt.solvers.trust_region_class import random_model, trust_region_geometry
-from ..base import Solver, Problem
+from simopt.base import (
+    Solution,
+)
+
+from simopt.solvers.trust_region_class import (random_model, trust_region_geometry)
 
 """
 	Class for a probabilistic trust region with design points able to be reused
@@ -50,17 +50,24 @@ from ..base import Solver, Problem
 
 #This is the only change, where we need to deal with cases of reuse in the model construction
 class random_model_reuse(random_model) :
-	def __init__(self, geometry_instance, tr_instance, problem, sampling_instance, model_construction_parameters) :
-		super().__init__(geometry_instance, tr_instance, problem, sampling_instance, model_construction_parameters)
+	def __init__(self, geometry_instance, tr_instance, poly_basis, problem, sampling_instance, model_construction_parameters) :
+		super().__init__(geometry_instance, tr_instance, poly_basis, problem, sampling_instance, model_construction_parameters)
 	
-	def construct_model(self, current_solution, delta, k, expended_budget, visited_pts_list):
+	def construct_model(self, current_solution, delta, k, expended_budget, visited_pts_list) -> tuple[
+        Solution,
+        float,
+        int,
+        list[Solution],
+        list[Solution],
+		int
+    ]:
 		interpolation_solns = []
 		x_k = current_solution.x
 		reuse_points = True
-		lambda_min = self.model_construction_parameters["lambda_min"]
+		lambda_min: int = self.model_construction_parameters["lambda_min"]
 		
 		j = 0
-		budget = self.problem.factors["budget"]
+		budget: int = self.problem.factors["budget"]
 		lambda_max = budget - expended_budget
 		pilot_run = ceil(max(lambda_min, min(.5 * self.problem.dim, lambda_max)) - 1)
 		# lambda_max = budget / (15 * sqrt(problem.dim))
@@ -80,6 +87,9 @@ class random_model_reuse(random_model) :
 				expended_budget += pilot_run
 				sample_size = pilot_run
 				expended_budget = self.sampling_instance.sampling_rule.calculate_kappa(self.problem, current_solution, delta_k, k, expended_budget, sample_size)
+			else : 
+				self.problem.simulate(current_solution, 2) 
+				expended_budget += 2
 
 			# Calculate the distance between the center point and other design points
 			Dist = []
@@ -94,12 +104,11 @@ class random_model_reuse(random_model) :
 			f_index = Dist.index(max(Dist))
 
 			# If it is the first iteration or there is no design point we can reuse within the trust region, use the coordinate basis
-			if (k == 1) or (norm(np.array(x_k) - np.array(visited_pts_list[f_index].x))==0) or reuse_points == False:
+			if (k == 1) or (norm(np.array(x_k) - np.array(visited_pts_list[f_index].x))==0) or not reuse_points :
 				# Construct the interpolation set
 
 
 				empty_geometry = copy.deepcopy(self.geometry_instance)
-				# empty_geometry.assign_current_val(np.zeros(self.problem.dim))
 			
 				Z = empty_geometry.interpolation_points(np.zeros(self.problem.dim), delta_k)
 				Y = self.geometry_instance.interpolation_points(np.array(current_solution.x), delta_k)
@@ -114,20 +123,22 @@ class random_model_reuse(random_model) :
 				# if first_basis has some zero components, use coordinate basis for those dimensions
 				for i in range(self.problem.dim):
 					if first_basis[i] == 0:
-						rotate_matrix = np.vstack((rotate_matrix, self.interpolation_sets.get_coordinate_vector(i)))
+						rotate_matrix = np.vstack((rotate_matrix, self.geometry_instance.get_coordinate_vector(i)))
 
 				# construct the interpolation set
-				Y = self.geometry_instance.get_rotated_basis_interpolation_points(delta_k, rotate_matrix, visited_pts_list[f_index].x)
+				Y = self.geometry_instance.get_rotated_basis_interpolation_points(np.array(x_k), delta_k, rotate_matrix, visited_pts_list[f_index].x)
 				
 				empty_geometry = copy.deepcopy(self.geometry_instance)
-				empty_geometry.assign_current_val(np.zeros(self.problem.dim))
-				Z = empty_geometry.get_rotated_basis_interpolation_points(delta_k, rotate_matrix, np.array(visited_pts_list[f_index].x) - np.array(x_k))
-
+				Z = empty_geometry.get_rotated_basis_interpolation_points(np.zeros(self.problem.dim), delta_k, rotate_matrix, np.array(visited_pts_list[f_index].x) - np.array(x_k))
+			else:
+				error_msg = "Error in constructing the interpolation set"
+				raise ValueError(error_msg)
+	
 			# Evaluate the function estimate for the interpolation points
 			for i in range(2 * self.problem.dim + 1):
 				# for x_0, we don't need to simulate the new solution
 				if (k == 1) and (i == 0):
-					self.problem.simulate(current_solution,1)
+					# self.problem.simulate(current_solution,1) #no need to simulate the new solution
 					fval.append(-1 * self.problem.minmax[0] * current_solution.objectives_mean)
 					interpolation_solns.append(current_solution)
 				# reuse the replications for x_k (center point, i.e., the incumbent solution)
@@ -143,17 +154,18 @@ class random_model_reuse(random_model) :
 					interpolation_solns.append(current_solution)
 
 				# else if reuse one design point, reuse the replications
-				elif (i == 1) and (norm(np.array(x_k) - np.array(visited_pts_list[f_index].x)) != 0) and reuse_points == True:
+				elif (i == 1) and (norm(np.array(x_k) - np.array(visited_pts_list[f_index].x)) != 0) and reuse_points :
+					reuse_solution = visited_pts_list[f_index]
 					#SAMPLING STRAT 2
-					init_sample_size = visited_pts_list[f_index].n_reps
+					init_sample_size = reuse_solution.n_reps
 					# sig2 = self.sampling_instance.sampling_rule.get_sig_2(visited_pts_list[f_index])
-					sig2 = visited_pts_list[f_index].objectives_var
+					sig2 = reuse_solution.objectives_var
 					
-					current_solution, sampling_budget = self.sampling_instance(self.problem, visited_pts_list[f_index],\
+					reuse_solution, sampling_budget = self.sampling_instance(self.problem, reuse_solution,\
 																  k, delta_k, expended_budget, init_sample_size, sig2, False)
 					expended_budget = sampling_budget
-					fval.append(-1 * self.problem.minmax[0] * current_solution.objectives_mean)
-					interpolation_solns.append(current_solution)
+					fval.append(-1 * self.problem.minmax[0] * reuse_solution.objectives_mean)
+					interpolation_solns.append(reuse_solution)
 
 				# for new points, run the simulation with pilot run
 				else:
@@ -170,7 +182,7 @@ class random_model_reuse(random_model) :
 					interpolation_solns.append(interpolation_pt_solution)
 
 			# get the current model coefficients
-			q, grad, Hessian = self.coefficient(Z, fval)
+			q, grad, Hessian = self.coefficient(Z, fval, delta)
 
 			if not self.model_construction_parameters['skip_criticality']:
 				# check the condition and break
@@ -219,13 +231,12 @@ class astrodf_geometry(trust_region_geometry) :
 		return rotate_matrix
 
 	# compute the interpolation points (2d+1) using the rotated coordinate basis (reuse one design point)
-	def get_rotated_basis_interpolation_points(self, delta, rotate_matrix, reused_x):
-		x_k = self.current_val
+	def get_rotated_basis_interpolation_points(self, x_k, delta, rotate_matrix, reused_x):
 		Y = [[x_k]]
 		epsilon = 0.01
-		for i in range(0, self.problem.dim):
+		for i in range(self.problem.dim):
 			if i == 0:
-				plus = [np.array(reused_x)]
+				plus = tuple([np.array(reused_x)])
 			else:
 				plus = Y[0] + delta * rotate_matrix[i]
 			minus = Y[0] - delta * rotate_matrix[i]
@@ -242,7 +253,7 @@ class astrodf_geometry(trust_region_geometry) :
 					elif plus[0][j] >= self.problem.upper_bounds[j]:
 						plus[0][j] = self.problem.upper_bounds[j] - epsilon
 
-			Y.append(plus)
-			Y.append(minus)
+			Y.append(list(plus))
+			Y.append(list(minus))
 		return Y
 		
