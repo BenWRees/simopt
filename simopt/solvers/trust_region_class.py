@@ -213,16 +213,8 @@ class trust_region(Solver) :
 		
 		return symmetric_matrix
 	
+	"""
 	def dot_prod(self, vector, tensor) :
-		"""
-		
-		Args: 
-			vector (np.ndarray): a vector of shape (2,1)
-			tensor (np.ndarray): a vector of shape (2,1,2,1)
-
-		Returns:
-			float - a scalar value
-		""" 
 		vals = []
 		for i in range(len(tensor)) :
 			vals.append(vector[i][0]*tensor[i][0])
@@ -233,18 +225,10 @@ class trust_region(Solver) :
 			sum += np.dot(vals[i], vals[i+1])
 
 		# sum = np.tensordot(res1,res2)
-		return sum
+		return sum"""
 	
+	"""
 	def mat_mul(self, matrix, vector) :
-		"""
-
-		Args:
-			matrix (np.ndarray): a matrix of shape (2,2,2,1)
-			vector (np.ndarray): a vector of shape (2,1)
-
-		Returns:
-			np.ndarray - a vector of shape (2,1,2,1)
-		"""
 		vector_res = []
 		for row in matrix :	#idx is row number
 			row_val= 0
@@ -252,7 +236,7 @@ class trust_region(Solver) :
 				row_val += vector[i]*row[i] 
 			vector_res.append(row_val)
 
-		return np.array(vector_res).reshape(len(vector_res),1,*vector_res[0].shape)
+		return np.array(vector_res).reshape(len(vector_res),1,*vector_res[0].shape)"""
 
 
 	def solve_subproblem(self, delta, model, problem, solution, visited_pts_list) :
@@ -655,11 +639,11 @@ class random_model :
 			# self.M = M
 		return q, grad, Hessian
 	
-	def collapse_tensor(self, tensor) :
+	"""def collapse_tensor(self, tensor) :
 		#tensor is of a shape (n,n,m,1). Want to reshape it to being (n,m*n)
 		n,m,x,y = tensor.shape 
 		reshaped_tensor = tensor.reshape(n, x * m)
-		return reshaped_tensor
+		return reshaped_tensor"""
 		
 	def local_model_evaluate(self, x_k, delta):
 		"""
@@ -675,7 +659,7 @@ class random_model :
 		evaluation = np.dot(X,q)
 		return evaluation
 
-	def construct_symmetric_matrix(self,column_vector) : 
+	"""def construct_symmetric_matrix(self,column_vector) : 
 		column_vector = np.array(column_vector).reshape((len(column_vector),1))
 		# Get dimensions
 		# m, _, n, _ = column_vector.shape
@@ -690,9 +674,9 @@ class random_model :
 			for j in range(m):
 				symmetric_matrix[i, j] = column_vector[abs(i - j)]
 
-		return symmetric_matrix
+		return symmetric_matrix"""
 
-	def dot_prod_tensor(self, vector1, vector2) : 
+	"""def dot_prod_tensor(self, vector1, vector2) : 
 		#check if the size is mismatched
 		if vector1.shape[1] != vector2.shape[1] : 
 			diff = abs(vector1.shape[1] - vector2.shape[1])
@@ -715,9 +699,9 @@ class random_model :
 		for i in range(vector1.shape[0]) : 
 			sum += np.matmul(vector1[i].T,vector2[i])[0,0]
 
-		return sum
+		return sum"""
 
-	def matmul_tensor(self, tensor, vector) : 
+	"""def matmul_tensor(self, tensor, vector) : 
 		tensor_shape = tensor.shape 
 
 		res_vect = []
@@ -728,9 +712,9 @@ class random_model :
 			res_vect.append(sum_vect) 
 
 		res = np.array(res_vect).reshape((len(res_vect),1, *res_vect[0].shape))
-		return res
+		return res"""
 
-	def pinv_of_tensor(self, tensor) :
+	"""def pinv_of_tensor(self, tensor) :
 		# Get the shape of the input tensor
 		n, m, j, k = tensor.shape
 		
@@ -751,7 +735,7 @@ class random_model :
 				# Store the result in the corresponding position in the pseudo-inverse tensor
 				pseudo_inv_tensor[:, :, i, l] = pseudo_inv_matrix
 		
-		return pseudo_inv_tensor 
+		return pseudo_inv_tensor """
 
 #function to handle basic sampling. For ASTRODF, this will be more complicated
 class sampling_rule :
