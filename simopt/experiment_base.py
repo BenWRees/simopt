@@ -355,7 +355,7 @@ def quantile_of_curves(curves: list[Curve], beta: float) -> Curve:
         raise TypeError(error_msg)
 
     unique_x_vals = np.unique(
-        [x_val for curve in curves for x_val in curve.x_vals]
+        [float(x_val) for curve in curves for x_val in curve.x_vals] #ADDED explicit casting to float due to design of curves class being too type strict
     )
     quantile_y_vals = [
         float(np.quantile([curve.lookup(x_val) for curve in curves], q=beta))
