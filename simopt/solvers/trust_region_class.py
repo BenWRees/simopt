@@ -411,6 +411,8 @@ class trust_region(Solver) :
 			model, problem, fval_tilde, delta_k, interpolation_solns, candidate_solution, recommended_solns
 			new_solution, delta_k, recommended_solns = self.evaluate_candidate_solution(model, problem, fval_tilde, delta_k, interpolation_solns, current_solution,\
 																			   candidate_solution, recommended_solns)	
+			
+			print('new solution: ', new_solution.x)
 
 			intermediate_budgets.append(expended_budget)
 
