@@ -1,6 +1,8 @@
 #type: ignore 
 """ Descriptions of various bases"""
 
+from abc import abstractmethod
+
 __all__ = ['PolynomialTensorBasis', 
 	'MonomialTensorBasis', 
 	'LegendreTensorBasis',
@@ -10,11 +12,15 @@ __all__ = ['PolynomialTensorBasis',
 	'ArnoldiPolynomialBasis',
  ]
 
+
+
 import numpy as np
 from numpy.polynomial.legendre import legvander, legder, legroots 
 from numpy.polynomial.chebyshev import chebvander, chebder, chebroots
 from numpy.polynomial.hermite import hermvander, hermder, hermroots
 from numpy.polynomial.laguerre import lagvander, lagder, lagroots
+from itertools import combinations_with_replacement
+from math import factorial
 
 
 class Basis(object):
@@ -65,7 +71,7 @@ def index_set(n, d):
 	I : ndarray
 		multi-indices ordered as columns
 	"""
-	I = np.zeros((1, d), dtype = np.int)
+	I = np.zeros((1, d), dtype = np.integer)
 	for i in range(1, n+1):
 		II = _full_index_set(i, d)
 		I = np.vstack((I, II))
@@ -365,6 +371,7 @@ class MonomialTensorBasis(PolynomialTensorBasis):
 		self.polyroots = np.polynomial.polynomial.polyroots
 		PolynomialTensorBasis.__init__(self, *args, **kwargs)	
 
+
 	
 class LegendreTensorBasis(PolynomialTensorBasis):
 	"""A tensor product basis of bounded total degree built from the Legendre polynomials
@@ -544,3 +551,118 @@ class ArnoldiPolynomialBasis(Basis):
 
 	def DDV(self, X = None):
 		raise NotImplementedError
+
+#Need to get this to work with POlyn
+class polynomial_basis(Basis) : 
+	def __init__(self, max_degree, interpolation_set, dim) : 
+		self.dim = dim
+		self.max_degree = max_degree
+		self.interpolation_set = interpolation_set
+		
+	#Construct a matrix Row by Row
+	def V(self, interpolation_set) :
+		self.assign_interpolation_set(interpolation_set)
+		no_rows = len(interpolation_set)
+		no_cols = self.solve_no_cols(interpolation_set)
+		matrix = []
+		for i in range(no_rows) :
+			row = []
+			for j in range(no_cols) : 
+				val = self.poly_basis_fn(interpolation_set,i,j)	
+				row.append(val) 
+			matrix.append(row)
+
+		X = np.array(matrix)
+		return X
+	
+	@abstractmethod
+	def poly_basis_fn(self, interpolation_set, row_num, col_num): 
+		raise NotImplementedError
+	
+	def assign_interpolation_set(self,interpolation_set) : 
+		self.interpolation_set = interpolation_set
+
+	@abstractmethod
+	def solve_no_cols(self,interpolation_set) -> int: 
+		raise NotImplementedError
+
+
+class natural_basis(polynomial_basis) : 
+	def __init__(self, degree, X, dim) : 
+		super().__init__(degree, X, dim)
+	#natural basis function for each element in the matrix
+	#each row should be of the form [1,x_1,x_2,...,x_p,(x_1)^2/2,]
+	#No of cols needed: 1 + len(current_solution.x) +  
+	def poly_basis_fn(self, interpolation_set, row_num, col_num) : 
+		val = interpolation_set[row_num]
+		p = len(val)
+		# Step 1: Define the full list of basis terms, up to max_degree
+		basis_terms = []
+	
+		# Add the constant term 1
+		basis_terms.append(lambda v: np.float64(1))
+		
+		# Add all first-order terms x_1, x_2, ..., x_p
+		for i in range(p):
+			basis_terms.append(lambda v, i=i: v[i].astype(np.float64).item())
+		 
+		
+		# Add higher-order terms up to degree max_degree
+		for degree in range(2, self.max_degree+1):
+			for comb in combinations_with_replacement(range(p), degree):
+				def term_func(v, comb=comb, degree=degree):
+					result = 1
+					for idx in comb:
+						result *= v[idx]
+					inner_result = result / factorial(degree)
+					return inner_result
+				basis_terms.append(term_func)
+		# Evaluate the basis term at the given row (vector)
+		res = basis_terms[col_num](val)
+		# return basis_terms[col_num](val)
+		return res
+	
+	def solve_no_cols(self, interpolation_set):
+		val = interpolation_set[0]
+		no_higher_order_terms = len([a for degree in range(2,self.max_degree+1) for a in combinations_with_replacement(range(len(val)), degree)]) 
+		return no_higher_order_terms*(self.max_degree - 1) + len(val) + 1
+		# return len(interpolation_set)
+	
+class lagrange_basis(polynomial_basis) : 
+	def __init__(self, degree, X, dim) : 
+		super().__init__(degree, X, dim)
+
+	#lagrange polynomical function for each element in the matrix
+	def poly_basis_fn(self, interpolation_set, row_num, col_num) :
+		current_val = interpolation_set[row_num]
+		denom_val = interpolation_set[col_num]
+
+		def basis_fn(x) :
+			denominator = np.linalg.norm(denom_val - x)
+			numerator = np.linalg.norm(current_val - x)
+			if denominator == 0 : 
+				denominator = 1 
+			return numerator/denominator
+		# basis_fn = lambda x : (np.linalg.norm(current_val - x))/(np.linalg.norm(denom_val - x))
+		lagrange_list = [basis_fn(a) for idx,a in enumerate(interpolation_set) if col_num != idx]
+		lagrange = np.prod(lagrange_list)
+		return lagrange 
+	
+	def solve_no_cols(self, interpolation_set):
+		return len(interpolation_set)
+	
+class NFP(polynomial_basis) : 
+	def __init__(self, degree, X, dim) : 
+		super().__init__(degree, X, dim) 
+
+	def poly_basis_fn(self, interpolation_set, row_num, col_num) :
+		if col_num == 0 : 
+			return 1
+		val = np.array(interpolation_set[row_num])
+		res = np.prod([(val-np.array(a)) for a in interpolation_set[:col_num]])
+		return float(res)
+	
+	def solve_no_cols(self, interpolation_set):
+		return len(interpolation_set)
+	
+
