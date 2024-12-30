@@ -1,20 +1,16 @@
 from __future__ import annotations
 from typing import Callable
-from abc import abstractmethod
 
-from numpy.linalg import pinv
-from numpy.linalg import norm
+from numpy.linalg import norm, pinv
 import numpy as np
-from math import ceil, factorial
+from math import ceil
 import warnings
 from scipy.optimize import NonlinearConstraint
 from scipy.optimize import minimize
-from scipy.special import eval_legendre
 warnings.filterwarnings("ignore")
 import importlib
 import copy
 
-from itertools import combinations_with_replacement
 
 from simopt.base import (
     ConstraintType,
@@ -24,6 +20,9 @@ from simopt.base import (
     Solver,
     VariableType,
 )
+
+from simopt.solvers.active_subspaces.basis import *
+
 # from .astrodf_ext import adaptive_sampling
 # from .tr_with_reuse_pts import random_model_reuse
 
@@ -116,7 +115,7 @@ class trust_region(Solver) :
 			"poly_basis": {
 				"description": "Polynomial basis to use in model construction",
 				"datatype": str, 
-				"default": "simopt.solvers.trust_region_class:natural_basis"
+				"default": "LegendreTensorBasis"
 			}, 
 			"random_model type" : {
 				"description": "The type of random model used",
@@ -186,8 +185,8 @@ class trust_region(Solver) :
 		return getattr(module, class_name)
 	
 	def polynomial_basis_instantiation(self) :
-		module_name, class_name = self.factors['poly_basis'].split(':')
-		module = importlib.import_module(module_name)
+		class_name = self.factors['poly_basis']
+		module = importlib.import_module('simopt.solvers.active_subspaces.basis')
 		return getattr(module, class_name)
 
 	def sample_instantiation(self) :
@@ -212,31 +211,6 @@ class trust_region(Solver) :
 				symmetric_matrix[i, j] = flat_vector[abs(i - j)]
 		
 		return symmetric_matrix
-	
-	"""
-	def dot_prod(self, vector, tensor) :
-		vals = []
-		for i in range(len(tensor)) :
-			vals.append(vector[i][0]*tensor[i][0])
-		# res1 = np.tensordot(vector, tensor, axes=([0, 1], [0, 1]))
-		# res2 = np.tensordot(vector, tensor, axes=([0, 1], [2, 3]))
-		sum = 0
-		for i in range(len(vals),2) : 
-			sum += np.dot(vals[i], vals[i+1])
-
-		# sum = np.tensordot(res1,res2)
-		return sum"""
-	
-	"""
-	def mat_mul(self, matrix, vector) :
-		vector_res = []
-		for row in matrix :	#idx is row number
-			row_val= 0
-			for i in range(len(row)) : 
-				row_val += vector[i]*row[i] 
-			vector_res.append(row_val)
-
-		return np.array(vector_res).reshape(len(vector_res),1,*vector_res[0].shape)"""
 
 
 	def solve_subproblem(self, delta, model, problem, solution, visited_pts_list) :
@@ -306,7 +280,7 @@ class trust_region(Solver) :
 		stepsize = np.subtract(candidate_solution.x, current_solution.x)
 		#TODO: Here we are seeing that for 2d legendre, this condition is being satisfied almost all the time.
 		# Problem with calculating step size?
-		model_reduction = model.local_model_evaluate(np.zeros(problem.dim), delta_k) - model.local_model_evaluate(stepsize, delta_k)
+		model_reduction = model.local_model_evaluate(np.zeros(problem.dim)) - model.local_model_evaluate(stepsize)
 		if model_reduction <= 0:
 			rho = 0
 		else:
@@ -368,7 +342,7 @@ class trust_region(Solver) :
 		#Dynamically load in different sampling rule, geometry type, and random model
 		sampling_instance = self.sample_instantiation()
 		geometry_instance = self.geometry_type_instantiation()(problem)
-		poly_basis_instance = self.polynomial_basis_instantiation()(problem, 2)
+		poly_basis_instance = self.polynomial_basis_instantiation()(2, None, problem.dim)
 		model = self.model_instantiation()(geometry_instance, self, poly_basis_instance, problem, sampling_instance, model_construction_parameters)
 		
 
@@ -401,7 +375,7 @@ class trust_region(Solver) :
 
 			intermediate_budgets.append(expended_budget)
 
-			print('new solution: ', new_solution.x)
+			# print('new solution: ', new_solution.x)
 
 		return recommended_solns, intermediate_budgets
 
@@ -461,54 +435,7 @@ class trust_region_geometry :
 
 			Y.append(plus)
 			Y.append(minus)
-		return Y
-	
-
-"""class chebyshev_interpolation(trust_region_geometry) : 
-	def __init__(self, problem):
-		super().__init__(problem)
-
-	def generate_chebyshev_nodes(self, current_solution, delta) : 
-		x_k = current_solution
-		d = self.problem.dim
-
-		Y = [[x_k]]
-		epsilon = 0.01
-		for i in range(0,2*d) :
-			for n in range(d) : 
-				chebyshev_point = []
-				int_pt = [np.cos(np.pi * ((2*i+1)/(2*(2*d + 1))))]
-
-			if sum(x_k) != 0: #check if x_k is not the origin
-				# block constraints
-				if int_pt[0][i] <= self.problem.lower_bounds[i]:
-					int_pt[0][i] = self.problem.lower_bounds[i] + epsilon
-
-			Y.append(int_pt)
-		return Y 
-
-	def calculate_chebyshev_fn(self, interpolation_set) : 
-		chebyshev_points = []
-		for pt in interpolation_set : 
-			break
-
-	def transform_interpolation_set(self, interpolation_set, delta) :
-		trans_int_set = [] 
-		current_sol = interpolation_set[0][0]
-		trans_int_set.append(current_sol)
-		for pt in interpolation_set[1:] : 
-			#move to current sol 
-			pt += current_sol
-			#scale to delta
-			pt *= delta
-			trans_int_set.append(pt)
-
-		return trans_int_set
-		
-	def interpolation_points(self, current_solution, delta):
-		int_set = self.generate_chebyshev_nodes(current_solution, delta)
-		return self.transform_interpolation_set(int_set, delta)"""
-	
+		return Y	
 
 class random_model :
 	"""
@@ -604,7 +531,7 @@ class random_model :
 			
 			
 			# construct the model and get the model coefficients
-			q, grad, Hessian = self.coefficient(Z, fval, delta_k)
+			q, grad, Hessian = self.coefficient(Z, fval)
 
 			if not self.model_construction_parameters['skip_criticality']:
 				# check the condition and break
@@ -623,29 +550,24 @@ class random_model :
 
 	#Calculate the Model coefficients
 	#TODO: When dealing with tensors for M, q, grad, and Hessian, reshape to be matrices and vectors
-	def coefficient(self, Y, fval, delta):
+	def coefficient(self, Y, fval):
 		d = self.problem.dim
-		M = self.poly_basis.construct_matrix(Y, delta) # now constructs M based on the polynomial basis being used
+		Y = np.array(Y).reshape((len(Y), self.problem.dim)) #reshape Y to be a matrix of (M,n)
+		M = self.poly_basis.V(Y) # now constructs M based on the polynomial basis being used
 		q = np.matmul(pinv(M), fval)
 				
 		grad = q[1:d + 1]
 		grad = np.reshape(grad, d)
 
-		if self.poly_basis.max_degree > 1 :
+		if self.poly_basis.degree > 1 :
 			Hessian = q[d + 1:len(fval)]
 			Hessian = np.reshape(Hessian, d)
 		else : 
 			Hessian = []
 			# self.M = M
 		return q, grad, Hessian
-	
-	"""def collapse_tensor(self, tensor) :
-		#tensor is of a shape (n,n,m,1). Want to reshape it to being (n,m*n)
-		n,m,x,y = tensor.shape 
-		reshaped_tensor = tensor.reshape(n, x * m)
-		return reshaped_tensor"""
 		
-	def local_model_evaluate(self, x_k, delta):
+	def local_model_evaluate(self, x_k):
 		"""
 			Calculate the solution of the local model at the point x_k
 		
@@ -653,89 +575,13 @@ class random_model :
 			x_k ([float]): the current iteration's solution value
 		"""
 		q = self.coefficients[0]
-		X = np.array([self.poly_basis.poly_basis_fn([[a] for a in [x_k]*len(q) ], 0, j, delta) for j in range(len(q))]) #tensor
+		# X = np.array([self.poly_basis.poly_basis_fn([[a] for a in [x_k]*len(q) ], 0, j) for j in range(len(q))]) #tensor
+		interpolation_set = np.array([x_k for _ in range(len(q))])
+		X = self.poly_basis.V(interpolation_set)[0]
 		if len(X[0].shape) == 2 : 
 			X = [i[0,0] for i in X]
 		evaluation = np.dot(X,q)
 		return evaluation
-
-	"""def construct_symmetric_matrix(self,column_vector) : 
-		column_vector = np.array(column_vector).reshape((len(column_vector),1))
-		# Get dimensions
-		# m, _, n, _ = column_vector.shape
-		m,n = column_vector.shape
-
-		# Initialize the symmetric matrix
-		symmetric_matrix = np.zeros((m,m))
-
-
-		# Fill in the symmetric matrix
-		for i in range(m):
-			for j in range(m):
-				symmetric_matrix[i, j] = column_vector[abs(i - j)]
-
-		return symmetric_matrix"""
-
-	"""def dot_prod_tensor(self, vector1, vector2) : 
-		#check if the size is mismatched
-		if vector1.shape[1] != vector2.shape[1] : 
-			diff = abs(vector1.shape[1] - vector2.shape[1])
-			#the elements in vector 1 are smaller than in vector 2
-			new_vect = []
-			if vector1.shape[1] < vector2.shape[1] :
-				for vect in vector1 : 
-					zeros = np.zeros((diff,1))
-					vect = np.vstack((vect,zeros))
-					new_vect.append(vect)
-				vector1 = np.array(new_vect)
-			else : 
-				for vect in vector2 : 
-					zeros = np.zeros((diff,1))
-					vect = np.vstack((vect,zeros))
-					new_vect.append(vect)
-				vector2 = np.array(new_vect) 
-
-		sum = 0
-		for i in range(vector1.shape[0]) : 
-			sum += np.matmul(vector1[i].T,vector2[i])[0,0]
-
-		return sum"""
-
-	"""def matmul_tensor(self, tensor, vector) : 
-		tensor_shape = tensor.shape 
-
-		res_vect = []
-		for j in range(tensor_shape[0]) : 
-			sum_vect = np.zeros((tensor_shape[2], tensor_shape[3]))
-			for i in range(tensor_shape[1]) :
-				sum_vect += vector[i][0]*tensor[j,i]
-			res_vect.append(sum_vect) 
-
-		res = np.array(res_vect).reshape((len(res_vect),1, *res_vect[0].shape))
-		return res"""
-
-	"""def pinv_of_tensor(self, tensor) :
-		# Get the shape of the input tensor
-		n, m, j, k = tensor.shape
-		
-		# Initialize an empty array to store the pseudo-inverse tensor with shape (m, n, j, k)
-		pseudo_inv_tensor = np.empty((m, n, j, k))
-		
-		# Iterate over each (j, k) slice and compute the pseudo-inverse along (n, m) axes
-		for i in range(j):
-			for l in range(k):
-				# Extract the (n, m) matrix at position (i, l)
-				matrix = tensor[:, :, i, l]
-				
-				# Compute the pseudo-inverse of the (n, m) matrix
-				U, S, Vt = np.linalg.svd(matrix, full_matrices=False)
-				S_inv = np.diag([1/s if s > 1e-10 else 0 for s in S])
-				pseudo_inv_matrix = Vt.T @ S_inv @ U.T
-				
-				# Store the result in the corresponding position in the pseudo-inverse tensor
-				pseudo_inv_tensor[:, :, i, l] = pseudo_inv_matrix
-		
-		return pseudo_inv_tensor """
 
 #function to handle basic sampling. For ASTRODF, this will be more complicated
 class sampling_rule :
@@ -767,7 +613,8 @@ class basic_sampling :
 		return current_solution, used_budget
 
 
-class polynomial_basis : 
+#Need to rewrite all of this 
+"""class polynomial_basis : 
 	def __init__(self, problem, max_degree) : 
 		self.problem = problem 
 		self.max_degree = max_degree
@@ -938,8 +785,4 @@ class legendre_basis(polynomial_basis) :
 	
 	def solve_no_cols(self, interpolation_set):
 		return len(interpolation_set)*self.problem.dim
-	
-
-
-
-
+"""
