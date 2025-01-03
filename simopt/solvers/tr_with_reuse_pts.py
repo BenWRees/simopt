@@ -170,7 +170,7 @@ class random_model_reuse(random_model) :
 				# for new points, run the simulation with pilot run
 				else:
 					#SAMPLING STRAT 3
-					interpolation_pt_solution = self.tr_instance.create_new_solution(tuple(Y[i][0]), self.problem)
+					interpolation_pt_solution = self.tr_instance.create_new_solution(tuple(Y[i]), self.problem)
 					visited_pts_list.append(interpolation_pt_solution)
 					self.problem.simulate(interpolation_pt_solution, pilot_run)
 					expended_budget += pilot_run 
@@ -182,7 +182,7 @@ class random_model_reuse(random_model) :
 					interpolation_solns.append(interpolation_pt_solution)
 
 			# get the current model coefficients
-			q, grad, Hessian = self.coefficient(Z, fval, delta)
+			q, grad, Hessian = self.coefficient(Z, fval)
 
 			if not self.model_construction_parameters['skip_criticality']:
 				# check the condition and break
@@ -232,11 +232,11 @@ class astrodf_geometry(trust_region_geometry) :
 
 	# compute the interpolation points (2d+1) using the rotated coordinate basis (reuse one design point)
 	def get_rotated_basis_interpolation_points(self, x_k, delta, rotate_matrix, reused_x):
-		Y = [[x_k]]
+		Y = [x_k]
 		epsilon = 0.01
 		for i in range(self.problem.dim):
 			if i == 0:
-				plus = tuple([np.array(reused_x)])
+				plus = np.array(reused_x)
 			else:
 				plus = Y[0] + delta * rotate_matrix[i]
 			minus = Y[0] - delta * rotate_matrix[i]
@@ -244,16 +244,16 @@ class astrodf_geometry(trust_region_geometry) :
 			if sum(x_k) != 0:
 				# block constraints
 				for j in range(self.problem.dim):
-					if minus[0][j] <= self.problem.lower_bounds[j]:
-						minus[0][j] = self.problem.lower_bounds[j] + epsilon
-					elif minus[0][j] >= self.problem.upper_bounds[j]:
-						minus[0][j] = self.problem.upper_bounds[j] - epsilon
-					if plus[0][j] <= self.problem.lower_bounds[j]:
-						plus[0][j] = self.problem.lower_bounds[j] + epsilon
-					elif plus[0][j] >= self.problem.upper_bounds[j]:
-						plus[0][j] = self.problem.upper_bounds[j] - epsilon
+					if minus[j] <= self.problem.lower_bounds[j]:
+						minus[j] = self.problem.lower_bounds[j] + epsilon
+					elif minus[j] >= self.problem.upper_bounds[j]:
+						minus[j] = self.problem.upper_bounds[j] - epsilon
+					if plus[j] <= self.problem.lower_bounds[j]:
+						plus[j] = self.problem.lower_bounds[j] + epsilon
+					elif plus[j] >= self.problem.upper_bounds[j]:
+						plus[j] = self.problem.upper_bounds[j] - epsilon
 
-			Y.append(list(plus))
-			Y.append(list(minus))
+			Y.append(plus)
+			Y.append(minus)
 		return Y
 		
