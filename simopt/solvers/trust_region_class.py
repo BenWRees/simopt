@@ -115,7 +115,7 @@ class trust_region(Solver) :
 			"poly_basis": {
 				"description": "Polynomial basis to use in model construction",
 				"datatype": str, 
-				"default": "LegendreTensorBasis"
+				"default": "NaturalPolynomialBasis"
 			}, 
 			"random_model type" : {
 				"description": "The type of random model used",
@@ -278,8 +278,6 @@ class trust_region(Solver) :
 		"""
 		fval = model.fval
 		stepsize = np.subtract(candidate_solution.x, current_solution.x)
-		#TODO: Here we are seeing that for 2d legendre, this condition is being satisfied almost all the time.
-		# Problem with calculating step size?
 		model_reduction = model.local_model_evaluate(np.zeros(problem.dim)) - model.local_model_evaluate(stepsize)
 		if model_reduction <= 0:
 			rho = 0
@@ -375,6 +373,7 @@ class trust_region(Solver) :
 
 			intermediate_budgets.append(expended_budget)
 
+
 			# print('new solution: ', new_solution.x)
 
 		return recommended_solns, intermediate_budgets
@@ -399,13 +398,6 @@ class trust_region_geometry :
 		arr = np.zeros(self.problem.dim)
 		arr[index] = 1.0
 		return arr
-	
-	# generate the coordinate vector corresponding to the variable number v_no
-	def get_coordinate_vector(self, v_no):
-		size = self.problem.dim
-		arr = np.zeros(size)
-		arr[v_no] = 1.0
-		return arr
 
 	def interpolation_points(self, current_solution, delta):
 		"""
@@ -420,7 +412,7 @@ class trust_region_geometry :
 		x_k = current_solution
 		d = self.problem.dim
 
-		Y = [[x_k]]
+		Y = [x_k]
 		epsilon = 0.01
 		for i in range(0, d):
 			plus = Y[0] + delta * self.standard_basis(i)
@@ -428,10 +420,10 @@ class trust_region_geometry :
 
 			if sum(x_k) != 0: #check if x_k is not the origin
 				# block constraints
-				if minus[0][i] <= self.problem.lower_bounds[i]:
-					minus[0][i] = self.problem.lower_bounds[i] + epsilon
-				if plus[0][i] >= self.problem.upper_bounds[i]:
-					plus[0][i] = self.problem.upper_bounds[i] - epsilon
+				if minus[i] <= self.problem.lower_bounds[i]:
+					minus[i] = self.problem.lower_bounds[i] + epsilon
+				if plus[i] >= self.problem.upper_bounds[i]:
+					plus[i] = self.problem.upper_bounds[i] - epsilon
 
 			Y.append(plus)
 			Y.append(minus)
@@ -514,7 +506,7 @@ class random_model :
 
 				# Otherwise, we need to simulate the system
 				else:
-					interpolation_pt_solution = self.tr_instance.create_new_solution(tuple(Y[i][0]), self.problem)
+					interpolation_pt_solution = self.tr_instance.create_new_solution(tuple(Y[i]), self.problem)
 					# check if there is existing result
 					self.problem.simulate(interpolation_pt_solution, 1)
 					expended_budget += 1
@@ -552,9 +544,12 @@ class random_model :
 	#TODO: When dealing with tensors for M, q, grad, and Hessian, reshape to be matrices and vectors
 	def coefficient(self, Y, fval):
 		d = self.problem.dim
-		Y = np.array(Y).reshape((len(Y), self.problem.dim)) #reshape Y to be a matrix of (M,n)
+		Y = np.row_stack(Y) #reshape Y to be a matrix of (M,d)
+		# print('Y (after reshape): ', Y)
+		self.poly_basis.assign_interpolation_set(Y)
 		M = self.poly_basis.V(Y) # now constructs M based on the polynomial basis being used
 		q = np.matmul(pinv(M), fval)
+		# print('q: ', q)
 				
 		grad = q[1:d + 1]
 		grad = np.reshape(grad, d)
@@ -575,8 +570,8 @@ class random_model :
 			x_k ([float]): the current iteration's solution value
 		"""
 		q = self.coefficients[0]
-		# X = np.array([self.poly_basis.poly_basis_fn([[a] for a in [x_k]*len(q) ], 0, j) for j in range(len(q))]) #tensor
-		interpolation_set = np.array([x_k for _ in range(len(q))])
+		interpolation_set = x_k.reshape((1,len(x_k)))
+		# interpolation_set = np.row_stack(interpolation_set)
 		X = self.poly_basis.V(interpolation_set)[0]
 		if len(X[0].shape) == 2 : 
 			X = [i[0,0] for i in X]
@@ -611,178 +606,3 @@ class basic_sampling :
 		problem.simulate(current_solution,sample_number)
 		used_budget += sample_number
 		return current_solution, used_budget
-
-
-#Need to rewrite all of this 
-"""class polynomial_basis : 
-	def __init__(self, problem, max_degree) : 
-		self.problem = problem 
-		self.max_degree = max_degree
-		self.interpolation_set = None
-		
-	#Construct a matrix Row by Row
-	def construct_matrix(self, interpolation_set, delta) :
-		self.assign_interpolation_set(interpolation_set)
-		no_rows = len(interpolation_set)
-		no_cols = self.solve_no_cols(interpolation_set)
-		matrix = []
-		for i in range(no_rows) :
-			row = []
-			for j in range(no_cols) : 
-				val = self.poly_basis_fn(interpolation_set,i,j, delta)	
-				row.append(val) 
-			matrix.append(row)
-
-		X = np.array(matrix)
-		return X
-	
-	@abstractmethod
-	def poly_basis_fn(self, interpolation_set, row_num, col_num, delta): 
-		raise NotImplementedError
-	
-	def assign_interpolation_set(self,interpolation_set) : 
-		self.interpolation_set = interpolation_set
-
-	@abstractmethod
-	def solve_no_cols(self,interpolation_set) -> int: 
-		raise NotImplementedError
-
-class monimal_basis(polynomial_basis) : 
-	def __init__(self, problem, max_degree):
-		super().__init__(problem, max_degree)
-
-	def poly_basis_fn(self, interpolation_set, row_num, col_num, delta):
-		val = interpolation_set[row_num][0]
-		#calculate the whole row,
-		row = [1] 
-		for exp in range(1, self.max_degree+1) : 
-			row =  np.append(row, val**exp)
-
-		return row[col_num]
-	
-	def solve_no_cols(self, interpolation_set):
-		val = interpolation_set[0][0]
-		return 1 + (len(val)*self.max_degree)
-
-
-class natural_basis(polynomial_basis) : 
-	def __init__(self, problem, max_degree) : 
-		super().__init__(problem, max_degree)
-	#natural basis function for each element in the matrix
-	#each row should be of the form [1,x_1,x_2,...,x_p,(x_1)^2/2,]
-	#No of cols needed: 1 + len(current_solution.x) +  
-	def poly_basis_fn(self, interpolation_set, row_num, col_num, delta) : 
-		val = interpolation_set[row_num][0]
-		p = len(val)
-		# Step 1: Define the full list of basis terms, up to max_degree
-		basis_terms = []
-	
-		# Add the constant term 1
-		basis_terms.append(lambda v: np.float64(1))
-		
-		# Add all first-order terms x_1, x_2, ..., x_p
-		for i in range(p):
-			basis_terms.append(lambda v, i=i: v[i].astype(np.float64).item())
-		 
-		
-		# Add higher-order terms up to degree max_degree
-		for degree in range(2, self.max_degree+1):
-			for comb in combinations_with_replacement(range(p), degree):
-				def term_func(v, comb=comb, degree=degree):
-					result = 1
-					for idx in comb:
-						result *= v[idx]
-					inner_result = result / factorial(degree)
-					return inner_result
-				basis_terms.append(term_func)
-		# Evaluate the basis term at the given row (vector)
-		res = basis_terms[col_num](val)
-		# return basis_terms[col_num](val)
-		return res
-	
-	def solve_no_cols(self, interpolation_set):
-		val = interpolation_set[0][0]
-		no_higher_order_terms = len([a for degree in range(2,self.max_degree+1) for a in combinations_with_replacement(range(len(val)), degree)]) 
-		return no_higher_order_terms*(self.max_degree - 1) + len(val) + 1
-		# return len(interpolation_set)
-	
-class lagrange_basis(polynomial_basis) : 
-	def __init__(self, problem, max_degree) : 
-		super().__init__(problem, max_degree)
-
-	#lagrange polynomical function for each element in the matrix
-	def poly_basis_fn(self, interpolation_set, row_num, col_num, delta) :
-		current_val = interpolation_set[row_num][0]
-		denom_val = interpolation_set[col_num][0]
-
-		def basis_fn(x) :
-			denominator = np.linalg.norm(denom_val - x)
-			numerator = np.linalg.norm(current_val - x)
-			if denominator == 0 : 
-				denominator = 1 
-			return numerator/denominator
-		# basis_fn = lambda x : (np.linalg.norm(current_val - x))/(np.linalg.norm(denom_val - x))
-		lagrange_list = [basis_fn(a) for idx,a in enumerate(interpolation_set) if col_num != idx]
-		lagrange = np.prod(lagrange_list)
-		return lagrange 
-	
-	def solve_no_cols(self, interpolation_set):
-		return len(interpolation_set)
-	
-class NFP(polynomial_basis) : 
-	def __init__(self, problem, max_degree) : 
-		super().__init__(problem, max_degree) 
-
-	def poly_basis_fn(self, interpolation_set, row_num, col_num, delta) :
-		if col_num == 0 : 
-			return 1
-		val = np.array(interpolation_set[row_num])
-		res = np.prod([(val-np.array(a)) for a in interpolation_set[:col_num]])
-		return float(res)
-	
-	def solve_no_cols(self, interpolation_set):
-		return len(interpolation_set)
-
-class legendre_basis(polynomial_basis) : 
-	def __init__(self, problem, max_degree, delta=0):
-		super().__init__(problem, max_degree)
-
-	def project_set(self, interpolation_set, delta) : 
-		#project into spherical coordinates
-		projected_set = []
-		curr_soln = interpolation_set[0][0]
-		for val in interpolation_set :
-			val=val[0]
-			r = norm(val)
-			rad = np.array([0] * len(val))
-			rad[0] = delta
-			rad = rad + curr_soln
-			v1_u = val/norm(val)
-			v2_u = rad/norm(rad)
-
-			if np.array_equal(val, np.zeros(val.shape)) :
-				v1_u = np.zeros(v1_u.shape)
-
-
-			angle = np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
-
-			
-			projected_set.append(angle)
-		return projected_set
-
-	def project_to_current_trust_region(self, res) : 
-		pass 
-	
-	#TODO: can also do norm of val and pass through eval_legendre
-	def poly_basis_fn(self, interpolation_set, row_num, col_num, delta):	
-		no_of_cols = self.solve_no_cols(interpolation_set)
-		interpolation_set = self.project_set(interpolation_set, delta)
-		val = np.array(interpolation_set[row_num])
-		row = [] 
-		for i in range(no_of_cols) :
-			row.extend(eval_legendre(i, np.cos(val)).flatten())
-		return row[col_num]
-	
-	def solve_no_cols(self, interpolation_set):
-		return len(interpolation_set)*self.problem.dim
-"""
