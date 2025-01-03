@@ -1,28 +1,31 @@
+#type: ignore 
 """mini-batch SGD 
 
 TODO: add bounds in
 
 """
-import numpy as np
+from __future__ import annotations
+from typing import Callable
+
 import warnings
 
 #import ridge function approximation from PSDR-Master
-import sys 
+import sys
+
 sys.path.append('~/Desktop/Simopt')
 
-from numpy.linalg import norm, pinv
-from math import log, ceil, sqrt
-import copy
-
-from scipy.special import legendre, eval_legendre
-
-import scipy
-
-from simopt.solvers.trust_region_class import trust_region
 warnings.filterwarnings("ignore")
 
-from ..base import Solver
-from ridge_regression import *
+from simopt.base import (
+	ConstraintType,
+	ObjectiveType,
+	Solver,
+	VariableType,
+)
+from simopt.solvers.active_subspaces.polyridge import *
+import numpy as np 
+from numpy.linalg import norm
+from scipy.optimize import minimize, NonlinearConstraint
 
 class OMoRF(Solver):
 	"""
@@ -52,8 +55,108 @@ class OMoRF(Solver):
 	check_factor_list : dict 
 		functions to check each fixed factor is performing
 	"""
+
+	@property
+	def objective_type(self) -> ObjectiveType:
+		return ObjectiveType.SINGLE
+
+	@property
+	def constraint_type(self) -> ConstraintType:
+		return ConstraintType.BOX
+
+	@property
+	def variable_type(self) -> VariableType:
+		return VariableType.CONTINUOUS
+
+	@property
+	def gradient_needed(self) -> bool:
+		return False
 	
-	def __init__(self, name="OMoRF", fixed_factors=None):
+	@property
+	def specifications(self) -> dict[str, dict] :
+		return {
+			"crn_across_solns": {
+				"description": "use CRN across solutions?",
+				"datatype": bool,
+				"default": True
+			},
+			"eta_1" : {
+				"description": "",
+				"datatype": float, 
+				"default": 0.1
+			}, 
+			"eta_2": {
+				"description": "",
+				"datatype": float, 
+				"default": 0.7
+
+			},
+			"initial radius": {
+				"description": "",
+				"datatype": float, 
+				"default": 0.0
+
+			}, 
+			"delta": {
+				"description": "size of the trust-region radius",
+				"datatype": float,
+				"default": 5.0
+			}, 
+			"delta_max": {
+				"description": "",
+				"datatype": float, 
+				"default": 0.0
+
+			},
+			"gamma_1": {
+				"description": "trust-region radius increase rate after a very successful iteration",
+				"datatype": float,
+				"default": 1.5
+			},
+			"gamma_2": {
+				"description": "trust-region radius decrease rate after an unsuccessful iteration",
+				"datatype": float,
+				"default": 0.5
+			},
+			"gamma_3": {
+				"description": "",
+				"datatype": float, 
+				"default": 2.5
+			},
+			"gamma_shrinking": {
+				"description": "",
+				"datatype": float, 
+				"default": 0.5
+			}, 
+			"omega_shrinking": {
+				"description": "",
+				"datatype": float,
+				"default": 0.5
+			}, 
+			"dimension reduction": {
+				"description": "dimension size of the active subspace",
+				"datatype": int, 
+				"default": 2
+			}, 
+			"adaptive dimension check": {
+				"description": "flag for if AIC will be applied",
+				"datatype": bool, 
+				"default": False
+			}, 
+			"adaptive interpolation construction": {
+				"description": "flag for if sampling for the interpolation sets is adaptive",
+				"datatype": bool, 
+				"default": False
+			}
+		}
+	
+	@property
+	def check_factor_list(self) -> dict[str, Callable] : 
+		return {
+			"crn_across_solns": self.check_crn_across_solns,
+		}
+	
+	def __init__(self, name="OMoRF", fixed_factors: dict | None = None) -> None:
 		"""
 			Initialisation of the OMoRF solver see base.Solver 
 		
@@ -64,7 +167,7 @@ class OMoRF(Solver):
 		fixed_factors : None, optional
 			fixed_factors of the solver
 		"""
-		if fixed_factors is None:
+		"""if fixed_factors is None:
 			fixed_factors = {}
 		self.name = name
 		self.objective_type = "single"
@@ -149,8 +252,8 @@ class OMoRF(Solver):
 		}
 		self.check_factor_list = {
 			"crn_across_solns": self.check_crn_across_solns,
-		}
-		super().__init__(fixed_factors)
+		}"""
+		super().__init__(name, fixed_factors)
 
 
 	def solve_subproblem(self, delta, model, problem, solution, visited_pts_list) :
@@ -362,7 +465,7 @@ class OMoRF(Solver):
 			#evaluate model
 			model, problem, fval_tilde, delta_k, interpolation_solns, candidate_solution, recommended_solns
 			current_solution, delta_k, recommended_solns, interpolation_set, active_subspace_set, subspace_matrix, rho_k = self.evaluate_candidate_solution(model, problem, fval_tilde, delta_k, rho_k, current_solution,\
-																			    candidate_solution, recommended_solns, model.polynomial_basis,\
+																				candidate_solution, recommended_solns, model.polynomial_basis,\
 																					 interpolation_set, active_subspace_set, subspace_matrix)	
 
 			intermediate_budgets.append(expended_budget)
@@ -408,9 +511,9 @@ class OMoRF(Solver):
 		for i in range(1, q) :
 			if geometry_improving_flag :
 				obj_fn_gi = lambda x : np.abs(pivot_polynomials[i](x))
-				x_t = scipy.minimise(obj_fn_gi)
+				x_t = minimize(obj_fn_gi)
 				new_solution = self.create_new_solution(tuple(x_t), problem)
-				problem.simulate(new_solution)
+				problem.simulate(new_solution,1)
 
 			else : 
 				obj_fn = lambda x : np.abs(pivot_polynomials[i](x_t))/(max(norm(x-x_t)**4/delta_k**4,1))
@@ -465,158 +568,4 @@ class trust_region_interpolation_points :
 
 		#maybe make half of the vectors stored in Y reflections by -rand_vect?
 		return Y 
-
-class data_driven_ridge : 
-	"""
-		This class constructs both the active subspace and model coefficients 
-	"""
-	def __init__(self, problem) :
-		self.active_subspace_matrix = None 
-		self.model_coefficients = None
-		self.problem = problem
-		self.polynomial_basis = None #np.polynomial.legendre.Legendre.basis(deg=2)
-
-	def affine_trans_hypercube(self, sample_pts) : 
-		# Stack vectors to compute min and max per dimension
-		stacked = np.vstack([v.flatten() for v in sample_pts])  # Shape: (n, M)
-		a = np.min(stacked, axis=1)  # Min values for each dimension
-		b = np.max(stacked, axis=1)  # Max values for each dimension
-
-		# Target range
-		target_min, target_max = (-1,1)
-		scaling_factors = (target_max - target_min) / (b - a)  # Scale to target range
-		translation_vector = target_min - a * scaling_factors  # Translate to target range
-
-		# Apply transformation to each vector
-		transformed_vectors = []
-		for v in sample_pts:
-			v = v.flatten()  # Flatten (n, 1) vector to (n,)
-			v_transformed = scaling_factors * v + translation_vector
-			transformed_vectors.append(v_transformed.reshape(-1, 1))  # Reshape back to (n, 1)
-
-		return transformed_vectors
-	
-	def build_V_U(self,y_vals, polynomial_degree) : 
-		matrix = np.zeros((len(y_vals),polynomial_degree)) #shape of (M,n)
-		for col_no in range(len(matrix)) : 
-			for row_no in range(len(matrix[0])) : 
-				matrix[col_no][row_no] = eval_legendre(y_vals[row_no],col_no)
-
-		return matrix
-
-	def build_jacobian(self, fvals, V_U, coeff) : 
-		#Differentiate r with respect to U
-		V_U_plus = V_U + 0.01
-		V_U_minus = V_U - 0.01
-
-		r_plus = np.subtract(fvals, np.matmul(V_U_plus,coeff)) 
-		r_minus = np.subtract(fvals, np.matmul(V_U_minus,coeff)) 
-
-		numerator = np.subtract(r_plus, r_minus)
-		return numerator/0.02
-
-
-	def solve_variable_projection_ridge_approx(self, sample_points, fvals, subspace_dim, polynomial_degree, step_length_reduction, beta) :
-		"""
-		 This is the algorithm as provided data-driven polynomial ridge approximation using variable projection by Hokanson and Constantine 
-
-		Args:
-			sample_points (np.array): sample points from the trust-region of shape (n,v)
-			problem (Problem): The problem being optimised (this is used in order to get function values)
-			subspace_dim (int): dimension of the active subspace
-			polynomial_degree (int): Degree of the polynomial ridge model
-			step_length_reduction (float): factor to reduce the step size in the Guass-Newton algorithm
-			beta (float): The Armijo Condition tolerance
-
-		Returns:
-			(np.array): The active subspace basis matrix of shape (n,m)
-			(np.array): the coefficients of the ridge model 
-			(np.series): The polynomial basis with degree N 
-		"""
-		#Sample from normal distribution 
-		Z = np.random.normal(size=(len(sample_points[0]),polynomial_degree)) #shape (n,v)
-		#Construct QR decomposition of Z 
-		U,R = np.linalg.qr(Z)
-		previous_U = np.zeros(U.shape)
-		while(not (np.allclose(U,previous_U,atol=beta))) : #update until U converges, based on some tolerance
-			#compute subspace values 
-			y_vals = [np.matmul(U.T, a) for a in sample_points]
-			y_vals = [a.reshape((len(a),1)) for a in y_vals]
-			#construct affine transformation 
-			eta = self.affine_trans_hypercube(y_vals)
-			
-			#Build V(U)
-			V_U = self.build_V_U(y_vals, polynomial_degree)	
-			#compute polynomial coefficients 
-			coeff = np.matmul(pinv(V_U), fvals)
-
-			#compute the residual
-			r = np.subtract(fvals, np.matmul(V_U,coeff))
-
-			#TODO: build the jacobian - is a 3d tensor of shape (len(sample_points), len(sample_points[0]), polynomial_degree)
-			jacobian = self.build_jacobian(fvals, V_U, coeff) #for SAN-1 this is (14,13,1)
-			print('shape of jacobian: ', jacobian.shape)
-			#build the gradient
-			grad = np.einsum('nmt,nk->mt', jacobian, r)
-
-			#compute the short form SVD
-			Y, Sigma, Z_trans = np.linalg.svd(self.vectorise_tensor(jacobian))
-
-			#compute gauss newton step 
-			delta_vectorised = -1*np.matmul(np.pinv(self.vectorise_tensor(jacobian)),r)
-
-			#compute delta from delta_vectorised 
-			delta = delta_vectorised.reshape(U.shape)
-			alpha = np.trace(grad.T* delta)
-
-			if alpha >= 0 : 
-				delta = -1*grad 
-				alpha = np.trace(np.matmul(grad.T, delta)) 
-
-			#Compute short form SVD 
-			Y, Sigma, Z_trans = np.linalg.svd(delta)
-			i = 0
-			while True : 
-				t = step_length_reduction**i 
-				#compute new step 
-				U_plus = np.matmul(U, np.matmul(Z,np.matmul(np.cos(Sigma*t),Z.t))) + np.matmul(Y, np.matmul(np.sin(Sigma*t), Z.t))
-				y_vals_plus = [np.matmul(U_plus.T, a) for a in sample_points]
-				V_U_plus = self.build_V_U(y_vals_plus, polynomial_degree)
-				#compute new residual 
-				r_plus = np.subtract(fvals, np.matmul( np.matmul(V_U_plus, pinv(V_U_plus)) ,fvals))
-				i+= 1
-				if norm(r_plus) <= norm(r) + (alpha*beta*t) : 
-					break
-			previous_U = U
-			U = U_plus
-	def fit_model(self, interpolation_points, new_solution, delta_k, k, expended_budget) :
-		"""
-			Fits the model to the projected interpolation points
-
-		Args:
-			interpolation_points (np.array): The projected interpolation points
-		"""
-		pass
-
-	def vectorise_tensor(self,tensor) :
-		tensor_shape = tensor.shape 
-		return tensor.reshape(tensor_shape[0], tensor_shape[1]*tensor_shape[2])
-
-	def get_tensor_from_vectorised(self, vectorised_tensor, U) : 
-		return vectorised_tensor.reshape(U.shape)
-
-
-	def local_model_evaluate(self, x_k):
-		"""
-			Calculate the solution of the local model at the point x_k
-		
-		Args:
-			x_k ([float]): the current iteration's solution value
-			q ([float]): the list of coefficients
-		"""
-		q = self.coefficients[0]	        
-		X = [1]
-		X = np.append(X, np.array(x_k))
-		X = np.append(X, np.array(x_k) ** 2)
-		return np.matmul(X, q)
 	
