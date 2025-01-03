@@ -4,15 +4,12 @@ This experiment tests the performance of OMoRF against a trust region algorithm 
 
 import sys
 import os.path as o
-import os
 sys.path.append(o.abspath(o.join(o.dirname(sys.modules[__name__].__file__), ".."))) # type:ignore
 
 # Import the ProblemSolver class and other useful functions
-from simopt.experiment_base import ProblemSolver, read_experiment_results, post_normalize, plot_progress_curves, plot_solvability_cdfs
+from simopt.experiment_base import ProblemsSolvers, plot_solvability_profiles
 # from simopt.base import adaptive_sampling 
 # from ..base import adaptive_sampling
-from simopt.solvers.tr_with_reuse_pts import random_model_reuse, astrodf_geometry
-from simopt.solvers.astrodf_ext import adaptive_sampling
 
 def main():
     solver_names = ["TRUSTREGION", "OMoRF"]
