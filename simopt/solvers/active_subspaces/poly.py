@@ -1,5 +1,8 @@
 #type: ignore 
-""" Polynomial functions """
+""" Polynomial functions 
+	This has been rewritten to work inside the simopt library 
+
+"""
 # (c) 2019 Jeffrey M. Hokanson (jeffrey@hokanson.us)
 
 from __future__ import print_function, division
@@ -80,6 +83,7 @@ class BaseFunction(object):
 		return self.__call__(X)
 
 
+#TODO: This function needs changing as it is undergone in the simopt library 
 class Function(BaseFunction):
 	r"""Wrapper around function specifying the domain
 
@@ -446,6 +450,7 @@ class PolynomialFunction(BaseFunction):
 			return DDf
 	
 
+#TODO: Change this to work with all the basis names 
 class PolynomialApproximation(PolynomialFunction):
 	r""" Construct a polynomial approximation
 

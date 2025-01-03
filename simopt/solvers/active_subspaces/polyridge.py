@@ -10,15 +10,16 @@ import scipy.linalg
 import scipy.special
 import cvxpy as cp
 import warnings
-from copy import deepcopy, copy
+from copy import copy
 
-from .domains import Domain, BoxDomain #This will be changed for the simopt library
 from .ridge import RidgeFunction
 from .basis import *
 from .gauss_newton import gauss_newton 
 from .seqlp import sequential_lp
 from .poly import PolynomialFunction
 from .local_linear import local_linear_grads  
+
+from simopt.base import (Problem)
 
 
 #From .misc
@@ -78,16 +79,34 @@ class PolynomialRidgeFunction(RidgeFunction):
 		self.basis = basis
 		self.coef = np.copy(coef)
 		self._U = np.array(U)
-		self.domain = None
+		self.problem = None
 
 	
 	def V(self, X, U = None):
+		"""Build the Vandermonde Matrix out of the current sample points
+
+		Args:
+			X (np.ndarray): a numpy matrix of M sample points of dimension IR^m
+			U (np.ndarray, None): The active subspace basis matrix. Defaults to None.
+
+		Returns:
+			np.ndarray: The vandermonde matrix computed from the samples X.
+		"""
 		if U is None: U = self.U
 		X = np.array(X)	
 		Y = (U.T @ X.T).T
 		return self.basis.V(Y)
 
 	def DV(self, X, U = None):
+		"""Column-wise derivative of the vandermonde matrix 
+
+		Args:
+			X (_type_): _description_
+			U (_type_, optional): _description_. Defaults to None.
+
+		Returns:
+			_type_: _description_
+		"""
 		if U is None: U = self.U
 		
 		Y = (U.T @ X.T).T
@@ -285,7 +304,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 	"""
 
 	def __init__(self, degree, subspace_dimension, basis = 'legendre', 
-		norm: int = 2, n_init = 1, scale = True, keep_data = True, domain = None,
+		norm: int = 2, n_init = 1, scale = True, keep_data = True, problem: Problem | None =  None,
 		bound = None, rotate = True, **kwargs):
 
 		self.kwargs = kwargs
@@ -331,11 +350,10 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		# if norm == 'inf': norm = np.inf
 		self.norm = norm
 
-		if domain is None:
-			self.domain = None
+		if problem is None:
+			raise NotImplementedError  
 		else:
-			assert isinstance(domain, Domain)
-			self.domain = deepcopy(domain)
+			self.problem = problem
 
 
 		assert bound in [None, 'lower', 'upper'], "Invalid bound specified"
@@ -410,17 +428,18 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		else:	
 			return self._fit_alternating(X, fX, U0, **kwargs)
 
-
 	################################################################################	
 	# Specialized Affine fits
-	def _fit_affine(self, X, fX):
+	def _fit_affine(self, X, fX): #TODO: Fix BoxDomain code in this function
 		r""" Solves the affine 
 		"""
 		# Normalize the domain 
-		lb = np.min(X, axis = 0)
-		ub = np.max(X, axis = 0)
-		dom = BoxDomain(lb, ub) 
-		XX = np.hstack([dom.normalize(X), np.ones((X.shape[0],1))])
+		# lb = np.min(X, axis = 0)
+		lb = self.problem.lower_bounds
+		# ub = np.max(X, axis = 0)
+		ub = self.problem.upper_bounds
+		# dom = BoxDomain(lb, ub) 
+		XX = np.hstack([self.normalize(X,self.problem), np.ones((X.shape[0],1))])
 
 		# Normalize the output
 		fX = (fX - np.min(fX))/(np.max(fX) - np.min(fX))
@@ -440,7 +459,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
 		U = b[0:-1].reshape(-1,1)
 		# Correct for transform 
-		U = dom._normalize_der().dot(U)
+		U = self.normalize_der(self.problem).dot(U)
 		# Force to have unit norm
 		U /= np.linalg.norm(U)
 		return U	
@@ -714,7 +733,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 			obj_lb = np.zeros(fX.shape)
 
 		# Perform optimization
-		U_c = sequential_lp(residual, U_c0, jacobian, trajectory = trajectory,
+		U_c = sequential_lp(residual, self.problem, U_c0, jacobian, trajectory = trajectory,
 			obj_lb = obj_lb, obj_ub = obj_ub,
 			search_constraints = search_constraints, norm = self.norm, **kwargs)	
 	
@@ -722,4 +741,49 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		U = U_c[:m*n].reshape(m,n)
 		self._finish(X, fX, U)
 	
+
+	def _normalize(self, X, problem) : 
+		c = self.center(problem)
+		D = self.normalize_der(problem)
+		X_norm = D.dot( (X - c.reshape(1,-1)).T ).T
+		return X_norm 
+
+	def normalize(self, X, problem) : 
+		""" Given a points in the application space, convert it to normalized units
+		
+		Parameters
+		----------
+		X: np.ndarray((M,m))
+			points in the domain to normalize
+		"""
+		try:
+			X.shape
+		except AttributeError:
+			X = np.array(self,X)
+		if len(X.shape) == 1:
+			X = X.reshape(-1, len(self)) 
+			return self._normalize(X, problem).flatten()
+		else:
+			return self._normalize(X, problem)
+		
+	def normalize_der(self, problem) :
+		"""Derivative of normalization function"""
+		norm = lambda x : x
+		norm_ub = norm(problem.upper_bounds)
+		norm_lb = norm(problem.lower_bounds)
+
+		slope = np.ones(len(self))
+		I = (norm_ub != norm_lb) & np.isfinite(norm_lb) & np.isfinite(norm_ub)
+		slope[I] = 2.0/(norm_ub[I] - norm_lb[I])
+		return np.diag(slope) 
+
+	def center(self, problem) : 
+		norm = lambda x : x
+		norm_ub = norm(problem.upper_bounds)
+		norm_lb = norm(problem.lower_bounds)
+
+		c = np.zeros(len(self))
+		I = np.isfinite(norm_lb) & np.isfinite(norm_ub)
+		c[I] = (norm_lb[I] + norm_ub[I])/2.0
+		return c	 
 

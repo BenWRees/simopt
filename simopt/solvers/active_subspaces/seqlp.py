@@ -6,8 +6,9 @@ import scipy.optimize
 import cvxpy as cp
 import warnings
 
-from .domains import UnboundedDomain
 from .gauss_newton import trajectory_linear
+
+from simopt.base import Problem
 
 class InfeasibleException(Exception):
 	pass
@@ -16,10 +17,10 @@ class UnboundedException(Exception):
 	pass
 
 
-def sequential_lp(f, x0, jac, search_constraints = None,
+def sequential_lp(fun, problem, x0, jac, search_constraints = None,
 	norm = 2, trajectory = trajectory_linear, obj_lb = None, obj_ub = None,
 	constraints = None, constraint_grads = None, constraints_lb = None, constraints_ub = None,
-	maxiter = 100, bt_maxiter = 50, domain = None,
+	maxiter = 100, bt_maxiter = 50,
 	tol_dx = 1e-10, tol_obj = 1e-10,  verbose = False, **kwargs):
 	r""" Solves a nonlinear optimization problem by a sequence of linear programs
 
@@ -53,8 +54,8 @@ def sequential_lp(f, x0, jac, search_constraints = None,
 	if search_constraints is None:
 		search_constraints = lambda x, p: []
 	
-	if domain is None:
-		domain = UnboundedDomain(len(x0))
+	# if domain is None:
+	# 	domain = UnboundedDomain(len(x0)) #TODO: change behaviour
 
 	if constraints is None:
 		constraints = []
@@ -125,10 +126,9 @@ def sequential_lp(f, x0, jac, search_constraints = None,
 	# Start optimizaiton loop
 	x = np.copy(x0)
 	try:
-		fx = np.array(f(x))
+		fx = np.array(fun(x))
 	except TypeError:
-		fx = np.array([fi(x) for fi in f]).reshape(-1,)
-
+		fx = np.array([fi(x) for fi in fun]).reshape(-1,)
 	objval = objfun(fx)
 
 	try:
@@ -182,7 +182,7 @@ def sequential_lp(f, x0, jac, search_constraints = None,
 		search_step_constraints = search_constraints(x, p)
 
 		# Append constraints from the domain of x
-		domain_constraints = domain._build_constraints(x + p)
+		domain_constraints = build_constraints(x + p, problem)
 
 		stop = False
 		for it2 in range(bt_maxiter):
@@ -197,9 +197,9 @@ def sequential_lp(f, x0, jac, search_constraints = None,
 			with warnings.catch_warnings():
 				warnings.simplefilter('ignore', PendingDeprecationWarning)
 				try:
-					problem = cp.Problem(cp.Minimize(obj), active_constraints)
-					problem.solve(**kwargs)
-					status = problem.status
+					prob = cp.Problem(cp.Minimize(obj), active_constraints)
+					prob.solve(**kwargs)
+					status = prob.status
 				except cp.SolverError:
 					if it2 == 0:
 						status = 'unbounded'
@@ -222,9 +222,9 @@ def sequential_lp(f, x0, jac, search_constraints = None,
 
 				# Evaluate value at new point
 				try:
-					fx_new = np.array(f(x_new))
+					fx_new = np.array(fun(x_new))
 				except TypeError:
-					fx_new = np.array([fi(x_new) for fi in f]).reshape(-1,)
+					fx_new = np.array([fi(x_new) for fi in fun]).reshape(-1,)
 				objval_new = objfun(fx_new)
 
 				constraint_violation = 0.
@@ -275,6 +275,47 @@ def sequential_lp(f, x0, jac, search_constraints = None,
 			break	
 
 	return x
+
+
+def build_constraints(x: np.ndarray, problem: Problem) -> list[np.ndarray] : 
+	"""Build the constraints corresponding to a given vector x 
+
+	Args:
+		x (np.ndarray): the candidate solution being check 
+		problem (Problem): The current sim-opt problem being solved
+
+	Returns:
+		list[bool]: List of constraints that hold for the given x
+	"""
+	constraint_type = problem.constraint_type 
+	constraints: list[np.ndarray] = [] 
+	lower_bound = np.array(problem.lower_bounds)
+	upper_bound = np.array(problem.upper_bounds)
+
+	if constraint_type.name == "BOX" : 
+		I = np.isfinite(lower_bound)
+		if np.sum(I) > 0:
+			constraints.append(lower_bound[I] <= x[I])
+		
+		I = np.isfinite(upper_bound)
+		if np.sum(I) > 0:
+			constraints.append(x[I] <= upper_bound[I])  
+
+	elif constraint_type.name == "UNCONSTRAINED" : 
+		pass 
+
+	elif constraint_type.name == "DETERMINISTIC" : 
+		pass #Not implemented yet
+
+	elif constraint_type.name == "STOCHASTIC" :
+		pass #Not implemented yet  
+
+	return constraints
+
+	
+
+
+
 			
 #if __name__ == '__main__':
 #	from polyridge import *

@@ -20,6 +20,7 @@ from copy import deepcopy
 
 import cvxpy as cp
 
+from simopt.base import (Problem, Solution)
 
 __all__ = ['SubspaceBasedDimensionReduction',
 	'ActiveSubspace', 
@@ -258,7 +259,7 @@ class SubspaceBasedDimensionReduction(object):
 				pgf.add('y2', Y[:,1])
 				pgf.add('fX', fX.flatten())
 				pgf.write(pgfname)
-
+ 
 		else:
 			raise NotImplementedError		
 
@@ -419,7 +420,7 @@ class SubspaceBasedDimensionReduction(object):
 		"""
 		raise NotImplementedError
 
-
+#TODO: This class needs rewriting 
 class ActiveSubspace(SubspaceBasedDimensionReduction):
 	r"""Computes the active subspace gradient samples
 
@@ -445,7 +446,6 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
 	def __init__(self):
 		self._U = None
 		self._s = None
-
 
 	def fit(self, grads, weights = None):
 		r""" Find the active subspace
@@ -476,20 +476,145 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
 		self._U = self._fix_subspace_signs_grads(self._U, self._grads)		
 
 
-	def fit_function(self, fun, N_gradients):
+	#TODO: This function needs rewriting to instead sample the simopt problem: 
+	#	- pass a simopt problem and a matrix of sample points as an argument instead 
+	# 	- sample the problem at different 
+	def fit_function(self, problem, delta, current_solution, N_gradients):
 		r""" Automatically estimate active subspace using a quadrature rule
 
 		Parameters
 		----------
-		fun: Function
-			function object for which to estimate the active subspace via the average outer-product of gradients
+		problem: simopt.Problem
+			The problem for which gradients can be sampled from
+		delta: float 
+			The trust-region radius 
+		current_solution: simopt.Solution
+			the incumbent solution of the solver
 		N_gradients: int
-			Maximum number of gradient samples to use 
+			Maximum number of gradient samples to use
+		
 		"""
-		X, w = fun.domain.quadrature_rule(N_gradients)
-		grads = fun.grad(X)
-		self.fit(grads, w)
+		# X, w = fun.domain.quadrature_rule(N_gradients)
+		X = self.samples(delta, problem, current_solution, N_gradients)
+		grads, expended_budget = self.grad(problem, X)
+		self.fit(grads)
+
+		return expended_budget
 			
+
+	def samples(self, delta: float, problem: Problem, current_solution: Solution, N_samples: int) -> list[Solution] : 
+		"""Samples N_samples from the trust_region_radius
+
+		Args:
+			delta (float): The current Trust-Region Radius
+			problem (simopt.Problem): The current sim-opt problem being solved
+			current_solution (simopt.Solution): The current incumbent solution
+			N_samples (int): The number of samples being taken 
+
+		Returns:
+			list: a list of length N_samples of different solutions in the trust_region 
+		"""
+		x_k = current_solution.x
+		n = len(x_k)
+		init_col = np.array(x_k).reshape((n,1))
+		Y = [current_solution]
+		for _ in range(N_samples-1) : 
+			#uniformly sample a vector a of shape (n,1) that has |a-x_k|<delta
+			while True : 
+				sample = np.random.uniform(-1,1,(n,1))
+				if np.linalg.norm(sample) <= 1 : 
+					break 
+			sample = delta * sample + init_col #scale and translate to TR region 
+			sample = Solution(tuple(sample), problem)
+			Y.append(sample)
+
+		[print(a.x) for a in Y]
+
+		return Y  
+
+	def grad(self, problem: Problem, samples: list[Solution]) -> tuple[np.ndarray, int] : 
+		"""
+			get grads at locations of different samples
+
+		Args:
+			problem (simopt.Problem): The problem being worked on 
+			samples (list[Solution]): A list of N_sample solutions at different points in the trust-region
+
+		Returns:
+			np.ndarray: A (d,n) matrix of samples where d is the problem.dim
+			int: The increase in expended_budget 
+		"""
+		expended_budget = 0
+		grads = np.zeros((problem.dim,1))
+		if problem.gradient_available : 
+			for idx,sample in enumerate(samples) : 
+				problem.simulate(sample, 1)
+				expended_budget += 1
+				grads[:, idx] = sample.objectives_gradients_mean 
+		else : 
+			for idx,sample in enumerate(samples) : 
+				grad = self.finite_diff(sample, problem) 
+				expended_budget += 2 * problem.dim
+				grads[:, idx] = grad  
+		return grads, expended_budget
+
+	def finite_diff(self, solution: Solution, problem: Problem) -> np.ndarray:
+		""" Solve a Finite Difference Approximation 
+
+		Args:
+			solution (np.ndarray): current solution value being approximated
+			problem (Problem): The current sim-opt problem being solved 
+
+		Returns:
+			np.ndarray: A (d,1) matrix of the gradient approximation of the problem at the solution.
+		"""
+		alpha = 1e-2
+		lower_bound = problem.lower_bounds
+		upper_bound = problem.upper_bounds
+		# grads = np.zeros((problem.dim,r)) #Take r gradient approximations
+		problem.simulate(solution,1)
+		
+		new_x = solution.x
+		FnPlusMinus = np.zeros((problem.dim, 3))
+		grad = np.zeros(problem.dim)
+		for i in range(problem.dim):
+			# Initialization.
+			x1 = list(new_x)
+			x2 = list(new_x)
+			# Forward stepsize.
+			steph1 = alpha
+			# Backward stepsize.
+			steph2 = alpha
+
+			# Check variable bounds.
+			if x1[i] + steph1 > upper_bound[i]:
+				steph1 = np.abs(upper_bound[i] - x1[i])
+			if x2[i] - steph2 < lower_bound[i]:
+				steph2 = np.abs(x2[i] - lower_bound[i])
+
+			# Decide stepsize.
+			# Central diff.
+			FnPlusMinus[i, 2] = min(steph1, steph2)
+			x1[i] = x1[i] + FnPlusMinus[i, 2]
+			x2[i] = x2[i] - FnPlusMinus[i, 2]
+
+			fn1, fn2 = 0,0 
+			x1_solution = Solution(tuple(x1), problem)
+			problem.simulate_up_to([x1_solution], 1)
+			fn1 = -1 * problem.minmax[0] * x1_solution.objectives_mean
+			# First column is f(x+h,y).
+			FnPlusMinus[i, 0] = fn1
+
+			x2_solution = Solution(tuple(x2), problem)
+			problem.simulate_up_to([x2_solution], 1)
+			fn2 = -1 * problem.minmax[0] * x2_solution.objectives_mean
+			# Second column is f(x-h,y).
+			FnPlusMinus[i, 1] = fn2
+
+			# Calculate gradient.
+			grad[i] = (fn1 - fn2) / (2 * FnPlusMinus[i, 2])
+		
+		return grad
 
 	@property
 	def U(self):
@@ -507,5 +632,3 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
 	# TODO: Plot of eigenvalues (with optional boostrapped estimate)
 
 	# TODO: Plot of eigenvector angles with bootstrapped replicates.
-
-
