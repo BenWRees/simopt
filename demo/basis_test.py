@@ -5,41 +5,107 @@ macroreplications of each problem-solver pair.
 """
 
 import sys
-import os.path as o
-import os
-sys.path.append(o.abspath(o.join(o.dirname(sys.modules[__name__].__file__), ".."))) # type:ignore
+import os 
+import time
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(sys.modules[__name__].__file__), ".."))) # type:ignore
 
 # Import the ProblemsSolvers class and other useful functions
-from simopt.experiment_base import ProblemsSolvers, plot_solvability_profiles, ProblemSolver
+from simopt.experiment_base import ProblemSolver, ProblemsSolvers, plot_solvability_profiles, plot_progress_curves
+from simopt.directory import problem_directory
+
+
+def load_problem_solvers(bases: list[str], problem_names: list[str]) -> list[list[ProblemSolver]] : 
+    """
+        Write the list of ProblemSolver instances for the basis experiments
+
+    Args:
+        bases (list[str]): the names of the different bases to test
+        problem_names (list[str]): the problem names to test 
+
+    Returns:
+        list[list[ProblemSolver]]: A list of lists of Problem Solvers. Each list in the list of lists share a common solver 
+    """
+
+    #create list of Problem objects - share same instances now 
+    problem_instances = [problem_directory[a]() for a in problem_names]
+
+
+    problem_solver_pairs = [] 
+    for basis in bases : 
+        common_solvers = [] 
+        for problem in problem_instances : 
+            solver_rename = 'Trust region with ' + basis + ' Basis'
+            problem_solver = ProblemSolver(solver_name='TRUSTREGION', problem=problem, 
+                                           solver_rename=solver_rename, solver_fixed_factors={'poly_basis': basis})
+            common_solvers.append(problem_solver)
+        problem_solver_pairs.append(common_solvers)
+
+    return problem_solver_pairs
+
+
+def sort_problem_solvers(problemsSolvers: ProblemsSolvers) -> list[list[ProblemSolver]] :
+    """ Sort the ProblemSolver objects in ProblemSolvers into a list of lists, where each list in the list of lists are ProblemSolver instances
+    with common problem 
+
+
+    Args:
+        problemsolvers (ProblemsSolvers): The ProblemSolvers instance to be sorted
+
+    Returns:
+        list[list[ProblemSolver]]: Sorted ProblemSolver instances where each list shares a common problem
+    """
+    problemSolvers = problemsSolvers.experiments
+    sorted_problem_solvers_list = [list(item) for item in zip(*problemSolvers)]
+    
+    return sorted_problem_solvers_list 
+
+def plot_results(problemsolvers: ProblemsSolvers, bases: list[str], problem_names: list[str]) -> None : 
+    solver_set_name = 'Trust Region with Bases: '.join([a + ' '  for a in bases[:-1]]) + bases[-1]
+    problem_set_name = 'Problems: '.join([a + ', '  for a in problem_names[:-1]]) + problem_names[-1]
+
+
+    plot_solvability_profiles(experiments=problemsolvers.experiments, plot_type="cdf_solvability", 
+                              solver_set_name=solver_set_name, problem_set_name=problem_set_name, legend_loc='lower right')
+    
+    myexperiments = sort_problem_solvers(problemsolvers)
+    
+    for myexperiment in myexperiments :
+        plot_progress_curves(experiments=myexperiment, plot_type="all", normalize=True)
+        plot_progress_curves(experiments=myexperiment, plot_type="mean", normalize=True)
+        plot_progress_curves(experiments=myexperiment, plot_type="quantile", beta=0.90, normalize=True)
 
 def main():
-    # !! When testing a new solver/problem, first go to directory.py.
-    # There you should add the import statement and an entry in the respective
-    # dictionary (or dictionaries).
-    # See directory.py for more details.
+    bases = [#'PolynomialTensorBasis', - This is a base class
+	'MonomialTensorBasis', 
+	'LegendreTensorBasis',
+	'ChebyshevTensorBasis',
+	'LaguerreTensorBasis',
+	'HermiteTensorBasis',
+	'ArnoldiPolynomialBasis',
+	'NaturalPolynomialBasis',
+	'LagrangePolynomialBasis',
+	'NFPPolynomialBasis'
+    ]
 
-    # Specify the names of the solver and problem to test.
-    # These names are strings and should match those input to directory.py.
-    # Ex:
-    solver_names = ["TRUSTREGION"]
-    problem_names = ["SIMPLEFUNC-1", 'EXAMPLE-1']
+    problem_names = [
+        'EXAMPLE-1',
+        'SIMPLEFUNC-1',
+        'SAN-1',
+        'FIXEDSAN-1',
+        'NETWORK-1',
+        'DYNAMNEWS-1'
+    ]
 
-    problem_solver_pairs = []
-    for problem in problem_names :
-        common_problems = [] 
-        common_problems.append(ProblemSolver(solver_name='TRUSTREGION', problem_name=problem, solver_rename='Trust Region with Monimal Basis', solver_fixed_factors={'poly_basis':"simopt.solvers.trust_region_class:monimal_basis"}))
-        common_problems.append(ProblemSolver(solver_name='TRUSTREGION', problem_name=problem, solver_rename='Trust Region with Natural Basis', solver_fixed_factors={'poly_basis':"simopt.solvers.trust_region_class:natural_basis"}))
-        common_problems.append(ProblemSolver(solver_name='TRUSTREGION', problem_name=problem, solver_rename='Trust Region with Legendre Basis', solver_fixed_factors={'poly_basis':"simopt.solvers.trust_region_class:legendre_basis"}))
-        common_problems.append(ProblemSolver(solver_name='TRUSTREGION', problem_name=problem, solver_rename='Trust Region with Newton Fundamental Polynomial Basis', solver_fixed_factors={'poly_basis':"simopt.solvers.trust_region_class:NFP"}))
-        # common_problems.append(ProblemSolver(solver_name='TRUSTREGION', problem_name=problem, solver_rename='Trust Region with Chebyshev Interpolation', solver_fixed_factors={'poly_basis':"simopt.solvers.trust_region_class:chebyshev_interpolation"}))
-        problem_solver_pairs.append(common_problems)
 
-    problem_solver_pairs = [[a,b] for a,b in zip(problem_solver_pairs[0], problem_solver_pairs[1])]
-    print(len(problem_solver_pairs[0]))
+    problem_solver_pairs = load_problem_solvers(bases, problem_names)
 
-    print([a.solver.name for i in problem_solver_pairs for a in i])
+    EXPERIMENT_DIR = os.path.join(os.getcwd(), "experiments", time.strftime("%Y-%m-%d_%H-%M-%S"))
+    file_name_path = os.path.join(EXPERIMENT_DIR, "outputs")
+    file_name_path = os.path.join(file_name_path, 'basis_test.pickle')
+
     # Initialize an instance of the experiment class.
-    mymetaexperiment = ProblemsSolvers(experiments=problem_solver_pairs)
+    mymetaexperiment = ProblemsSolvers(experiments=problem_solver_pairs, file_name_path=file_name_path, experiment_name='basis_test', create_pair_pickles=True)
+
 
     # Write to log file.
     mymetaexperiment.log_group_experiment_results()
@@ -55,7 +121,7 @@ def main():
 
     print("Plotting results.")
     # Produce basic plots of the solvers on the problems.
-    plot_solvability_profiles(experiments=mymetaexperiment.experiments, plot_type="cdf_solvability")
+    plot_results(mymetaexperiment, bases, problem_names)
 
     # Plots will be saved in the folder experiments/plots.
     print("Finished. Plots can be found in experiments/plots folder.")
