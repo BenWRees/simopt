@@ -5927,6 +5927,7 @@ class ProblemsSolvers:
             error_msg = "Number of postreplications must be positive."
             raise ValueError(error_msg)
 
+        # experiments_same_problem = [list(item) for item in zip(*self.experiments)]
         for problem_idx in range(self.n_problems):
             experiments_same_problem = [
                 self.experiments[solver_idx][problem_idx]
