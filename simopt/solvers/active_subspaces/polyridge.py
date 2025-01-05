@@ -80,6 +80,7 @@ class PolynomialRidgeFunction(RidgeFunction):
 		self.coef = np.copy(coef)
 		self._U = np.array(U)
 		self.problem = None
+		
 
 	
 	def V(self, X, U = None):
@@ -303,8 +304,8 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		SIAM J. Sci. Comput. Vol 40, No 3, pp A1566--A1589, DOI:10.1137/17M1117690.
 	"""
 
-	def __init__(self, degree, subspace_dimension, basis = 'legendre', 
-		norm: int = 2, n_init = 1, scale = True, keep_data = True, problem: Problem | None =  None,
+	def __init__(self, degree, subspace_dimension, problem, basis, 
+		norm: int = 2, n_init = 1, scale = True, keep_data = True,
 		bound = None, rotate = True, **kwargs):
 
 		self.kwargs = kwargs
@@ -312,6 +313,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		assert isinstance(degree, int)
 		assert degree >= 0
 		self.degree = degree
+		self.problem = problem
 			
 		assert isinstance(subspace_dimension, int)
 		assert subspace_dimension >= 1
@@ -323,22 +325,25 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		if self.degree == 0:
 			self.subspace_dimension = 0
 
-		basis = basis.lower()
-		assert basis in ['arnoldi', 'legendre', 'monomial', 'chebyshev', 'laguerre', 'hermite']
-		self.basis_name = copy(basis)
+		# basis = basis.lower()
+		# assert basis in ['arnoldi', 'legendre', 'monomial', 'chebyshev', 'laguerre', 'hermite']
+		# self.basis_name = copy(basis)
+
+		self.Basis = basis 
+		self.basis_name = basis.__class__.__name__
 		
-		if basis == 'arnoldi':
-			self.Basis = ArnoldiPolynomialBasis
-		elif basis == 'legendre':
-			self.Basis = LegendreTensorBasis
-		elif basis == 'monomial':
-			self.Basis = MonomialTensorBasis 
-		elif basis == 'chebyshev':
-			self.Basis = ChebyshevTensorBasis 
-		elif basis == 'laguerre':
-			self.Basis = LaguerreTensorBasis 
-		elif basis == 'hermite':
-			self.Basis = HermiteTensorBasis 
+		# if basis == 'arnoldi':
+		# 	self.Basis = ArnoldiPolynomialBasis
+		# elif basis == 'legendre':
+		# 	self.Basis = LegendreTensorBasis
+		# elif basis == 'monomial':
+		# 	self.Basis = MonomialTensorBasis 
+		# elif basis == 'chebyshev':
+		# 	self.Basis = ChebyshevTensorBasis 
+		# elif basis == 'laguerre':
+		# 	self.Basis = LaguerreTensorBasis 
+		# elif basis == 'hermite':
+		# 	self.Basis = HermiteTensorBasis 
 
 		assert isinstance(keep_data, bool)
 		self.keep_data = keep_data
@@ -350,14 +355,11 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		# if norm == 'inf': norm = np.inf
 		self.norm = norm
 
-		if problem is None:
-			raise NotImplementedError  
-		else:
-			self.problem = problem
-
-
-		assert bound in [None, 'lower', 'upper'], "Invalid bound specified"
-		self.bound = bound
+		# assert bound in [None, 'lower', 'upper'], "Invalid bound specified"
+		# self.bound = problem.bound
+		if self.problem.bound == 'lower':
+			self.bound = 'lower'
+		# super().__init__(basis = self.Basis(self.degree), coef = None, U = None)
 
 	def __len__(self):
 		return self.U.shape[0]
@@ -524,7 +526,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		Y = (U.T @ X.T).T
 		self.basis = self.Basis(self.degree, Y)
 		V = self.basis.V(Y)
-		if self.basis_name == 'arnoldi':
+		if self.basis_name == 'ArnoldiPolynomialBasis':
 			# In this case, V is orthonormal
 			c = V.T @ fX
 		else:
