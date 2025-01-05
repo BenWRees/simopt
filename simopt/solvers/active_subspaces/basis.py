@@ -456,18 +456,13 @@ class ArnoldiPolynomialBasis(Basis):
 	r""" Construct a stable polynomial basis for arbitrary points using Vandermonde+Arnoldi
 	"""
 	def __init__(self, degree, X=None, dim=None):
-		# self.X = np.copy(np.atleast_2d(X)) #X is shape M,dim where M is the number of points sampled
-		# self.dim = dim #self.X.shape[1]
-		if X is not None:
-			self.X = np.atleast_2d(X)
-			self.dim = self.X.shape[1]
-		elif dim is not None:
-			self.dim = int(dim)
-			self.X = None
+		self.X = np.copy(np.atleast_2d(X))
+		self.dim = self.X.shape[1]
 		self.degree = int(degree)
 		self.indices = index_set(self.degree, self.dim)
 
-		# self.Q, self.R = self.arnoldi()
+		self.Q, self.R = self.arnoldi()
+
 	
 	def __len__(self):
 		return len(self.indices)
@@ -908,33 +903,13 @@ class LagrangePolynomialBasis(PolynomialBasis) :
 		lagrange = np.prod(lagrange_list)
 		return lagrange 
 	
+	def _build_Dmat(self):
+		raise NotImplementedError
+
 	#TODO: Implement the derivative function
 	def DV(self, X = None):
-		if X is None or np.array_equal(X, self.X):
-			X = self.X
-			V = self.Q
-		else:
-			V = self.V(X)
-
-		M = X.shape[0]
-		N = self.Q.shape[1]
-		n = self.X.shape[1]
-		DV = np.zeros((M, N, n), dtype = self.Q.dtype)
-
-		for ell in range(n):
-			index_iterator = enumerate(self.indices)
-			next(index_iterator)
-			for k, ids in index_iterator:
-				i, j = self._update_vec(ids)
-				# Q[:,k] = X[:,i] * Q[:,j] - sum_s Q[:,s] * R[s, k]
-				if i == ell:
-					DV[:,k,ell] = V[:,j] + X[:,i] * DV[:,j,ell] - DV[:,0:k,ell] @ self.R[0:k,k] 
-				else:
-					DV[:,k,ell] = X[:,i] * DV[:,j,ell] - DV[:,0:k,ell] @ self.R[0:k,k] 
-				DV[:,k,ell] /= self.R[k,k]	
+		raise NotImplementedError
 		
-		return DV
-
 	def DDV(self, X = None):
 		raise NotImplementedError
 	
@@ -955,32 +930,12 @@ class NFPPolynomialBasis(PolynomialBasis) :
 		res = np.prod([(val-np.array(a)) for a in interpolation_set[:col_num]])
 		return float(res)
 	
+	def _build_Dmat(self):
+		return None 
+	
 	#TODO: Implement the derivative function
 	def DV(self, X = None):
-		if X is None or np.array_equal(X, self.X):
-			X = self.X
-			V = self.Q
-		else:
-			V = self.arnoldi_X(X)
-
-		M = X.shape[0]
-		N = self.Q.shape[1]
-		n = self.X.shape[1]
-		DV = np.zeros((M, N, n), dtype = self.Q.dtype)
-
-		for ell in range(n):
-			index_iterator = enumerate(self.indices)
-			next(index_iterator)
-			for k, ids in index_iterator:
-				i, j = self._update_vec(ids)
-				# Q[:,k] = X[:,i] * Q[:,j] - sum_s Q[:,s] * R[s, k]
-				if i == ell:
-					DV[:,k,ell] = V[:,j] + X[:,i] * DV[:,j,ell] - DV[:,0:k,ell] @ self.R[0:k,k] 
-				else:
-					DV[:,k,ell] = X[:,i] * DV[:,j,ell] - DV[:,0:k,ell] @ self.R[0:k,k] 
-				DV[:,k,ell] /= self.R[k,k]	
-		
-		return DV
+		raise NotImplementedError
 
 	def DDV(self, X = None):
 		raise NotImplementedError
