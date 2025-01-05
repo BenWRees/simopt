@@ -306,7 +306,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
 	def __init__(self, degree, subspace_dimension, problem, basis, 
 		norm: int = 2, n_init = 1, scale = True, keep_data = True,
-		bound = None, rotate = True, **kwargs):
+		rotate = True, **kwargs):
 
 		self.kwargs = kwargs
 		self.rotate = rotate
@@ -357,7 +357,9 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
 		# assert bound in [None, 'lower', 'upper'], "Invalid bound specified"
 		# self.bound = problem.bound
-		if self.problem.bound == 'lower':
+		
+		#TODO: Handle how bounds are dealt with. Should rely on problem object
+		if self.problem.bound != 'unconstrained':
 			self.bound = 'lower'
 		# super().__init__(basis = self.Basis(self.degree), coef = None, U = None)
 
