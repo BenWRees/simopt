@@ -366,7 +366,7 @@ class trust_region(Solver) :
 			expended_budget = sampling_budget
 
 			#evaluate model
-			model, problem, fval_tilde, delta_k, interpolation_solns, candidate_solution, recommended_solns
+			# model, problem, fval_tilde, delta_k, interpolation_solns, candidate_solution, recommended_solns
 			new_solution, delta_k, recommended_solns = self.evaluate_candidate_solution(model, problem, fval_tilde, delta_k, interpolation_solns, current_solution,\
 																			   candidate_solution, recommended_solns)	
 			
