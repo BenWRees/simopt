@@ -32,6 +32,7 @@ from simopt.solvers.trust_region_class import sampling_rule
 import numpy as np 
 from numpy.linalg import norm
 from scipy.optimize import minimize, NonlinearConstraint
+from math import comb
 
 class OMoRF(Solver):
 	"""
@@ -86,6 +87,11 @@ class OMoRF(Solver):
 				"datatype": bool,
 				"default": True
 			},
+			"easy_solve": {
+				"description": "solve the subproblem approximately with Cauchy point",
+				"datatype": bool,
+				"default": False
+			},
 			"eta_1" : {
 				"description": "threshold for successful iteration",
 				"datatype": float, 
@@ -101,7 +107,6 @@ class OMoRF(Solver):
 				"description": "initial trust-region radius",
 				"datatype": float, 
 				"default": 0.0
-
 			}, 
 			"delta": {
 				"description": "size of the trust-region radius",
@@ -156,7 +161,7 @@ class OMoRF(Solver):
 			"poly_basis": {
 				"description": "Polynomial basis to use in model construction",
 				"datatype": str, 
-				"default": "NaturalPolynomialBasis"
+				"default": "MonomialPolynomialBasis"
 			}, 
 			"sampling_rule" : {
 				"description": "An instance of the sampling rule being used",
@@ -169,6 +174,7 @@ class OMoRF(Solver):
 	def check_factor_list(self) -> dict[str, Callable] : 
 		return {
 			"crn_across_solns": self.check_crn_across_solns,
+			"easy_solve": self.check_easy_solve,
 			"eta_1": self.check_eta_1,
 			"eta_2": self.check_eta_2,
 			"initial radius": self.check_initial_radius,
@@ -187,6 +193,9 @@ class OMoRF(Solver):
 		}
 	
 	def check_crn_across_solns(self) -> bool:
+		return True
+	
+	def check_easy_solve(self) -> bool:
 		return True
 	
 	def check_eta_1(self) -> bool:
@@ -254,7 +263,7 @@ class OMoRF(Solver):
 				attr = getattr(module, self.factors['sampling_rule'])
 				return inspect.isclass(attr)
 			return False
-		except ModuleNotFoundError
+		except ModuleNotFoundError:
 			return False
 
 	def __init__(self, name="OMoRF", fixed_factors: dict | None = None) -> None:
@@ -286,7 +295,7 @@ class OMoRF(Solver):
 		sampling_instance = getattr(module, class_name)(self)
 		return sampling_rule(self, sampling_instance)
 
-	def solve_subproblem(self, delta: float, rho_k: float, expended_budget:int, model: PolynomialRidgeApproximation, problem: Problem, solution: Solution, polynomial_basis: Basis, subspace_int_set:list[np.ndarray], model_int_set: list[np.ndarray]) -> tuple[Solution, float, float, int, list, list, bool]:
+	def solve_subproblem(self, delta: float, rho_k: float, expended_budget:int, model: PolynomialRidgeApproximation, subspace_matrix:np.ndarray, problem: Problem, solution: Solution, polynomial_basis: Basis, subspace_int_set:list[np.ndarray], model_int_set: list[np.ndarray], fvals: list[float], grad_fval: list[float]) -> tuple[Solution, float, float, int, list, np.ndarray, list, list, list, bool]:
 		"""
 		Solve the Trust-Region subproblem either using Cauchy reduction or a black-box optimisation solver
 		
@@ -299,7 +308,8 @@ class OMoRF(Solver):
 			base.Solution - the candidate solution from the subproblem
 		"""
 		new_x = np.array(solution.x)
-		grad, Hessian = model.profile.gradient(new_x), model.profile.hessian(new_x)
+		grad, Hessian = model.grad(new_x), model.hessian(new_x)
+		# grad, Hessian = np.zeros(new_x.shape),np.zeros(new_x.shape)
 		gamma_s = self.factors['gamma_shrinking']
 		omega_s = self.factors['omega_shrinking']
 		reset_flag = False
@@ -338,17 +348,15 @@ class OMoRF(Solver):
 		# check if the stepsize is too small
 		if norm(solve_subproblem.x) < rho_k * gamma_s :
 			delta = max(delta*omega_s, rho_k)
-			subspace_int_set, model_int_set, fvals, rho_k, delta, expended_budget = self.interpolation_update(solution, problem, expended_budget, 
-																							  polynomial_basis, model_int_set, subspace_int_set, fvals,
-																							  delta, rho_k, True)
+			subspace_int_set, model_int_set, subspace_matrix, fvals, grad_fval, rho_k, delta, expended_budget = self.interpolation_update(solution, problem, expended_budget, polynomial_basis, model_int_set, subspace_int_set, subspace_matrix, fvals, grad_fval, delta, rho_k, True)
 			reset_flag = True
 			candidate_solution = solution
 
 		 
 
-		return candidate_solution, rho_k, delta, expended_budget, subspace_int_set, model_int_set, reset_flag
+		return candidate_solution, rho_k, delta, expended_budget, subspace_int_set, subspace_matrix, model_int_set, fvals, grad_fval, reset_flag
 	
-	def evaluate_candidate_solution(self, model:PolynomialRidgeApproximation, problem: Problem, current_fval: float, fval_tilde: float, delta_k: float, rho_k: float, current_solution: Solution, candidate_solution: Solution, recommended_solns: list[Solution], polynomial_basis: Basis, model_int_set: list[np.ndarray], subspace_int_set: list[np.ndarray], fvals: list[float]) -> tuple[Solution, float, float, list[Solution], list[np.ndarray], list[np.ndarray], list[float], float, int]:
+	def evaluate_candidate_solution(self, model:PolynomialRidgeApproximation, subspace_matrix: np.ndarray, problem: Problem, current_fval: float, fval_tilde: float, delta_k: float, rho_k: float, current_solution: Solution, candidate_solution: Solution, recommended_solns: list[Solution], polynomial_basis: Basis, model_int_set: list[np.ndarray], subspace_int_set: list[np.ndarray], fvals: list[float]) -> tuple[Solution, float, float, list[Solution], list[np.ndarray], list[np.ndarray], np.ndarray, list[float], float, int]:
 		# fval = model.fval
 		expended_budget = 0
 		current_x = np.array(current_solution.x)
@@ -379,19 +387,21 @@ class OMoRF(Solver):
 			recommended_solns.append(current_solution)
 
 		#append the candidate solution to the interpolation set and active subspace set
-		interpolation_set.append(candidate_x)
-		active_subspace_set.append(candidate_x)
+		print('model_int_set in evaluate: ', model_int_set)
+		print('subspace_int_set in evaluate: ', subspace_int_set)
+		model_int_set = np.vstack((model_int_set, candidate_x))
+		subspace_int_set = np.vstack((subspace_int_set, candidate_x))
 
 		if rho_k >= self.factors['eta_1'] :
-			model_int_set, fvals, budget = self.geometry_improvement(model_int_set, fvals, problem, polynomial_basis, delta_k, False)
+			model_int_set, budget = self.geometry_improvement(model_int_set, current_solution, polynomial_basis, delta_k, False)
 			expended_budget += budget
-			subspace_int_set, fvals, budget =  self.geometry_improvement(subspace_int_set, fvals, problem, polynomial_basis, delta_k, False)
+			subspace_int_set, budget =  self.geometry_improvement(subspace_int_set, current_solution, polynomial_basis, delta_k, False)
 			expended_budget += budget
 		else :
-			model_int_set, subspace_int_set, fvals, rho_k, delta_k, budget = self.interpolation_update(current_solution, problem, polynomial_basis, model_int_set, subspace_int_set, fvals, delta_k, rho_k, True)
+			model_int_set, subspace_int_set, subspace_matrix, fvals, grad_fval, rho_k, delta_k, budget = self.interpolation_update(current_solution, problem, polynomial_basis, model_int_set, subspace_int_set, subspace_matrix, fvals, grad_fval, delta_k, rho_k, True)
 			expended_budget += budget
 
-		return current_solution, current_fval, delta_k, recommended_solns, model_int_set, subspace_int_set, fvals, rho_k, expended_budget
+		return current_solution, current_fval, delta_k, recommended_solns, model_int_set, subspace_int_set, subspace_matrix, fvals, rho_k, expended_budget
 
 
 	def finite_difference_gradient(self, new_solution: Solution, problem: Problem) -> np.ndarray :
@@ -408,7 +418,7 @@ class OMoRF(Solver):
 		alpha = 1e-3
 		lower_bound = problem.lower_bounds
 		upper_bound = problem.upper_bounds
-		new_solution = self.create_new_solution(tuple(x), problem)
+		# new_solution = self.create_new_solution(tuple(x), problem)
 
 		new_x = new_solution.x
 		FnPlusMinus = np.zeros((problem.dim, 3))
@@ -465,19 +475,26 @@ class OMoRF(Solver):
 				grad, expended_budget = self.finite_difference_gradient(new_solution, problem)
 				grads.append(grad)
 				budget += expended_budget
+
+		# print("grads: ", np.array(grads).shape)
 			
-		return np.array(fvals).reshape((len(fvals),1)), np.array(grads).reshape((len(grads),1)), budget
+		return np.array(fvals).reshape((len(fvals),1)), np.array(grads).reshape((len(grads),problem.dim)), budget
 
 
 	def generate_samples(self, lower_bound, upper_bound, new_x, problem) : 
 		samples = [] 
-		while len(samples) < problem.dim + 1 :
-			sample = np.random.normal(size=(len(new_x),1)) 
+		degree = self.factors['polynomial degree']
+		subspace_dim = self.factors['dimension reduction']
+		dim = problem.dim
+		no_samples = comb(subspace_dim + degree, degree) + dim*subspace_dim - (subspace_dim*(subspace_dim+1))//2
+
+		while len(samples) < no_samples:
+			sample = np.random.normal(size=(len(new_x),)) 
 			#check bounds if inside then append 
 			if np.all(sample >= lower_bound) and np.all(sample <= upper_bound) : 
 				samples.append(sample)
 
-		return samples
+		return np.array(samples)
 
 
 	def solve(self, problem):
@@ -509,7 +526,7 @@ class OMoRF(Solver):
 
 		current_x = problem.factors["initial_solution"]
 		current_solution = self.create_new_solution(current_x, problem)
-		recommended_solns.append(new_solution)
+		recommended_solns.append(current_solution)
 		intermediate_budgets.append(expended_budget)
 
 		#evaluate the current solution
@@ -520,7 +537,7 @@ class OMoRF(Solver):
 		sampling_instance = self.sample_instantiation()
 
 		poly_basis = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], dim=problem.dim)
-		geometry_instance = self.geometry_type_instantiation()(problem, current_x)
+		geometry_instance = self.geometry_type_instantiation()(problem)
 
 		#build an initial set of interpolation points of n+1 points
 		subspace_int_set = self.generate_samples(problem.lower_bounds, problem.upper_bounds, current_x, problem)
@@ -529,10 +546,11 @@ class OMoRF(Solver):
 		fvals, grad_fval, expended_budget = self.get_fvals(subspace_int_set, problem, expended_budget)
 
 		#construct an initial subspace matrix using subspace_int_set
-		subspace_matrix = initialize_subspace_matrix(subspace_int_set, fvals, grad_fval)
+		subspace_matrix = initialize_subspace(subspace_int_set, fvals, grad_fval)
 
 		#build an initial set of interpolation points
-		model_int_set = geometry_instance.interpolation_points(delta_k)
+		model_int_set = geometry_instance.interpolation_points(np.array(current_x),delta_k)
+		model_int_set = np.array(model_int_set).reshape(len(model_int_set), problem.dim)
 
 		#initialise the polyridge model 
 		local_model = PolynomialRidgeApproximation(self.factors['polynomial degree'], self.factors['dimension reduction'], problem, poly_basis)
@@ -542,17 +560,14 @@ class OMoRF(Solver):
 		k=0
 
 		while expended_budget < problem.factors['budget']:
-			k += 1
-
-			#construct the model using the interpolation set
-			local_model.fit(subspace_int_set, fvals)
+			print('k: ', k)
+			if k > 0 :
+				#construct the model using the interpolation set
+				local_model.fit(subspace_int_set, fvals, U0=subspace_matrix)
 
 			#solve the subproblem
-			candidate_solution, rho_k, delta_k, expended_budget, subspace_int_set, model_int_set, fvals, reset_flag = self.solve_subproblem(delta_k, rho_k, 
-																														  expended_budget,local_model,
-																														  problem, current_solution, 
-																														  poly_basis, subspace_int_set, 
-																														  model_int_set, fvals) 
+
+			candidate_solution, rho_k, delta_k, expended_budget, subspace_int_set, subspace_matrix, model_int_set, fvals, grad_fval, reset_flag = self.solve_subproblem(delta_k, rho_k, expended_budget, local_model, subspace_matrix, problem, current_solution, poly_basis, subspace_int_set, model_int_set, fvals, grad_fval) 
 
 			#if the stepsize is too small, do not evaluate and restart the loop
 			if reset_flag :
@@ -561,78 +576,136 @@ class OMoRF(Solver):
 				continue
 			else : 
 				#evaluate the candidate solution
-				candidate_solution, sampling_budget = sampling_instance(problem, candidate_solution, k, delta_k, expended_budget, sample_size, 0)
+				candidate_solution, sampling_budget = sampling_instance(problem, candidate_solution, k, delta_k, expended_budget, 1, 0)
 				fval_tilde = -1 * problem.minmax[0] * candidate_solution.objectives_mean
 				expended_budget = sampling_budget
 
 				#evaluate the candidate solution
-				# current_solution, current_fval, delta_k, recommended_solns, interpolation_set, active_subspace_set, rho_k, expended_budget
-				current_solution, current_fval, delta_k, recommended_solns, model_int_set, subspace_int_set, fvals, rho_k, budget = self.evaluate_candidate_solution(local_model, problem, current_fval, fval_tilde, delta_k, rho_k, new_solution, candidate_solution, recommended_solns, poly_basis, subspace_int_set, model_int_set, fvals)
+				current_solution, current_fval, delta_k, recommended_solns, model_int_set, subspace_int_set, subspace_matrix, fvals, rho_k, budget = self.evaluate_candidate_solution(local_model, subspace_matrix, problem, current_fval, fval_tilde, delta_k, rho_k, current_solution, candidate_solution, recommended_solns, poly_basis, subspace_int_set, model_int_set, fvals)
 				expended_budget += budget
 				
 				intermediate_budgets.append(expended_budget)
+			k += 1
 			
 		return recommended_solns, intermediate_budgets
 
+
 	#This is the update for the interpolation sets as defined in the paper
-	def interpolation_update(self, current_solution, problem, expended_budget, polynomial_basis, interpolation_set, active_subspace_set, delta_k, rho_k, geometry_improving_flag) : 
+	def interpolation_update(self, current_solution, problem, expended_budget, polynomial_basis, interpolation_set, active_subspace_set, subspace_matrix, fvals, grad_fval, delta_k, rho_k, geometry_improving_flag) : 
 		tol = max(2*delta_k, 10*rho_k)
 		for elem_int,elem_as in zip(interpolation_set, active_subspace_set)  : 
+			
 			if max(norm(current_solution.x - elem_int)) > tol : 
 				#geometry inmproving algorithm on interpolation_set
-				interpolation_set, budget = self.geometry_improvement(interpolation_set, problem, polynomial_basis, delta_k, geometry_improving_flag)
+				interpolation_set, budget = self.geometry_improvement(interpolation_set, problem, current_solution, polynomial_basis, delta_k, geometry_improving_flag)
 				expended_budget += budget
+
+				#update the function values of the interpolation set
+				fvals, grad_fval, budget = self.get_fvals(interpolation_set, problem, expended_budget)
+				expended_budget += 2
+
 				#set new subspace matrix, rho_k+1, delta_k+1
-				return interpolation_set, active_subspace_set, subspace_matrix, rho_k, delta_k, expended_budget
+				return interpolation_set, active_subspace_set, subspace_matrix, fvals, grad_fval, rho_k, delta_k, expended_budget
+			
 			elif max(norm(current_solution.x - elem_as)) > tol : 
 				#geometry improving algorithm on active_subspace_set
-				active_subspace_set, budget = self.geometry_improvement(active_subspace_set, problem, polynomial_basis, delta_k, geometry_improving_flag)
+				active_subspace_set, budget = self.geometry_improvement(active_subspace_set, current_solution, polynomial_basis, delta_k, geometry_improving_flag)
 				expended_budget += budget
+				
+				#update the function values of the active subspace set
+				fvals, grad_fval, budget = self.get_fvals(active_subspace_set, problem, expended_budget)
+				expended_budget += 2 
+
+				#update the subspace matrix
+				subspace_matrix = initialize_subspace_matrix(active_subspace_set, fvals, grad_fval)
+
+
 				#reconstruct basis matrix of active subspace 
-				subspace_matrix, budget = self.construct_active_subspace(active_subspace_set, problem)
 				#set rho_k+1 and delta_k+1
-				return interpolation_set, active_subspace_set, subspace_matrix, rho_k, delta_k, expended_budget
+				return interpolation_set, active_subspace_set, subspace_matrix, fvals, grad_fval, rho_k, delta_k, expended_budget
 			
 		if delta_k==rho_k : 
 			#shrink rho_k+1 and delta_k+1
 			rho_k = 0.1 * rho_k 
 			delta_k = 0.5 * delta_k
 
-			return interpolation_set, active_subspace_set, subspace_matrix, rho_k, delta_k, expended_budget
+			return interpolation_set, active_subspace_set, subspace_matrix, fvals, grad_fval, rho_k, delta_k, expended_budget
 		
-		return interpolation_set, active_subspace_set, subspace_matrix, rho_k, delta_k, expended_budget
+		return interpolation_set, active_subspace_set, subspace_matrix, fvals, grad_fval, rho_k, delta_k, expended_budget
 		
 
 	#the set parameter is of the form {x_k,x^2,...,x^q,...}
-	def geometry_improvement(self, set, problem, polynomial_basis, delta_k, geometry_improving_flag) : 
-		#build pivot polynomials 
-		budget = 0
-		pivot_polynomials = [polynomial_basis[0](set[0])]
+	#TODO: Needs fixing 
+	def geometry_improvement(self, set:np.ndarray, current_solution: Solution, basis: Basis, delta_k: float, geometry_improving_flag: bool) -> tuple(np.ndarray, int) : 
 		q = len(set)
+		#convert set into a list of numpy vectors where each row is an element
+		set = [set[i,:] for i in range(q)]
+		budget = 0
+		current_x = np.array(current_solution.x)
+		print('current_x: ', current_x.shape)
+
+		#Build list of polynomial basis functions that can be called at any value 
+		polynomial_basis = lambda x : basis.vander(x,q)
+
+		# polynomial_basis = []
+		# for i in range(len(set)) : 
+		# 	basis_fn_at_i = lambda x : basis.vander(x, i)
+		# 	polynomial_basis.append(basis_fn_at_i)
+
+		vander_current_x = polynomial_basis(current_x) 
+		print('vander at current_x: ', vander_current_x)
+		#construct pivot polynomials 
+		def pivot_polynomial_basis(x, j) :
+			vand_at_x = polynomial_basis(x)
+			frac = vander_current_x[:,j]/vander_current_x[:,0]
+			res = vand_at_x[:,j] - frac * vand_at_x[:,0]
+			return res 
+		
+		pivot_polynomials = [vander_current_x[:,0]]
 		for i in range(1, q) : 
-			pivot_polynomials.append(lambda x : polynomial_basis[i](x) - (polynomial_basis[i](set[0])/polynomial_basis[0](set[0]))*polynomial_basis[0](x))
+			pivot_polynomials.append(lambda x : pivot_polynomial_basis(x, i))
+
 
 		new_set = [set.pop(0)] 
 		for i in range(1, q) :
+			x_t = np.zeros(current_x.shape)
+
 			if geometry_improving_flag :
+
 				obj_fn_gi = lambda x : np.abs(pivot_polynomials[i](x))
-				x_t = minimize(obj_fn_gi)
-				new_solution = self.create_new_solution(tuple(x_t), problem)
-				problem.simulate(new_solution,1)
-				budget += 1
+				nlc = NonlinearConstraint(lambda x : norm(x-current_x), 0, delta_k)
+				x_t = minimize(obj_fn_gi, current_x, method='trust-constr', constraints=nlc).x
 
 			else : 
 				obj_fn = lambda x : np.abs(pivot_polynomials[i](x_t))/(max(norm(x-x_t)**4/delta_k**4,1))
-				x_t = max(list(map(obj_fn, set)))
-				set.remove(x_t)
-
+				obj_val_set = [obj_fn(i) for i in set]
+				print('obj_val_set: ', obj_val_set)
+				x_t = max(obj_val_set, key=np.linalg.norm)
+				
+				# set.remove(x_t)
+				# x_t = np.array(x_t)
+				set = [v for v in set if not np.array_equal(v, x_t)]
+			
+			print('TEST')
 			new_set.append(x_t)
 
-			#update pivot polynomials 
-			for j in range(i, q) :
-				pivot_polynomials[j] = lambda x : pivot_polynomials[j](x) - (pivot_polynomials[j](x_t)/pivot_polynomials[j](x_t))* pivot_polynomials[i](x)
+			#update pivot polynomials
+			#FIX: after a few iterations this has a recursion error 
+			old_fn_i = pivot_polynomials[i]
+			old_fn_i_at_x_t = old_fn_i(x_t)
+			res = lambda x : old_fn_i_at_x_t
+			pivot_polynomials[i] = res 
+			for j in range(i+1, q) :
+				old_fn_j = pivot_polynomials[j]
+				old_fn_j_at_x_t = old_fn_j(x_t)
+				# res = lambda x : pivot_polynomials[j](x) - (pivot_polynomials[j](x_t)/pivot_polynomials[j](x_t))* pivot_polynomials[i](x)
+				res = lambda x : old_fn_j(x) - (old_fn_j_at_x_t/old_fn_i_at_x_t)* old_fn_i(x)
+				pivot_polynomials[j] = res
+
+			print('length of pivot polynomials: ', len(pivot_polynomials))
 
 		return new_set, budget
+	
 	
 
 
@@ -640,9 +713,9 @@ class OMoRF(Solver):
 	Class that represents the geometry of the solution space. It is able to construct an interpolation set and handle geometric behaviours of the space
 """
 class trust_region_interpolation_points :
-	def __init__(self, problem, current_val):
+	def __init__(self, problem):
 		self.problem = problem
-		self.current_val = current_val
+		# self.current_val = current_val
 
 	def assign_current_val(self, current_val) :
 		"""
@@ -653,7 +726,7 @@ class trust_region_interpolation_points :
 		"""
 		self.current_val = current_val
 
-	def interpolation_points(self, delta):
+	def interpolation_points(self, current_val, delta):
 		"""
 		Samples 0.5*(d+1)*(d+2) points within the trust region
 		Args:
@@ -662,6 +735,7 @@ class trust_region_interpolation_points :
 		Returns:
 			[np.array]: the trust_region set
 		"""
+
 		size = 0.5*(self.problem.dim + 1)*(self.problem.dim + 2)
 		x_k = self.current_val 
 		Y = [x_k]
