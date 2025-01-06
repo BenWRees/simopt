@@ -82,12 +82,8 @@ def linesearch_armijo(f, g, p, x0, bt_factor=0.5, ftol=1e-4, maxiter=40, traject
 	return x, alpha, fx
 
 
-def gnsolver_default(F_eval, f_eval):
-			dx, _, _, s = sp.linalg.lstsq(F_eval, -f_eval, lapack_driver = 'gelss')
-			return dx, s
-
 def gauss_newton(f, F, x0, tol=1e-10, tol_normdx=1e-12, 
-	maxiter=100, linesearch=None, verbose=0, trajectory=None, gnsolver = gnsolver_default):
+	maxiter=100, linesearch=None, verbose=0, trajectory=None, gnsolver = None):
 	r"""A Gauss-Newton solver for unconstrained nonlinear least squares problems.
 
 	Given a vector valued function :math:`\mathbf{f}:\mathbb{R}^m \to \mathbb{R}^M`
@@ -173,12 +169,12 @@ def gauss_newton(f, F, x0, tol=1e-10, tol_normdx=1e-12,
 	if linesearch is None:
 		linesearch = linesearch_armijo
 			
-	# if gnsolver is None:
-	# 	# Scipy seems to properly check for proper allocation of working space, reporting an error with gelsd
-	# 	# so we specify using gelss (an SVD based solver)
-	# 	def gnsolver_default(F_eval, f_eval):
-	# 		dx, _, _, s = sp.linalg.lstsq(F_eval, -f_eval, lapack_driver = 'gelss')
-	# 		return dx, s
+	if gnsolver is None:
+		# Scipy seems to properly check for proper allocation of working space, reporting an error with gelsd
+		# so we specify using gelss (an SVD based solver)
+		def gnsolver(F_eval, f_eval):
+			dx, _, _, s = sp.linalg.lstsq(F_eval, -f_eval, lapack_driver = 'gelsd')
+			return dx, s
 
 	x = np.copy(x0)
 	f_eval = f(x)
@@ -186,12 +182,11 @@ def gauss_newton(f, F, x0, tol=1e-10, tol_normdx=1e-12,
 	grad = F_eval.T @ f_eval
 
 	normgrad = np.linalg.norm(grad)
-
+	info = None
 	#rescale tol by norm of initial gradient
 	tol = max(tol*normgrad, 1e-14)
 
 	normdx = 1
-	info = 0
 	for it in range(maxiter):
 		residual_increased = False
 		
@@ -249,25 +244,24 @@ def gauss_newton(f, F, x0, tol=1e-10, tol_normdx=1e-12,
 				(np.linalg.norm(f_eval), np.linalg.norm(f_eval_new)))
 			break
 
-		if normgrad <= tol:
-			info = 0
-			if verbose >= 1:
-				print('Gauss-Newton converged successfully!')
-		elif normdx <= tol_normdx:
-			info = 1
-			if verbose >= 1:
-				print ('Gauss-Newton did not converge: ||dx|| < tol')
-		elif it == maxiter - 1:
-			info = 2
-			if verbose >= 1:
-				print ('Gauss-Newton did not converge: max iterations reached')
-		elif np.linalg.norm(f_eval_new) >= np.linalg.norm(f_eval):
-			info = 3
-			if verbose >= 1:
-				print ('No progress made during line search')
-		else:
-			raise Exception('Stopping criteria not determined!')
+	if normgrad <= tol:
+		info = 0
+		if verbose >= 1:
+			print('Gauss-Newton converged successfully!')
+	elif normdx <= tol_normdx:
+		info = 1
+		if verbose >= 1:
+			print ('Gauss-Newton did not converge: ||dx|| < tol')
+	elif it == maxiter - 1:
+		info = 2
+		if verbose >= 1:
+			print ('Gauss-Newton did not converge: max iterations reached')
+	elif np.linalg.norm(f_eval_new) >= np.linalg.norm(f_eval):
+		info = 3
+		if verbose >= 1:
+			print ('No progress made during line search')
+	else:
+		raise Exception('Stopping criteria not determined!')
 
 	return x, info
-
 
