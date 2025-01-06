@@ -12,6 +12,7 @@ import cvxpy as cp
 import warnings
 from copy import copy
 
+from .basis import Basis
 from .ridge import RidgeFunction
 from .basis import *
 from .gauss_newton import gauss_newton 
@@ -55,10 +56,8 @@ def check_sample_inputs(X, fX, grads):
 def initialize_subspace(X = None, fX = None, grads = None, n_grads = 100):
 	r""" Construct an initial estimate of the desired subspace 
 	"""
-
-
 	X, fX, grads = check_sample_inputs(X, fX, grads)
-	ngrads = max(n_grads, X.shape[1])
+	n_grads = max(n_grads, X.shape[1])
 	# If we don't have enough grads and we have enough samples to estimate gradients
 	if len(grads) < n_grads and X.shape[0] >= X.shape[1]+1:
 		# Pick a random subset to estimate the gradient at
@@ -76,7 +75,7 @@ class PolynomialRidgeFunction(RidgeFunction):
 	r""" A polynomial ridge function
 	"""
 	def __init__(self, basis, coef, U):
-		self.basis = basis
+		self.Basis = basis
 		self.coef = np.copy(coef)
 		self._U = np.array(U)
 		self.problem = None
@@ -93,10 +92,10 @@ class PolynomialRidgeFunction(RidgeFunction):
 		Returns:
 			np.ndarray: The vandermonde matrix computed from the samples X.
 		"""
-		if U is None: U = self.U
+		if U is None: U = self._U
 		X = np.array(X)	
 		Y = (U.T @ X.T).T
-		return self.basis.V(Y)
+		return self.Basis.V(Y)
 
 	def DV(self, X, U = None):
 		"""Column-wise derivative of the vandermonde matrix 
@@ -108,15 +107,15 @@ class PolynomialRidgeFunction(RidgeFunction):
 		Returns:
 			_type_: _description_
 		"""
-		if U is None: U = self.U
+		if U is None: U = self._U
 		
 		Y = (U.T @ X.T).T
-		return self.basis.DV(Y)
+		return self.Basis.DV(Y)
 
 	def DDV(self, X, U = None):
-		if U is None: U = self.U
+		if U is None: U = self._U
 		Y = (U.T @ X.T).T
-		return self.basis.DDV(Y)
+		return self.Basis.DDV(Y)
 
 	def eval(self, X, **kwargs):
 		Vc = self.V(X) @ self.coef
@@ -133,7 +132,7 @@ class PolynomialRidgeFunction(RidgeFunction):
 		# Compute gradient on projected space
 		Df = np.tensordot(DV, self.coef, axes = (1,0))
 		# Inflate back to whole space
-		Df = Df.dot(self.U.T)
+		Df = Df.dot(self._U.T)
 		if one_d:
 			return Df.reshape(X.shape[1])
 		else:
@@ -149,7 +148,7 @@ class PolynomialRidgeFunction(RidgeFunction):
 		DDV = self.DDV(X)
 		DDf = np.tensordot(DDV, self.coef, axes = (1,0))
 		# Inflate back to proper dimensions
-		DDf = np.tensordot(np.tensordot(DDf, self.U, axes = (2,1)) , self.U, axes = (1,1)) 
+		DDf = np.tensordot(np.tensordot(DDf, self._U, axes = (2,1)) , self._U, axes = (1,1)) 
 		if one_d:
 			return DDf.reshape(X.shape[1], X.shape[1])
 		else:
@@ -157,7 +156,7 @@ class PolynomialRidgeFunction(RidgeFunction):
 
 	@property
 	def profile(self):
-		return PolynomialFunction(self.basis, self.coef)
+		return PolynomialFunction(self.Basis, self.coef)
 	
 
 
@@ -304,7 +303,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		SIAM J. Sci. Comput. Vol 40, No 3, pp A1566--A1589, DOI:10.1137/17M1117690.
 	"""
 
-	def __init__(self, degree, subspace_dimension, problem, basis, 
+	def __init__(self, degree: int, subspace_dimension: int, problem: Problem, basis: Basis, 
 		norm: int = 2, n_init = 1, scale = True, keep_data = True,
 		rotate = True, **kwargs):
 
@@ -357,10 +356,18 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
 		# assert bound in [None, 'lower', 'upper'], "Invalid bound specified"
 		# self.bound = problem.bound
-		
+
 		#TODO: Handle how bounds are dealt with. Should rely on problem object
-		if self.problem.bound != 'unconstrained':
-			self.bound = 'lower'
+		if self.problem.constraint_type == 'unconstrained':
+			self.bound = None 
+		else :
+			if self.problem.upper_bounds == np.nan :
+				self.bound = 'lower'
+			elif self.problem.lower_bounds == np.nan:
+				self.bound = 'upper'
+			else : 
+				self.bound = None
+
 		# super().__init__(basis = self.Basis(self.degree), coef = None, U = None)
 
 	def __len__(self):
@@ -472,8 +479,8 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		r""" Returns the linear coefficients
 		"""
 		Y = (U.T @ X.T).T
-		self.basis = self.Basis(self.degree, X = Y) 
-		V = self.basis.V(Y)
+		# self.basis = self.Basis(self.degree, X = Y) 
+		V = self.Basis.V(Y)
 		c = np.zeros(fX.shape)
 		if self.bound is None:
 			if self.norm == 1:
@@ -526,8 +533,8 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
 		#V = self.V(X, U)
 		Y = (U.T @ X.T).T
-		self.basis = self.Basis(self.degree, Y)
-		V = self.basis.V(Y)
+		# self.basis = self.Basis(self.degree, Y)
+		V = self.Basis.V(Y)
 		if self.basis_name == 'ArnoldiPolynomialBasis':
 			# In this case, V is orthonormal
 			c = V.T @ fX
@@ -543,11 +550,11 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		m, n = U.shape
 	
 		Y = (U.T @ X.T).T
-		self.basis = self.Basis(self.degree, Y)
-		V = self.basis.V(Y)
-		DV = self.basis.DV(Y)
+		# self.basis = self.Basis(self.degree, Y)
+		V = self.Basis.V(Y)
+		DV = self.Basis.DV(Y)
 
-		if isinstance(self.basis, ArnoldiPolynomialBasis):
+		if isinstance(self.Basis, ArnoldiPolynomialBasis):
 			# In this case, V is orthonormal
 			c = V.T @ fX
 			Y = np.copy(V)
@@ -591,9 +598,12 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 	
 	def _fit_varpro(self, X, fX, U0, **kwargs):
 	
-
+		#TODO: This inner function needs reworking as s is not returning properly
 		def gn_solver(J_flat, r):
+			print('J_flat: ', J_flat)
+			print('r: ', r)
 			Y, s, ZT = scipy.linalg.svd(J_flat, full_matrices = False, lapack_driver = 'gesvd')
+			print('s: ', s)
 			# Apply the pseudoinverse
 			n = self.subspace_dimension
 			Delta_flat = -ZT[:-n**2,:].T.dot(np.diag(1/s[:-n**2]).dot(Y[:,:-n**2].T.dot(r)))
@@ -607,7 +617,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
 		U0_flat = U0.flatten() 
 		U_flat, info = gauss_newton(residual, jacobian, U0_flat,
-			trajectory = self._grassmann_trajectory, gnsolver = gn_solver, **kwargs) 
+			trajectory = self._grassmann_trajectory, gnsolver = None, **kwargs) 
 		
 		U = U_flat.reshape(-1, self.subspace_dimension)
 		
@@ -619,7 +629,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
 	def _residual(self, X, fX, U_c):
 		M, m = X.shape
-		N = len(self.basis)
+		N = len(self.Basis)
 		n = self.subspace_dimension
 		
 		# Extract U and c
@@ -629,13 +639,13 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		# Construct basis
 		#V = self.V(X, U)
 		Y = (U.T @ X.T).T
-		V = self.basis.V(Y) 
+		V = self.Basis.V(Y) 
 		res = V @ c - fX
 		return res
 
 	def _jacobian(self, X, fX, U_c):
 		M, m = X.shape
-		N = len(self.basis)
+		N = len(self.Basis)
 		n = self.subspace_dimension
 		
 		# Extract U and c
@@ -644,13 +654,13 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
 		# Re-initialize basis
 		Y = (U.T @ X.T).T
-		self.basis = self.Basis(self.degree, Y)
-		V = self.basis.V(Y)
+		# self.basis = self.Basis(self.degree, Y)
+		V = self.Basis.V(Y)
 
 		# Derivative of V with respect to U with c fixed	
 		DVDUc = np.zeros((M,m,n))
 		#DV = self.DV(X, U) 	# Size (M, N, n)
-		DV = self.basis.DV(Y)
+		DV = self.Basis.DV(Y)
 		for k in range(m):
 			for ell in range(n):
 				DVDUc[:,k,ell] = X[:,k]*np.dot(DV[:,:,ell], c)
@@ -669,7 +679,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
 		"""
 		M, m = X.shape
-		N = len(self.basis)
+		N = len(self.Basis)
 		n = self.subspace_dimension
 		
 		# Split components
@@ -722,7 +732,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		# Recall pU.T @ U == 0 is a requirement for Grassmann optimization
 		def search_constraints(U_c, pU_pc):
 			M, m = X.shape
-			N = len(self.basis)
+			N = len(self.Basis)
 			n = self.subspace_dimension
 			U = U_c[:m*n].reshape(m,n)
 			constraints = [ pU_pc[k*m:(k+1)*m].__rmatmul__(U.T) == np.zeros(n) for k in range(n)]
