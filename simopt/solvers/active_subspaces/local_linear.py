@@ -161,7 +161,7 @@ def local_linear(X, fX, perplexity = None, bandwidth: float | None | str = None,
 
 	if perplexity is None and bandwidth is None:
 		perplexity = min(m+1, M)
-	if perplexity is not None:
+	elif perplexity is not None:
 		bandwidth = None
 		assert perplexity >= 2 and perplexity < M, "Perplexity must be in the interval [2,M)"
 	elif bandwidth is not None:
