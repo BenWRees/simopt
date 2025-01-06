@@ -198,11 +198,18 @@ class PolynomialTensorBasis(Basis):
 		M = X.shape[0]
 		assert X.shape[1] == self.dim, "Expected %d dimensions, got %d" % (self.dim, X.shape[1])
 		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
+
+		print('X[:,1]: ', X[:,1])
+		# print('degree: ', self.degree)
+		print('V_coordinate[1]: ', V_coordinate[1])
 		
 		V = np.ones((M, len(self.indices)), dtype = X.dtype)
 		
 		for j, alpha in enumerate(self.indices):
 			for k in range(self.dim):
+				print('shape of V_coordinate[k]: ', V_coordinate[k].shape)
+				print('shape of alpha[k]: ', alpha[k])
+				print('shape of V[:,j]: ', V[:,j].shape)
 				V[:,j] *= V_coordinate[k][:,alpha[k]]
 		return V
 
@@ -602,18 +609,46 @@ class PolynomialBasis(Basis) :
 		self.indices = index_set(self.degree, self.dim).astype(int)
 		self._build_Dmat()
 		
+	def __len__(self):
+		return len(self.indices)
+	
 	@abstractmethod
 	def poly_basis_fn(self, interpolation_set: list[np.ndarray], row_num : int, col_num: int) -> np.float64: 
 		raise NotImplementedError
 	
 	@abstractmethod
-	def poly_basis_fn_deriv(self, coeff: np.ndarray) -> np.ndarray : 
+	def polyder(self, coeff: np.ndarray) -> np.ndarray : 
 		raise NotImplementedError
 	
 	@abstractmethod
-	def poly_basis_roots(self, coeff: np.ndarray) -> np.ndarray : 
+	def polyroots(self, coeff: np.ndarray) -> np.ndarray : 
 		raise NotImplementedError
 	
+	def vander(self, interpolation_set, degree):
+		X_shape = interpolation_set.shape + (degree + 1,)
+
+		#calculate the whole row,
+		X = np.zeros(X_shape)
+		if len(interpolation_set.shape) == 1 : 
+			# print('dealing with a singular point')
+			for i in range(X_shape[0]) : 
+				for j in range(X_shape[1]) : 
+					# print(f'({i},{j})')
+					X[i,j] = self.poly_basis_fn(interpolation_set, i, j)
+		else :
+			#for each row in the interpolation set, we construct a matrix
+			# print('making a tensor matrix') 
+			for pt in interpolation_set :
+				matrix = np.zeros(X_shape[1:])
+				# print('matrix shape: ', matrix.shape)
+				# print('pt: ', pt.shape)
+				for i in range(matrix.shape[0]) : 
+					for j in range(matrix.shape[1]) : 
+						matrix[i,j] = self.poly_basis_fn(pt, i, j)
+			for i in range(len(interpolation_set)) : 	
+				X[i,:] = matrix 
+		return X
+
 	def assign_interpolation_set(self,X) : 
 		self.X = X
 
@@ -627,7 +662,7 @@ class PolynomialBasis(Basis) :
 		self.Dmat = np.zeros( (self.degree+1, self.degree))
 		I = np.eye(self.degree + 1)
 		for j in range(self.degree + 1):
-			self.Dmat[j,:] = self.poly_basis_fn_deriv(I[:,j])
+			self.Dmat[j,:] = self.polyder(I[:,j])
 
 	def set_scale(self, X):
 		r""" Construct an affine transformation of the domain to improve the conditioning
@@ -657,20 +692,25 @@ class PolynomialBasis(Basis) :
 			raise NotImplementedError
 
 	#Construct a matrix Row by Row
-	def V(self, interpolation_set: np.ndarray) -> np.ndarray :
-		interpolation_set = interpolation_set.tolist()
-		no_cols = self.solve_no_cols(interpolation_set)
-		X = np.zeros((len(interpolation_set), no_cols))
-		for i in range(len(interpolation_set)) :
-			for j in range(no_cols) : 
-				X[i,j] = self.poly_basis_fn(interpolation_set,i,j)	
-		return X
+	def V(self, X: np.ndarray) -> np.ndarray :
+		X = X.reshape(-1, self.dim)
+		X = self._scale(np.array(X))
+		M = X.shape[0]
+		assert X.shape[1] == self.dim, "Expected %d dimensions, got %d" % (self.dim, X.shape[1])
+		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
+		
+		V = np.ones((M, len(self.indices)), dtype = X.dtype)
+		
+		for j, alpha in enumerate(self.indices):
+			for k in range(self.dim):
+				V[:,j] *= V_coordinate[k][:,alpha[k]]
+		return V
 	
 	def DV(self, X):
 		X = X.reshape(-1, self.dim)
 		X = self._scale(np.array(X))
 		M = X.shape[0]
-		V_coordinate = [self.V(X[:,k]) for k in range(self.dim)]
+		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
 		
 		N = len(self.indices)
 		DV = np.ones((M, N, self.dim), dtype = X.dtype)
@@ -697,7 +737,7 @@ class PolynomialBasis(Basis) :
 		X = X.reshape(-1, self.dim)
 		X = self._scale(np.array(X))
 		M = X.shape[0]
-		V_coordinate = [self.V(X[:,k]) for k in range(self.dim)]
+		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
 		
 		N = len(self.indices)
 		DDV = np.ones((M, N, self.dim, self.dim), dtype = X.dtype)
@@ -716,9 +756,7 @@ class PolynomialBasis(Basis) :
 							# We need the second derivative
 							eq = np.zeros(self.degree+1)
 							eq[alpha[q]] = 1.
-							der2 = self.poly_basis_fn_deriv(self.poly_basis_fn_deriv(eq))
-							print(V_coordinate[q][:,0:len(der2)].dtype)
-							print(der2.dtype)
+							der2 = self.polyder(self.polyder(eq))
 							DDV[:,j,k,ell] *= V_coordinate[q][:,0:len(der2)].dot(der2)
 						elif q == k or q == ell:
 							DDV[:,j,k,ell] *= np.dot(V_coordinate[q][:,0:-1], self.Dmat[alpha[q],:])
@@ -733,15 +771,54 @@ class PolynomialBasis(Basis) :
 	def roots(self, coef):
 		if self.dim > 1:
 			raise NotImplementedError
-		r = self.poly_basis_roots(coef)
+		r = self.polyroots(coef)
 		return r*(self._ub[0] - self._lb[0])/2.0 + (self._ub[0] + self._lb[0])/2.
 
 
 class NaturalPolynomialBasis(PolynomialBasis) : 
-	def __init__(self, degree, X, dim) : 
+	def __init__(self, degree, X=None, dim=None) : 
 		super().__init__(degree, X, dim)
 
-	def poly_basis_fn(self, interpolation_set, row_num, col_num) : 
+	#TODO: the factorial(degree) in this function can lead to a stackoverflow due to the recursive limit being reached
+	def poly_basis_fn(self, interpolation_set, row_num, col_num):
+		# val = interpolation_set[row_num]
+		# val_dim = len(val) if not isinstance(val, float) or isinstance(val, int) else 1
+		point = interpolation_set[row_num]  # The row corresponds to the n-dimensional point in X
+
+		if isinstance(point, float) or isinstance(point, int) : 
+			point = [point]
+
+    
+		if col_num == 0:
+			return 1  # Constant term for the first column
+		
+		# Determine which term this column corresponds to
+		degree = 1
+		while True:
+			terms_for_degree = (degree + 1) * degree // 2
+			if col_num <= terms_for_degree:
+				break
+			degree += 1
+		
+		term_position = col_num - (degree * (degree - 1) // 2) - 1
+		
+		if term_position < degree:
+			# Diagonal terms like x_i^d / d!
+			component = term_position
+			if len(point) == 1 : 
+				component = 0
+			# print('point: ', point)
+			# print('component: ',component)
+			return (point[component] ** degree) / factorial(degree)
+		else:
+			# Cross terms like x_i * x_j
+			i = term_position - degree
+			j = degree - 1 - i
+			return point[i] * point[j]
+
+
+
+	"""def poly_basis_fn(self, interpolation_set, row_num, col_num) : 
 		val = interpolation_set[row_num]
 		p = len(val) if not isinstance(val, float) or isinstance(val, int) else 1
 		
@@ -760,7 +837,7 @@ class NaturalPolynomialBasis(PolynomialBasis) :
 		 
 		
 		# Add higher-order terms up to degree max_degree
-		for degree in range(2, self.degree+1):
+		for degree in range(2, self.degree+2):
 			for comb in combinations_with_replacement(range(p), degree):
 				def term_func(v, comb=comb, degree=degree):
 					result = 1
@@ -779,11 +856,13 @@ class NaturalPolynomialBasis(PolynomialBasis) :
 				else :
 					basis_terms.append(term_func)
 		# Evaluate the basis term at the given row (vector)
+		print('length of basis terms: ', len(basis_terms))
 		res = basis_terms[col_num](val)
 		# return basis_terms[col_num](val)
-		return res
+		return res"""
+			
 	
-	def poly_basis_fn_deriv(self, coeff: np.ndarray) -> np.ndarray:
+	def polyder(self, coeff: np.ndarray) -> np.ndarray:
 		"""Takes coefficients [a_0,a_1,...] that correspond to
 
 		Args:
@@ -828,7 +907,7 @@ class NaturalPolynomialBasis(PolynomialBasis) :
 		return coefficients
 
 	
-	def poly_basis_roots(self, coeff: np.ndarray) -> np.ndarray:
+	def polyroots(self, coeff: np.ndarray) -> np.ndarray:
 		return np.roots(coeff)
 	
 	def solve_no_cols(self, interpolation_set):
@@ -842,11 +921,13 @@ class NaturalPolynomialBasis(PolynomialBasis) :
 
 
 class MonomialPolynomialBasis(PolynomialBasis) : 
-	def __init__(self, degree, X, dim):
+	def __init__(self, degree, X=None, dim=None):
 		super().__init__(degree, X, dim)
 
 	def poly_basis_fn(self, interpolation_set, row_num, col_num):
+		interpolation_set = np.array(interpolation_set)
 		val = interpolation_set[row_num]
+		print('val: ', val)
 		#calculate the whole row,
 		row = [1] 
 		for exp in range(1, self.degree+1) : 
@@ -854,7 +935,7 @@ class MonomialPolynomialBasis(PolynomialBasis) :
 
 		return row[col_num]
 	
-	def poly_basis_fn_deriv(self, coeff: np.ndarray) -> np.ndarray:
+	def polyder(self, coeff: np.ndarray) -> np.ndarray:
 		n = self.degree
 		 # Create symbolic variables for x1, x2, ..., xp
 		x = sp.symbols('x')
@@ -876,7 +957,7 @@ class MonomialPolynomialBasis(PolynomialBasis) :
 
 		return coefficients 
 
-	def poly_basis_roots(self, coeff: np.ndarray) -> np.ndarray:
+	def polyroots(self, coeff: np.ndarray) -> np.ndarray:
 		return np.roots(coeff) 
 	
 	def solve_no_cols(self, interpolation_set):
@@ -884,13 +965,19 @@ class MonomialPolynomialBasis(PolynomialBasis) :
 		return 1 + (len(val)*self.degree)
 	
 class LagrangePolynomialBasis(PolynomialBasis) : 
-	def __init__(self, degree, X, dim) : 
+	def __init__(self, degree, X=None, dim=None) : 
 		super().__init__(degree, X, dim)
 
 	#lagrange polynomical function for each element in the matrix
+	#TODO: Fix the lagrange polynomial function 
 	def poly_basis_fn(self, interpolation_set, row_num, col_num) :
-		current_val = interpolation_set[row_num]
-		denom_val = interpolation_set[col_num]
+		
+		if interpolation_set.shape == 1 : 
+			current_val = interpolation_set[row_num]
+			denom_val = interpolation_set[col_num]
+		else :		
+			current_val = interpolation_set[row_num]
+			denom_val = interpolation_set[col_num]
 
 		def basis_fn(x) :
 			denominator = np.linalg.norm(denom_val - x)
@@ -904,7 +991,7 @@ class LagrangePolynomialBasis(PolynomialBasis) :
 		return lagrange 
 	
 	def _build_Dmat(self):
-		raise NotImplementedError
+		return None
 
 	#TODO: Implement the derivative function
 	def DV(self, X = None):
@@ -913,16 +1000,17 @@ class LagrangePolynomialBasis(PolynomialBasis) :
 	def DDV(self, X = None):
 		raise NotImplementedError
 	
-	def poly_basis_roots(self, coeff: np.ndarray) -> np.ndarray:
+	def polyroots(self, coeff: np.ndarray) -> np.ndarray:
 		return np.roots(coeff)
 	
 	def solve_no_cols(self, interpolation_set):
 		return len(interpolation_set)
 	
 class NFPPolynomialBasis(PolynomialBasis) : 
-	def __init__(self, degree, X, dim) : 
+	def __init__(self, degree, X=None, dim=None) : 
 		super().__init__(degree, X, dim) 
 
+	#TODO: Fix the polynomial basis function
 	def poly_basis_fn(self, interpolation_set, row_num, col_num) :
 		if col_num == 0 : 
 			return 1
@@ -940,7 +1028,7 @@ class NFPPolynomialBasis(PolynomialBasis) :
 	def DDV(self, X = None):
 		raise NotImplementedError
 
-	def poly_basis_roots(self, coeff: np.ndarray) -> np.ndarray:
+	def polyroots(self, coeff: np.ndarray) -> np.ndarray:
 		return np.roots(coeff)
 	
 	def solve_no_cols(self, interpolation_set):
