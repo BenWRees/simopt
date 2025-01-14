@@ -419,8 +419,7 @@ class SubspaceBasedDimensionReduction(object):
 		r""" Approximate the Lipschitz matrix on the low-dimensional subspace
 		"""
 		raise NotImplementedError
-
-#TODO: This class needs rewriting 
+ 
 class ActiveSubspace(SubspaceBasedDimensionReduction):
 	r"""Computes the active subspace gradient samples
 
@@ -467,13 +466,14 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
 			weights = np.ones(N)/N
 			
 		self._weights = np.array(weights)
-		self._U, self._s, VT = scipy.linalg.svd(np.sqrt(self._weights)*self._grads.T)
+		self._U, self._s, VT = scipy.linalg.svd(np.sqrt(self._weights)*self._grads.T, full_matrices=False) #Added full_matrices
 		# Pad s with zeros if we don't have as many gradient samples as dimension of the space
 		self._s = np.hstack([self._s, np.zeros(self._dimension - len(self._s))])
-		self._C = self._U @ np.diag(self._s**2) @ self._U.T
+		self._C = self._U.T @ np.diag(self._s**2) @ self._U #switched transposed _U around
 
 		# Fix +/- scaling so average gradient is positive	
-		self._U = self._fix_subspace_signs_grads(self._U, self._grads)		
+		self._U = self._fix_subspace_signs_grads(self._U, self._grads)	
+
 
 
 	#TODO: This function needs rewriting to instead sample the simopt problem: 
