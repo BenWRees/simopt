@@ -67,7 +67,6 @@ def initialize_subspace(X = None, fX = None, grads = None, n_grads = 100):
 	else:
 		all_grads = grads
 
-	print(f'all_grads shape: ', all_grads.shape)
 
 	# Compute SVD
 	U, s, VH = scipy.linalg.svd(all_grads.T, full_matrices = False, compute_uv = True)
@@ -603,10 +602,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 	
 		#TODO: This inner function needs reworking as s is not returning properly
 		def gn_solver(J_flat, r):
-			print('J_flat: ', J_flat)
-			print('r: ', r)
 			Y, s, ZT = scipy.linalg.svd(J_flat, full_matrices = False, lapack_driver = 'gesvd')
-			print('s: ', s)
 			# Apply the pseudoinverse
 			n = self.subspace_dimension
 			Delta_flat = -ZT[:-n**2,:].T.dot(np.diag(1/s[:-n**2]).dot(Y[:,:-n**2].T.dot(r)))
