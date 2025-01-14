@@ -1,11 +1,11 @@
 from __future__ import annotations
 from typing import Callable
 
-from numpy.linalg import norm, pinv
+from numpy.linalg import norm, pinv, qr
 import numpy as np
 from math import ceil, isnan, isinf, comb, factorial
 import warnings
-from scipy.optimize import minimize, NonlinearConstraint
+from scipy.optimize import minimize, NonlinearConstraint, linprog
 from scipy import optimize
 warnings.filterwarnings("ignore")
 import importlib
@@ -25,8 +25,9 @@ from simopt.base import (
 from simopt.solvers.active_subspaces.basis import *
 from simopt.solvers.active_subspaces.polyridge import *
 from simopt.solvers.active_subspaces.subspace import ActiveSubspace
-from .Sampling import SamplingRule
+from simopt.solvers.active_subspaces.index_set import IndexSet
 
+from .Sampling import SamplingRule
 from .TrustRegion import * 
 from .Sampling import * 
 from .Geometry import *
@@ -510,9 +511,9 @@ class OMoRF(TrustRegionBase):
 	def specifications(self) -> dict[str, dict] :
 		new_specifications = {
 			"interpolation update tol":{
-				"description": "tolerance value to check for updating the interpolation model",
-				"datatype": float, 
-				"default": 0.01
+				"description": "tolerance values to check for updating the interpolation model",
+				"datatype": tuple, 
+				"default": (2.0,10.0)
 			},
 			"initial radius": {
 				"description": "initial trust-region radius",
@@ -537,7 +538,27 @@ class OMoRF(TrustRegionBase):
 			"subspace dimension": {
 				"description": "dimension size of the active subspace",
 				"datatype": int, 
-				"default": 2
+				"default": 5
+			}, 
+			"random directions": {
+				"description": "Determine to take random directions in set construction",
+				"datatype": bool, 
+				"default": False 
+			},
+			"alpha_1" : {
+				"description": "Scale factor to shrink the stepsize check",
+				"datatype": float, 
+				"default": 0.1
+			},
+			"alpha_2": {
+				"description": "Scale factor to shrink the trust-region radius",
+				"datatype": float,
+				"default": 0.5
+			},
+			"rho_min": {
+				"description": "initial rho when shrinking", 
+				"datatype": float, 
+				"default": 1.0e-8
 			}
 		}
 		super().factors['geometry instance'] = 'OMoRFGeometry'
@@ -547,18 +568,22 @@ class OMoRF(TrustRegionBase):
 	@property
 	def check_factor_list(self) -> dict[str, Callable] : 
 		new_check_list = {
-				"interpolation update tol":self.check_tolerance,
-				"initial radius": self.check_initial_radius,
-				"gamma_3": self.check_gamma_3,
-				"gamma_shrinking": self.check_gamma_shrinking,
-				"omega_shrinking": self.check_omega_shrinking,
-				"subspace dimension": self.check_dimension_reduction,
+			"interpolation update tol":self.check_tolerance,
+			"initial radius": self.check_initial_radius,
+			"gamma_3": self.check_gamma_3,
+			"gamma_shrinking": self.check_gamma_shrinking,
+			"omega_shrinking": self.check_omega_shrinking,
+			"subspace dimension": self.check_dimension_reduction,
+			"random directions": self.check_random_directions,
+			"alpha_1": self.check_alpha_1,
+			"alpha_2": self.check_alpha_2,
+			"rho_min": self.check_rho_min
 			}
 		return {**super().check_factor_list, **new_check_list}
 
 	
 	def check_tolerance(self) -> bool:
-		return self.factors['interpolation update tol'] >0 and self.factors['interpolation update tol'] <= 1
+		return self.factors['interpolation update tol'] >(0,0) and self.factors['interpolation update tol'] <= (1,1)
 	
 	def check_initial_radius(self) -> bool:
 		return self.factors['initial radius'] > 0
@@ -574,6 +599,18 @@ class OMoRF(TrustRegionBase):
 	
 	def check_dimension_reduction(self) -> bool:
 		return self.factors['subspace dimension'] >= 1
+	
+	def check_random_directions(self) -> bool : 
+		return isinstance(self.factors['random directions'], bool)
+	
+	def check_alpha_1(self) -> bool :
+		return self.factors['alpha_1'] > 0 
+	
+	def check_alpha_2(self) -> bool :
+		return self.factors['alpha_2'] > 0 
+	
+	def check_rho_min(self) -> bool : 
+		return self.factors['rho_min'] < self.factors['delta']
 
 	def __init__(self, name="OMoRF", fixed_factors: dict | None = None) -> None:
 		"""
@@ -589,147 +626,60 @@ class OMoRF(TrustRegionBase):
 		# self.check_factor_list = {**super().check_factor_list, **self.check_factor_list()}
 		super().__init__(name, fixed_factors)
 
-	def solve_subproblem(self, delta: float, rho_k: float, expended_budget:int, problem: Problem, solution: Solution, subspace_int_set:list[np.ndarray], model_int_set: list[np.ndarray], fvals: list[float], grad_fval: list[float]) -> tuple[Solution, float, float, int, list, np.ndarray, list, list, list, bool]:
+	def _set_bounds(self,problem) : 
+		self.bounds = [problem.lower_bounds, problem.upper_bounds]
+
+	def _set_iterate(self):
+		ind_min = np.argmin(self.f) #get the index of the smallest function value 
+		self.s_old = self.S[ind_min,:] #get the x-val that corresponds to the smallest function value 
+		self.f_old = self.f[ind_min] #get the smallest function value 
+
+
+	def _set_delta(self, val) : 
+		self.delta_k = val
+
+	def _set_counter(self, count) :
+		self.unsuccessful_iteration_counter = count 
+
+	def _set_ratio(self, ratio) : 
+		self.ratio = ratio 
+
+	def _set_rho_k(self, value):
+		self.rho_k = value 
+
+
+	def blackbox_evaluation(self, s, problem):
 		"""
-		Solve the Trust-Region subproblem either using Cauchy reduction or a black-box optimisation solver
-		
-		Args:
-			model (PolynomialRidgeApproximation): the polynomial ridge approximation model
-			problem (base.Problem): the simulation-optimisation Problem
-			solution (base.Solution): the current iteration's solution
+		Evaluates the point s for the problem
 
-		Returns:
-			base.Solution - the candidate solution from the subproblem
+		self.S is array-like of all the x values 
+		self.f is a 1-d array of function values 
 		"""
-		new_x = np.array(solution.x)
-		grad, Hessian = self.local_model.grad(new_x), self.local_model.hessian(new_x)
-		# grad, Hessian = np.zeros(new_x.shape),np.zeros(new_x.shape)
-		gamma_s = self.factors['gamma_shrinking']
-		omega_s = self.factors['omega_shrinking']
-		reset_flag = False
-
-
-		if self.factors['easy_solve'] :
-			# Cauchy reduction
-			if np.dot(np.multiply(grad, Hessian), grad) <= 0:
-				tau = 1
-			else:
-				tau = min(1, norm(grad) ** 3 / (delta * np.dot(np.multiply(grad, Hessian), grad)))
-			grad = np.reshape(grad, (1, problem.dim))[0]
-			candidate_x = new_x - tau * delta * grad / norm(grad)
-
-		
-		else:
-			# Search engine - solve subproblem
-			def subproblem(s) : 
-				res =  self.local_model.eval(new_x + s)
-				return res
-			
-			con_f = lambda s: norm(s)
-			nlc = NonlinearConstraint(con_f, 0, delta)
-
-			solve_subproblem = minimize(subproblem, np.zeros(problem.dim), method='trust-constr', constraints=nlc)
-			candidate_x =  new_x + np.array(solve_subproblem.x) 
-
-
-		# handle the box constraints
-		for i in range(problem.dim):
-			if candidate_x[i] <= problem.lower_bounds[i]:
-				candidate_x[i] = problem.lower_bounds[i] + 0.01
-			elif candidate_x[i] >= problem.upper_bounds[i]:
-				candidate_x[i] = problem.upper_bounds[i] - 0.01
-
-		candidate_solution = self.create_new_solution(tuple(candidate_x), problem) 
-		
-		# check if the stepsize is too small
-		if norm(solve_subproblem.x) < rho_k * gamma_s :
-			delta = max(delta*omega_s, rho_k)
-			model_int_set, subspace_int_set, fvals, grad_fval, rho_k, delta, expended_budget = self.interpolation_update(solution, problem, expended_budget, model_int_set, subspace_int_set, fvals, grad_fval, delta, rho_k, True)
-			reset_flag = True
-			candidate_solution = solution
-			self.deltas.append(delta)
-
-
-		return candidate_solution, rho_k, delta, expended_budget, subspace_int_set, model_int_set, fvals, grad_fval, reset_flag
-	
-	def evaluate_candidate_solution(self, problem: Problem, current_fval: float, fval_tilde: float, delta_k: float, rho_k: float, current_solution: Solution, candidate_solution: Solution, recommended_solns: list[Solution], model_int_set: list[np.ndarray], subspace_int_set: list[np.ndarray], fvals: list[float], grad_fval: list[np.ndarray]) -> tuple[Solution, float, float, list[Solution], list[np.ndarray], list[np.ndarray], np.ndarray, list[float], list[np.ndarray], float, int]:
-		# fval = model.fval
-		expended_budget = 0
-		current_x = np.array(current_solution.x)
-		candidate_x = np.array(candidate_solution.x)
-		step_size = np.subtract(candidate_x,current_x)
-
-		print(f'candidate value: {candidate_x}')
-		print(f'incumbent value: {current_x}')
-
-		print(f'current best function value: {current_fval}')
-		print(f'candidate function value: {fval_tilde}')
-
-
-
-		numerator = current_fval - fval_tilde
-		denominator = self.local_model.eval(current_x) - self.local_model.eval(candidate_x)
-		# denominator = self.local_model.eval(np.zeros(problem.dim)) - self.local_model.eval(step_size)
-		print(f'numerator: {numerator}')
-		print(f'denominator: {denominator}')
-		if denominator > 0 : 
-			ratioComparison = numerator / denominator
-		else : 
-			ratioComparison = 0
-		
-		self.rhos.append(ratioComparison)
-		if ratioComparison >= self.factors['eta_1']:
-			current_solution = candidate_solution
-			current_fval = fval_tilde
-			recommended_solns.append(candidate_solution)
-			delta_k = max(self.factors['gamma_1']*delta_k, norm(step_size),rho_k)
-			
-			# very successful: expand and accept
-			if ratioComparison >= self.factors['eta_2'] :
-				delta_k = max(self.factors['gamma_2'] * delta_k, self.factors['gamma_3']*norm(step_size))
-			
-		# unsuccessful: shrink and reject
-		else:
-			delta_k = max(min(self.factors['gamma_1']*delta_k, norm(step_size)), rho_k)
-			recommended_solns.append(current_solution)
-
-		#append the candidate solution to the interpolation set and active subspace set
-		model_int_set = np.vstack((model_int_set, candidate_x))
-		subspace_int_set = np.vstack((subspace_int_set, candidate_x))
-
-		#append candidate_x to fvals
-		fvals = np.vstack((fvals,fval_tilde))
-		
-		#calculate the gradient at fval_tilde and 
-		grad_append, budget = self.finite_difference_gradient(candidate_solution, problem)
-		grad_fval = np.vstack((grad_fval, grad_append))
-		expended_budget += budget
-
-
-
-		if ratioComparison >= self.factors['eta_1'] :
-			print('ITERATION WAS SUCCESSFUL')
-			model_int_set, budget = self.geometry_improvement(model_int_set, current_solution, delta_k, False)
-			expended_budget += budget
-			subspace_int_set, budget =  self.geometry_improvement(subspace_int_set, current_solution, delta_k, False)
-			expended_budget += budget
-
-			#update the fvals for the new subspace interpolation set 
-			fvals, expended_budget = self.get_fvals(model_int_set,problem, expended_budget) 
-			grad_fval, expended_budget = self.get_grad_fvals(subspace_int_set, problem, expended_budget)
-
+		#If S has 1 or more points in it and the point being evaluated is not unique. Just grab the existing fn. value
+		if self.S.size > 0 and np.unique(np.vstack((self.S, s)), axis=0).shape[0] == self.S.shape[0]:
+			s = s.reshape(1,-1)
+			ind_repeat = np.argmin(norm(self.S - s, ord=np.inf, axis=1))
+			f = self.f[ind_repeat]
 		else :
-			print('ITERATION WAS UNSUCCESSFUL')
-			model_int_set, subspace_int_set, fvals, grad_fval, rho_k, delta_k, budget = self.interpolation_update(current_solution, problem, expended_budget, model_int_set, subspace_int_set, fvals, grad_fval, delta_k, rho_k, True)
-			expended_budget += budget
+			new_solution = self.create_new_solution(tuple(s), problem) 
+			problem.simulate(new_solution, 1)
+			f = -1 * problem.minmax[0] * new_solution.objectives_mean
+			self.expended_budget += 1
+			
+			s = s.reshape(1,-1)
 
-		
-		self.deltas.append(delta_k)
+			#update S and f
+			if self.f.size == 0:
+				self.S = s
+				self.f = f
+			else:
+				self.S = np.vstack((self.S, s))
+				self.f = np.vstack((self.f, f))
+			
 
-		return current_solution, current_fval, delta_k, recommended_solns, model_int_set, subspace_int_set, fvals, grad_fval, rho_k, expended_budget
-
-
-	def finite_difference_gradient(self, new_solution: Solution, problem: Problem) -> tuple[np.ndarray, int] :
+		return f[0]
+	
+	def finite_difference_gradient(self, new_solution: Solution, problem: Problem) -> np.ndarray :
 		"""Calculate the finite difference gradient of the problem at new_solution.
 
 		Args:
@@ -741,13 +691,22 @@ class OMoRF(TrustRegionBase):
 
 			int: The expended budget 
 		"""
-		budget = 0
 		alpha = 1e-3		
 		lower_bound = problem.lower_bounds
 		upper_bound = problem.upper_bounds
+		problem.simulate(new_solution,1)
+		fn = -1 * problem.minmax[0] * new_solution.objectives_mean
+		self.expended_budget += 1
 		# new_solution = self.create_new_solution(tuple(x), problem)
 
 		new_x = new_solution.x
+		forward = np.isclose(new_x, lower_bound, atol = 10**(-7)).astype(int)
+		backward = np.isclose(new_x, upper_bound, atol = 10**(-7)).astype(int)
+		# BdsCheck: 1 stands for forward, -1 stands for backward, 0 means central diff.
+		BdsCheck = np.subtract(forward, backward)
+
+		# print(f'BdsCheck: {BdsCheck}')
+
 		FnPlusMinus = np.zeros((problem.dim, 3))
 		grad = np.zeros(problem.dim)
 		for i in range(problem.dim):
@@ -764,481 +723,353 @@ class OMoRF(TrustRegionBase):
 				steph2 = np.abs(x2[i] - lower_bound[i])
 
 			# Decide stepsize.
-			FnPlusMinus[i, 2] = min(steph1, steph2)
-			x1[i] = x1[i] + FnPlusMinus[i, 2]
-			x2[i] = x2[i] - FnPlusMinus[i, 2]
+			# Central diff.
+			if BdsCheck[i] == 0:
+				FnPlusMinus[i, 2] = min(steph1, steph2)
+				x1[i] = x1[i] + FnPlusMinus[i, 2]
+				x2[i] = x2[i] - FnPlusMinus[i, 2]
+			# Forward diff.
+			elif BdsCheck[i] == 1:
+				FnPlusMinus[i, 2] = steph1
+				x1[i] = x1[i] + FnPlusMinus[i, 2]
+			# Backward diff.
+			else:
+				FnPlusMinus[i, 2] = steph2
+				x2[i] = x2[i] - FnPlusMinus[i, 2]
 
-			fn1, fn2 = 0,0 
+			fn1 = 0 
+			fn2 = 0
 			x1_solution = self.create_new_solution(tuple(x1), problem)
-			problem.simulate_up_to([x1_solution], 1)
-			budget += 1
-			fn1 = -1 * problem.minmax[0] * x1_solution.objectives_mean
-			# First column is f(x+h,y).
-			FnPlusMinus[i, 0] = fn1
+			if BdsCheck[i] != -1:
+				problem.simulate_up_to([x1_solution], 1)
+				fn1 = -1 * problem.minmax[0] * x1_solution.objectives_mean
+				self.expended_budget +=1
+				# First column is f(x+h,y).
+				FnPlusMinus[i, 0] = fn1
 			
 			x2_solution = self.create_new_solution(tuple(x2), problem)
-			problem.simulate_up_to([x2_solution], 1)
-			budget += 1
-			fn2 = -1 * problem.minmax[0] * x2_solution.objectives_mean
-			# Second column is f(x-h,y).
-			FnPlusMinus[i, 1] = fn2
+			if BdsCheck[i] != 1:
+				problem.simulate_up_to([x2_solution], 1)
+				fn2 = -1 * problem.minmax[0] * x2_solution.objectives_mean
+				self.expended_budget +=1
+				# Second column is f(x-h,y).
+				FnPlusMinus[i, 1] = fn2
 
 			# Calculate gradient.
-			grad[i] = (fn1 - fn2) / (2 * FnPlusMinus[i, 2])
-
-		return grad, budget
-
-	def get_fvals(self, samples: list[np.ndarray], problem: Problem, budget: int) -> tuple[np.ndarray, int] : 
-		fvals = []
-		for s in samples :
-			s = [a for a in s.flatten()]
-			new_solution = self.create_new_solution(tuple(s), problem)
-			problem.simulate(new_solution,1)
-			budget += 1
-			fvals.append(-1 * problem.minmax[0] * new_solution.objectives_mean)
-			
-
-		# print("grads: ", np.array(grads).shape)
-			
-		return np.array(fvals).reshape((-1,1)), budget
-	
-
-	def get_grad_fvals(self, samples: list[np.ndarray], problem:Problem, budget:int) -> tuple[np.ndarray, int] :
-		grads = []
-		for s in samples :
-			s = [a for a in s.flatten()]
-			new_solution = self.create_new_solution(tuple(s), problem)
-			grad, expended_budget = self.finite_difference_gradient(new_solution, problem)
-			grads.append(grad)
-			budget += expended_budget
-	
-		return np.array(grads).reshape((-1,problem.dim)), budget
-	
+			if BdsCheck[i] == 0:
+				grad[i] = (fn1 - fn2) / (2 * FnPlusMinus[i, 2])
+			elif BdsCheck[i] == 1:
+				grad[i] = (fn1 - fn) / FnPlusMinus[i, 2]
+			elif BdsCheck[i] == -1:
+				grad[i] = (fn - fn2) / FnPlusMinus[i, 2]
 
 
+		# print(f'grad shape: {grad.shape}')
+		return grad
 
-	def generate_samples(self, lower_bound, upper_bound, new_x, problem) : 
-		samples = [] 
-		# degree = self.factors['polynomial degree']
-		# subspace_dim = self.factors['subspace dimension']
-		dim = self.factors['subspace dimension']
-		no_samples = dim  #comb(subspace_dim + degree, degree) + dim*subspace_dim - (subspace_dim*(subspace_dim+1))//2
 
-		while len(samples) < no_samples:
-			sample = np.random.normal(size=(len(new_x),)) 
-			#check bounds if inside then append 
-			if np.all(sample >= lower_bound) and np.all(sample <= upper_bound) : 
-				samples.append(sample)
+	def _get_grads(self, X: np.ndarray, problem: Problem) -> np.ndarray : 
+		"""Calculate gradients 
 
-		return np.array(samples)
+		Args:
+			X (np.ndarray): (N,m) matrix of N x-vals to be evaluated
+			problem (Problem): 
+
+		Returns:
+			np.ndarray: (N,m) matrix of N gradients evaluated at each row of X
+		"""
+		grads = np.zeros(X.shape)
+
+		# print(f'X: {X}')
+
+		#fill out each row 
+		for idx,x_val in enumerate(X) : 
+			x_solution = self.create_new_solution(x_val, problem)
+			grads[idx, :] = self.finite_difference_gradient(x_solution, problem)
+
+		# print(f'grads: {grads}')
+		return grads 
+
+	def fit_subspace(self, X:np.ndarray, problem: Problem) -> None:
+		"""
+		Takes the active subspace and fits
+
+		Args:
+			X (np.ndarray): (N,m) matrix of N x-values
+			problem (Problem)
+		"""
+		grads = self._get_grads(X, problem) 
+		self.U.fit(grads, self.d) 
 
 
 	def solve(self, problem):
-		"""
-		Run a single macroreplication of a solver on a problem.
+		#initialise factors: 
+		self.recommended_solns = []
+		self.intermediate_budgets = []
 		
-		Arguments
-		---------
-		problem : Problem object
-			simulation-optimization problem to solve
-		
-		Returns
-		-------
-		recommended_solns : list of Solution objects
-			list of solutions recommended throughout the budget
-		intermediate_budgets : list of ints
-			list of intermediate budgets when recommended solutions changes
-		
-		Deleted Parameters
-		------------------
-		crn_across_solns : bool
-			indicates if CRN are used when simulating different solutions
-		"""
-		recommended_solns = []
-		intermediate_budgets = []
-		expended_budget = 0
-		delta_k = self.factors['delta']
-		rho_k = delta_k 
+		self.S = np.array([])
+		self.f = np.array([])
+		self.g = np.array([])
+		self.d = self.factors['subspace dimension']
+
+		self.expended_budget = 0
+		# self.delta_k = self.factors['delta']
+		self._set_delta(self.factors['delta'])
+		# self.rho_k = self.delta_k
+		self._set_rho_k(self.delta_k) 
 		self.rhos = []
 		self.deltas = []
+		self.n = problem.dim
+		self.deg = self.factors['polynomial degree'] 
+		self.q = comb(self.d + self.deg, self.deg) +  self.n * self.d #int(0.5*(self.d+1)*(self.d+2))
+		self.p = self.n+1
+		self.epsilon_1, self.epsilon_2 = self.factors['interpolation update tol'] #epsilon is the tolerance in the interpolation set update 
+		self.random_initial = self.factors['random directions']
+		self.alpha_1 = self.factors['alpha_1'] #shrink the trust region radius in set improvement 
+		self.alpha_2 = self.factors['alpha_2'] #shrink the stepsize reduction  
+		self.rho_min = self.factors['rho_min']
 
+
+		#set up initial Solution
 		current_x = problem.factors["initial_solution"]
-		print(f'initial solution: {current_x}')
-		current_solution = self.create_new_solution(current_x, problem)
-		recommended_solns.append(current_solution)
-		intermediate_budgets.append(expended_budget)
+		# print(f'initial solution: {current_x}')
+		self.current_solution = self.create_new_solution(current_x, problem)
+		self.recommended_solns.append(self.current_solution)
+		self.intermediate_budgets.append(self.expended_budget)
 
-		#evaluate the current solution
-		problem.simulate(current_solution,1)
-		expended_budget += 1
-		current_fval = -1 * problem.minmax[0] * current_solution.objectives_mean
+		self._set_bounds(problem)
+		
+		""" 
+		self.s_old = self._apply_scaling(s_old) #shifts the old solution into the unit ball
+		"""
 
-		sampling_instance = self.sample_instantiation()
+		self.k = 0
+		self._set_counter(0)
 
+		geo_factors = {
+			'random_directions': self.random_initial,
+			'epsilon_1': self.epsilon_1,
+			'epsilon_2': self.epsilon_2,
+			'rho_min': self.rho_min,
+			'alpha_1': self.alpha_1,
+			'alpha_2': self.alpha_2,
+			'n': self.n,
+			'd': self.d,
+			'q': self.q,
+			'p': self.p
+			
+		}
+
+
+		#basis construction
+		 
+		# This returns 
+		index_set = IndexSet('total-order', orders=np.tile([2], self.q))
+		self.index_set = index_set.get_basis()[:,range(self.d-1, -1, -1)]
+		
 		self.poly_basis = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], dim=self.factors['subspace dimension'])
-		geometry_instance = self.geometry_type_instantiation()(problem)
+		self.geometry_instance = self.geometry_type_instantiation()(problem, self, self.index_set, **geo_factors)
 
 		#instantiate ActiveSubspace and use it to construct the active subspace matrix 
-		self.active_subspace_matrix = ActiveSubspace()
+		self.U = ActiveSubspace()
+
+		self.s_old = np.array(current_x)
+		self.f_old = self.blackbox_evaluation(self.s_old,problem)
+
+		# Construct the sample set for the subspace 
+		S_full = self.geometry_instance.generate_set(self.d, self.s_old, self.delta_k)
+		f_full = np.zeros((self.d, 1))
+		f_full[0, :] = self.f_old #first row gets the old function values 
+
+		reset_budget = self.expended_budget
+
+		#get the rest of the function evaluations - write as a function
+		for i in range(1, self.d):
+			#simulate the problem at each component of f_
+			f_full[i, :] = self.blackbox_evaluation(S_full[i, :], problem)
+			self.expended_budget = reset_budget #!QUICK FIX TO CHECK IF WE NEED TO FILL f_full
+			#case where we use up our whole budget getting the function values 
+			if not self.expended_budget < problem.factors['budget'] :
+				return self.recommended_solns, self.intermediate_budget
 
 
-
-		subspace_int_set = self.generate_samples(problem.lower_bounds, problem.upper_bounds, current_x, problem)
-
-
-		#get function values of the interpolation set
-		grad_fval, expended_budget = self.get_grad_fvals(subspace_int_set, problem, expended_budget)
-		print(f'gradient of the function values of the subspace interpolation set shape: {grad_fval.shape}')
-		self.active_subspace_matrix.fit(grad_fval)
-
-		#construct an initial subspace matrix using subspace_int_set
-
-		print('subspace matrix shape: ', self.active_subspace_matrix._U.shape)
-
-		#build an initial set of interpolation points
-		model_int_set = geometry_instance.interpolation_points(np.array(current_x),delta_k, self.factors['polynomial degree'], self.factors['subspace dimension'] )
-		model_int_set = np.array(model_int_set).reshape(-1, problem.dim)
-
-
-		fvals, expended_budget = self.get_fvals(model_int_set, problem, expended_budget)
-
-		#initialise the polyridge model 
-		self.local_model = PolynomialRidgeApproximation(self.factors['polynomial degree'], self.factors['subspace dimension'], problem, self.poly_basis)
-		print(f'model_int_set shape: {model_int_set.shape}')
-		print(f'fvals shape: {fvals.shape}')
-		self.local_model.fit(model_int_set, fvals, U0=self.active_subspace_matrix._U)
-
-
-		k=0
-		reset_counter = 0
-
-		while expended_budget < problem.factors['budget']:
-			print(f'iteration number {k} ')
-			
-			if k == 0 :
-				print('shape of subspace_int_set: ', subspace_int_set.shape)
-				print('shape of model int set: ', model_int_set.shape)
-				print('shape of fvals: ', fvals.shape)
-				print(f'model interpolation set: {model_int_set}')
-			
-			if k > 0 :
-				#construct the model using the interpolation set
-				print('shape of model_int_set: ', model_int_set.shape)
-				print('subspace matrix: ', self.active_subspace_matrix._U)
-				print('shape of fvals: ', fvals.shape)
-				print(f'model_int_set: {model_int_set}')
-				print(f'fvals: {fvals}')
-				self.local_model.fit(model_int_set, fvals, U0=self.active_subspace_matrix._U)
-
-			#solve the subproblem
-
-			candidate_solution, rho_k, delta_k, expended_budget, subspace_int_set, model_int_set, fvals, grad_fval, reset_flag = self.solve_subproblem(delta_k, rho_k, expended_budget, problem, current_solution, subspace_int_set, model_int_set, fvals, grad_fval) 
-			#if the stepsize is too small, do not evaluate and restart the loop
-			if reset_flag :
-				print('RESETTING')
-				reset_counter += 1 					
-				print(f'candidate solution: {candidate_solution.x}')
-				print(f'current solution: {current_solution.x}')
-				print(f'model_int_set shape: {model_int_set.shape}')
-				fvals, expended_budget = self.get_fvals(model_int_set, problem, expended_budget)
-				grad_fval, expended_budget = self.get_grad_fvals(subspace_int_set, problem, expended_budget)
-				print(f'fvals shape: {fvals.shape}')
-				print(f'grad_fvals shape: {grad_fval.shape}')
-				recommended_solns.append(current_solution)
-				intermediate_budgets.append(expended_budget) 
-				if reset_counter >= 4 : 
-					print('END PROCESS')
-					break
-
-				continue
-			else : 
-				#evaluate the candidate solution
-				candidate_solution, sampling_budget = sampling_instance(problem, candidate_solution, k, delta_k, expended_budget, 1, 0)
-				fval_tilde = -1 * problem.minmax[0] * candidate_solution.objectives_mean
-				expended_budget = sampling_budget
-
-				#evaluate the candidate solution
-				current_solution, current_fval, delta_k, recommended_solns, model_int_set, subspace_int_set, fvals, grad_fval, rho_k, budget = self.evaluate_candidate_solution(problem, current_fval, fval_tilde, delta_k, rho_k, current_solution, candidate_solution, recommended_solns, model_int_set, subspace_int_set, fvals, grad_fval)
-				expended_budget += budget
-
-				self.active_subspace_matrix.fit(grad_fval)
-				
-				intermediate_budgets.append(expended_budget)
-			k += 1
-			print('rhos: \n', self.rhos)
-			print('deltas: \n', self.deltas)
-			
-		return recommended_solns, intermediate_budgets
 		
 
-	"""
-		p - 
-		d - subspace dimension
-		q -  number of interpolation points in model interpolation
-		n - number of interpolation points in subspace interpolation
-		S - 
-		delta_k - trust_region_radius
-		eta_1 - successful iteration thresehold
-		eta_2 - very successful iteration threshold 
-		epsilon_1 - 
-		epsilon_2 - 
-		rho_k - ratio comparison value 
-		f - 
-		s_old - 
-		f_old - 
+		#initial subspace calculation - requires gradients of f_full 
+		self.fit_subspace(S_full, problem)
+		# self.s_old = self.U._U.T @ self.s_old 
+		# print(f's_old shape (after mapping):{self.s_old.shape}')
+
+		#This constructs the sample set for the model construction
+		S_red, f_red = self.geometry_instance.sample_set('new', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U.U, full_space=False)
+
+		# print(f'AS Matrix: {self.U.U}')
+		self.local_model = PolynomialRidgeApproximation(self.deg, self.d, problem, self.poly_basis)
+		# self.local_model.fit(S_red, f_red, U0=self.U.U)
+		
+		while self.expended_budget < problem.factors['budget'] :
+			# print(f'K: {self.k}')
+			#if rho has been decreased too much we end the algorithm  
+			if self.rho_k <= self.rho_min:
+				break
+			
+			#BUILD MODEL
+			try: 
+				self.local_model.fit(S_red, f_red, U0=self.U.U) #this should be the model instance construct model
+			except: #thrown if the sample set is not defined properly 
+				S_red, f_red = self.geometry_instance.sample_set('improve', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U.U, S_red, f_red, full_space=False)
+				self.intermediate_budgets.append(self.expended_budget)
+				continue 
+
+			#SOLVE THE SUBPROBLEM
+			candidate_solution, S_full, S_red, f_full, f_red, reset_flag = self.solve_subproblem(problem, S_full, S_red, f_full, f_red)
+
+			candidate_fval = self.blackbox_evaluation(np.array(candidate_solution.x),problem)
+
+			if reset_flag :
+				self.recommended_solns.append(self.current_solution)
+				self.intermediate_budgets.append(self.expended_budget) 
+				self.k +=1
+				break 
+			
+			#EVALUATE THE CANDIDATE SOLUTION
+			S_red, S_full, f_red, f_full = self.evaluate_candidate_solution(problem, candidate_fval, candidate_solution, S_red, S_full, f_red, f_full)
+		
+
+			self.recommended_solns.append(self.current_solution) 
+			self.intermediate_budgets.append(self.expended_budget)
+
+			# print(f'EXPENDED BUDGET: {self.expended_budget}')
+
+			self.k+=1
 
 
-	"""
+		return self.recommended_solns, self.intermediate_budgets
 
-	def _update_geometry_omorf(self, S_full, f_full, S_red, f_red):
-		dist = max(self.epsilon_1*self.del_k, self.epsilon_2*self.rho_k)
-		if max(np.linalg.norm(S_full-self.s_old, axis=1, ord=np.inf)) > dist:
-			S_full, f_full = self._sample_set('improve', S_full, f_full)
-			try:
-				pass 
-				# grad_full = self.get_grad_fvals(f_full, problem=, budget=)
-				# self.active_subspace_matrix(grad_full)
-			except:
-				pass
-		elif max(np.linalg.norm(S_red-self.s_old, axis=1, ord=np.inf)) > dist:
-			S_red, f_red = self._sample_set('improve', S_red, f_red, full_space=False)
-		elif self.del_k == self.ratioComparison:
-			self._set_del_k(self.alpha_2*self.ratioComparison)
-			if self.count >= 3 and self.r_k < 0:
-				if self.ratioComparison >= 250*self.rho_min:
-					self.ratioComparison = (self.alpha_1*self.rho_k)
-				elif 16*self.rho_min < self.rho_k < 250*self.rho_min:
-					self.ratioComparison = np.sqrt(self.rho_k*self.rho_min)
-				else:
-					self.ratioComparison = self.rho_min
-		return S_full, f_full, S_red, f_red
-	
 
-	def _sample_set(self, method, S=None, f=None, s_new=None, f_new=None, full_space=True):
-		if full_space:
-			q = self.p
-		else:
-			q = self.q
-		dist = max(self.epsilon_1*self.del_k, self.epsilon_2*self.rho_k)
-		if method == 'replace':
-			S_hat = np.vstack((S, s_new))
-			f_hat = np.vstack((f, f_new))
-			if S_hat.shape != np.unique(S_hat, axis=0).shape:
-				S_hat, indices = np.unique(S_hat, axis=0, return_index=True)
-				f_hat = f_hat[indices]
-			elif f_hat.size > q and max(np.linalg.norm(S_hat-self.s_old, axis=1, ord=np.inf)) > dist:
-				S_hat, f_hat = self._remove_furthest_point(S_hat, f_hat, self.s_old)
-			S_hat, f_hat = self._remove_point_from_set(S_hat, f_hat, self.s_old)
-			S = np.zeros((q, self.n))
-			f = np.zeros((q, 1))
-			S[0, :] = self.s_old
-			f[0, :] = self.f_old
-			S, f = self._LU_pivoting(S, f, S_hat, f_hat, full_space)
-		elif method == 'improve':
-			S_hat = np.copy(S)
-			f_hat = np.copy(f)
-			if max(np.linalg.norm(S_hat-self.s_old, axis=1, ord=np.inf)) > dist:
-				S_hat, f_hat = self._remove_furthest_point(S_hat, f_hat, self.s_old)
-			S_hat, f_hat = self._remove_point_from_set(S_hat, f_hat, self.s_old)
-			S = np.zeros((q, self.n))
-			f = np.zeros((q, 1))
-			S[0, :] = self.s_old
-			f[0, :] = self.f_old
-			S, f = self._LU_pivoting(S, f, S_hat, f_hat, full_space, 'improve')
-		elif method == 'new':
-			S_hat = f_hat = np.array([])
-			S = np.zeros((q, self.n))
-			f = np.zeros((q, 1))
-			S[0, :] = self.s_old
-			f[0, :] = self.f_old
-			S, f = self._LU_pivoting(S, f, S_hat, f_hat, full_space, 'new')
-		return S, f
-	
-	@staticmethod
-	def _remove_point_from_set(S, f, s):
-		ind_current = np.where(np.linalg.norm(S-s, axis=1, ord=np.inf) == 0.0)[0]
-		S = np.delete(S, ind_current, 0)
-		f = np.delete(f, ind_current, 0)
-		return S, f
 
-	@staticmethod
-	def _remove_furthest_point(S, f, s):
-		ind_distant = np.argmax(np.linalg.norm(S-s, axis=1, ord=np.inf))
-		S = np.delete(S, ind_distant, 0)
-		f = np.delete(f, ind_distant, 0)
-		return S, f
-	
-	def _blackbox_evaluation(self, s):
+	def solve_subproblem(self, problem: Problem, S_full:np.ndarray, S_red: np.ndarray, f_full: float, f_red: float) :
 		"""
-		Evaluates the point s for ``trust-region`` or ``omorf`` methods
+			Solves the trust-region subproblem for ``trust-region`` or ``omorf`` methods
 		"""
-		s = s.reshape(1,-1)
-		if self.S.size > 0 and np.unique(np.vstack((self.S, s)), axis=0).shape[0] == self.S.shape[0]:
-			ind_repeat = np.argmin(np.linalg.norm(self.S - s, ord=np.inf, axis=1))
-			f = self.f[ind_repeat]
+		
+		omega_s = self.factors['omega_shrinking']
+		reset_flag = False
+
+		# bounds_l = np.maximum(np.array(self.bounds[0]).reshape(self.s_old.shape), self.s_old-self.delta_k)
+		# bounds_u = np.minimum(np.array(self.bounds[1]).reshape(self.s_old.shape), self.s_old+self.delta_k)
+		
+		# #The bounds here are the trust region bounds in each dimension - can change to taking the norm of x
+		# bounds = []
+		# for i in range(self.n):
+		# 	bounds.append((bounds_l[i], bounds_u[i]))
+
+
+		cons =  NonlinearConstraint(lambda x : norm(self.s_old - x), 0, self.delta_k)
+		
+			
+		# res = minimize(lambda x: np.asscalar(self.local_model.eval(x)), self.s_old, \
+		# 		method='TNC', jac=lambda x: np.dot(self.U, my_poly.get_polyfit_grad(np.dot(x,self.U))).flatten(), \
+		# 		bounds=bounds, options={'disp': False})
+		obj = lambda x: self.local_model.eval(x)[0]
+		res = minimize(obj, self.s_old, method='trust-constr', constraints=cons, options={'disp': False})
+		s_new = res.x
+		# m_new = res.fun 
+
+		# print(f'CANDIDATE SOLUTION: {s_new}')
+
+		for i in range(problem.dim):
+			if s_new[i] <= problem.lower_bounds[i]:
+				s_new[i] = problem.lower_bounds[i] + 0.01
+			elif s_new[i] >= problem.upper_bounds[i]:
+				s_new[i] = problem.upper_bounds[i] - 0.01
+
+		# print(f'CANDIDATE SOLUTION (AFTER CONSTRAINTS):{s_new}')
+
+		candidate_solution = self.create_new_solution(tuple(s_new), problem)
+
+		step_dist = norm(s_new - self.s_old, ord=np.inf)
+
+		# Safety step implemented in BOBYQA
+		if step_dist < omega_s*self.rho_k:
+			# self.ratio= -0.1
+			self._set_ratio(-0.1)
+			self._set_counter(3)
+			# self.delta_k = max(0.5*self.delta_k, self.rho_k)
+			self._set_delta(max(0.5*self.delta_k, self.rho_k))
+			S_full, f_full, S_red, f_red, delta_k, rho_k, U = self.geometry_instance.update_geometry_omorf(self.s_old, self.f_old, self.delta_k, self.rho_k, self.U.U, S_full, f_full, S_red, f_red, self.unsuccessful_iteration_counter, self.ratio)
+			self.U.set_U(U)
+			self._set_delta(delta_k)
+			self._set_rho_k(rho_k)
+		
+		#this is a breaking condition
+		if self.rho_k <= self.rho_min:
+			reset_flag=True
+
+		return candidate_solution, S_full, S_red, f_full, f_red, reset_flag
+
+	def evaluate_candidate_solution(self, problem: Problem, fval_tilde: float, candidate_solution: Solution, S_red: np.ndarray, S_full: np.ndarray, f_red: np.ndarray, f_full: np.ndarray) :
+		
+		gamma_1 = self.factors['gamma_1']
+		gamma_2 = self.factors['gamma_2']
+		gamma_3 = self.factors['gamma_3']
+		eta_1 = self.factors['eta_1']
+		eta_2 = self.factors['eta_2']
+		s_new = np.array(candidate_solution.x)
+		
+		del_f = self.f_old - fval_tilde #self.f_old - f_new 
+		# del_m = np.asscalar(my_poly.get_polyfit(np.dot(self.s_old,self.U))) - m_new
+		del_m = self.local_model.eval(self.s_old)[0] - self.local_model.eval(s_new)[0]
+
+		step_dist = norm(np.array(candidate_solution.x) - self.s_old, ord=np.inf)
+
+		#in the case that the denominator is very small 
+		if abs(del_m) < 100*np.finfo(float).eps:
+			# self.ratio = 1.0
+			self._set_ratio(1.0)
 		else:
-			f = np.array([[self.objective['function'](self._remove_scaling(s.flatten()))]])
-			self.num_evals += 1
-			if self.f.size == 0:
-				self.S = s
-				self.f = f
-			else:
-				self.S = np.vstack((self.S, s))
-				self.f = np.vstack((self.f, f))
-		return np.asscalar(f)
+			# self.ratio = del_f/del_m
+			self._set_ratio(del_f/del_m)
+
+		self._set_iterate
+
+		"""ind_min = np.argmin(self.f) #get the index of the smallest function value 
+		self.s_old = self.S[ind_min,:] #get the x-val that corresponds to the smallest function value 
+		self.f_old = np.asscalar(self.f[ind_min]) #get the smallest function value""" 
+
+		#add candidate value and corresponding fn val to interpolation sets
+		S_red, f_red = self.geometry_instance.sample_set('replace', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U.U, S_red, f_red, s_new, fval_tilde, full_space=False)
+		S_full, f_full = self.geometry_instance.sample_set('replace', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U.U, S_full, f_full, s_new, fval_tilde)
+
+		# print(f'RATIO COMPARISON VALUE: {self.ratio}')
+
+		if self.ratio >= eta_2:
+			# print('VERY SUCCESSFUL ITERATION')
+			self._set_counter(0)
+			# self.delta_k = max(gamma_2*self.delta_k, gamma_3*step_dist)
+			self._set_delta(max(gamma_2*self.delta_k, gamma_3*step_dist))
+			self.current_solution = candidate_solution
+			self.f_old = fval_tilde
+			self.s_old = s_new
+		
+		elif self.ratio >= eta_1:
+			# print('SUCCESSFUL ITERATION')
+			self._set_counter(0)
+			# self.delta_k = max(gamma_1*self.delta_k, step_dist, self.rho_k)
+			self._set_delta(max(gamma_1*self.delta_k, step_dist, self.rho_k))
+			self.current_solution = candidate_solution
+			self.f_old = fval_tilde
+			self.s_old = s_new
+
+		else:
+			# print('UNSUCCESSFUL ITERATION')
+			self._set_counter(1)
+			# self.delta_k = max(min(gamma_1*self.delta_k, step_dist), self.rho_k)
+			self._set_delta(max(min(gamma_1*self.delta_k, step_dist), self.rho_k))
+			S_full, f_full, S_red, f_red, delta_k, rho_k, U = self.geometry_instance.update_geometry_omorf(self.s_old, self.f_old, self.delta_k, self.rho_k, self.U.U, S_full, f_full, S_red, f_red, self.unsuccessful_iteration_counter, self.ratio)
+			self.U.set_U(U)
+			self._set_delta(delta_k)
+			self._set_rho_k(rho_k)
+
+		return S_red, S_full, f_red, f_full
 	
-	def _LU_pivoting(self, S, f, S_hat, f_hat, full_space, method=None):
-		psi_1 = 1.0e-4
-		if full_space:
-			psi_2 = 1.0
-		else:
-			psi_2 = 0.25
-		phi_function, phi_function_deriv = self._get_phi_function_and_derivative(S_hat, full_space)
-		if full_space:
-			q = self.p
-		else:
-			q = self.q
-#       Initialise U matrix of LU factorisation of M matrix (see Conn et al.)
-		U = np.zeros((q,q))
-		U[0,:] = phi_function(self.s_old)
-#       Perform the LU factorisation algorithm for the rest of the points
-		for k in range(1, q):
-			flag = True
-			v = np.zeros(q)
-			for j in range(k):
-				v[j] = -U[j,k] / U[j,j]
-			v[k] = 1.0
-#           If there are still points to choose from, find if points meet criterion. If so, use the index to choose 
-#           point with given index to be next point in regression/interpolation set
-			if f_hat.size > 0:
-				M = np.absolute(np.dot(phi_function(S_hat),v).flatten())
-				index = np.argmax(M)
-				if M[index] < psi_1:
-					flag = False
-				elif method == 'improve' and (k == q - 1 and M[index] < psi_2):
-					flag = False
-				elif method == 'new' and M[index] < psi_2:
-					flag = False
-			else:
-				flag = False
-#           If index exists, choose the point with that index and delete it from possible choices
-			if flag:
-				s = S_hat[index,:]
-				S[k, :] = s
-				f[k, :] = f_hat[index]
-				S_hat = np.delete(S_hat, index, 0)
-				f_hat = np.delete(f_hat, index, 0)
-#           If index doesn't exist, solve an optimisation problem to find the point in the range which best satisfies criterion
-			else:
-				try:
-					s = self._find_new_point(v, phi_function, phi_function_deriv, full_space)
-					if np.unique(np.vstack((S[:k, :], s)), axis=0).shape[0] != k+1:
-						s = self._find_new_point_alternative(v, phi_function, S[:k, :])
-				except:
-					s = self._find_new_point_alternative(v, phi_function, S[:k, :])
-				if f_hat.size > 0 and M[index] >= abs(np.dot(v, phi_function(s))):
-					s = S_hat[index,:]
-					S[k, :] = s
-					f[k, :] = f_hat[index]
-					S_hat = np.delete(S_hat, index, 0)
-					f_hat = np.delete(f_hat, index, 0)
-				else:
-					S[k, :] = s
-					f[k, :] = self._blackbox_evaluation(s)
-#           Update U factorisation in LU algorithm
-			phi = phi_function(s)
-			U[k,k] = np.dot(v, phi)
-			for i in range(k+1,q):
-				U[k,i] += phi[i]
-				for j in range(k):
-					U[k,i] -= (phi[j]*U[j,i]) / U[j,j]
-		return S, f
-
-	def _find_new_point(self, v, phi_function, phi_function_deriv, full_space=False):
-		bounds = []
-		for i in range(self.n):
-			bounds.append((self.bounds_l[i], self.bounds_u[i])) 
-		if full_space:
-			c = v[1:]
-			res1 = optimize.linprog(c, bounds=bounds)
-			res2 = optimize.linprog(-c, bounds=bounds)
-			if abs(np.dot(v, phi_function(res1['x']))) > abs(np.dot(v, phi_function(res2['x']))):
-				s = res1['x']
-			else:
-				s = res2['x']
-		else:
-			obj1 = lambda s: np.dot(v, phi_function(s))
-			jac1 = lambda s: np.dot(phi_function_deriv(s), v)
-			obj2 = lambda s: -np.dot(v, phi_function(s))
-			jac2 = lambda s: -np.dot(phi_function_deriv(s), v)
-			res1 = optimize.minimize(obj1, self.s_old, method='TNC', jac=jac1, \
-					bounds=bounds, options={'disp': False})
-			res2 = optimize.minimize(obj2, self.s_old, method='TNC', jac=jac2, \
-					bounds=bounds, options={'disp': False})
-			if abs(res1['fun']) > abs(res2['fun']):
-				s = res1['x']
-			else:
-				s = res2['x']
-		return s
-
-	def _find_new_point_alternative(self, v, phi_function, S):
-		S_tmp = self._generate_set(int(0.5*(self.n+1)*(self.n+2)))
-		M = np.absolute(np.dot(phi_function(S_tmp), v).flatten())
-		indices = np.argsort(M)[::-1][:len(M)]
-		for index in indices:
-			s = S_tmp[index,:]
-			if np.unique(np.vstack((S, s)), axis=0).shape[0] == S.shape[0]+1:
-				return s
-		return S_tmp[indices[0], :]
-	
-	def _get_phi_function_and_derivative(self, S_hat, full_space):
-		Del_S = self.del_k
-		if full_space:
-			if S_hat.size > 0:
-				Del_S = max(np.linalg.norm(S_hat-self.s_old, axis=1, ord=np.inf))
-			def phi_function(s):
-				s_tilde = np.divide((s - self.s_old), Del_S)
-				try:
-					m,n = s_tilde.shape
-				except:
-					m = 1
-					s_tilde = s_tilde.reshape(1,-1)
-				phi = np.zeros((m, self.p))
-				phi[:, 0] = 1.0
-				phi[:, 1:] = s_tilde
-				if m == 1:
-					return phi.flatten()
-				else:
-					return phi
-			phi_function_deriv = None
-		else :
-			if S_hat.size > 0:
-				Del_S = max(np.linalg.norm(np.dot(S_hat-self.s_old,self.U), axis=1))
-			def phi_function(s):
-				u = np.divide(np.dot((s - self.s_old), self.U), Del_S)
-				try:
-					m,n = u.shape
-				except:
-					m = 1
-					u = u.reshape(1,-1)
-				phi = np.zeros((m, self.q))
-				for k in range(self.q):
-					phi[:,k] = np.prod(np.divide(np.power(u, self.basis[k,:]), factorial(self.basis[k,:])), axis=1)
-				if m == 1:
-					return phi.flatten()
-				else:
-					return phi
-			def phi_function_deriv(s):
-				u = np.divide(np.dot((s - self.s_old), self.U), Del_S)
-				phi_deriv = np.zeros((self.d, self.q))
-				for i in range(self.d):
-					for k in range(1, self.q):
-						if self.basis[k, i] != 0.0:
-							tmp = np.zeros(self.d)
-							tmp[i] = 1
-							phi_deriv[i,k] = self.basis[k, i] * np.prod(np.divide(np.power(u, self.basis[k,:]-tmp), \
-									factorial(self.basis[k,:])))
-				phi_deriv = np.divide(phi_deriv.T, Del_S).T
-				return np.dot(self.U, phi_deriv)
-		return phi_function, phi_function_deriv
-
