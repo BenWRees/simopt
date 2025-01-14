@@ -489,6 +489,7 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
 		"""
 		#construct the covariance matrix  
 		cov_matrix = self._covariance_matrix(grads) 
+		self._dimension = subspace_dimension
 		
 		#take the eigendecomposition of the covariance matrix
 		_,W = np.linalg.eigh(cov_matrix)
@@ -657,6 +658,9 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
 	def U(self):
 		# return np.copy(self._U)
 		return self._U #this should still return a shallow copy 
+	
+	def set_U(self, U) : 
+		self._U = U
 
 	@property
 	def C(self):
