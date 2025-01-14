@@ -22,6 +22,8 @@ import cvxpy as cp
 
 from simopt.base import (Problem, Solution)
 
+from ..active_subspaces.polyridge import * 
+
 __all__ = ['SubspaceBasedDimensionReduction',
 	'ActiveSubspace', 
 	]
@@ -475,6 +477,42 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
 		self._U = self._fix_subspace_signs_grads(self._U, self._grads)	
 
 
+	def fit(self, grads: np.ndarray, subspace_dimension: int) -> None:
+		"""Calculate the active subspace matrix by 
+
+		Args:
+			X (np.ndarray): of shape (M,n) that represents M n-dimensional sample points
+			fX (np.ndarray): The function values of the M sample points in the shape (M,1)
+			subspace_dimension (int): The dimension of the subspace 
+
+		Sets the matrix self._U which will be a (n,subspace_dimension) numpy matrix
+		"""
+		#construct the covariance matrix  
+		cov_matrix = self._covariance_matrix(grads) 
+		
+		#take the eigendecomposition of the covariance matrix
+		_,W = np.linalg.eigh(cov_matrix)
+		#sort the eigenvalues from increasing size with the eigenvectors 
+		#* Doesn't need sorting, we just take elements from the back
+		W = W[::-1]
+		#take the first subspace_dimension eiegenvectors from the sorted list and stack them as columns 
+		self._U = W[:, :subspace_dimension]
+
+
+	def _covariance_matrix(self, grads: np.ndarray) -> np.ndarray : 
+		"""Construct a covariance matrix using interpolation
+
+		Args:
+			grads (np.ndarray): (N,m) matrix of N grad evaluations of the function
+
+		Returns:
+			np.ndarray: The (m,m) covariance matrix
+		"""
+		M = grads.shape[0]
+		return (grads.T @ grads)/M
+
+		
+
 
 	#TODO: This function needs rewriting to instead sample the simopt problem: 
 	#	- pass a simopt problem and a matrix of sample points as an argument instead 
@@ -528,7 +566,6 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
 			sample = Solution(tuple(sample), problem)
 			Y.append(sample)
 
-		[print(a.x) for a in Y]
 
 		return Y  
 
