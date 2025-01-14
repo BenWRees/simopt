@@ -157,7 +157,7 @@ class OMoRF(Solver) :
 			"subspace dimension": {
 				"description": "dimension size of the active subspace",
 				"datatype": int, 
-				"default": 2
+				"default": 5
 			}, 
 			"random directions": {
 				"description": "Determine to take random directions in set construction",
@@ -476,7 +476,7 @@ class OMoRF(Solver) :
 		if max(norm(S_full-self.s_old, axis=1, ord=np.inf)) > dist:
 			S_full, f_full = self._sample_set(problem, 'improve', S_full, f_full) #!! THIS IS CAUSING THERE TO BE TOO MANY X VALUES
 			try:
-				print('UPDATING GEOMETRY')
+				# print('UPDATING GEOMETRY')
 				self._fit_subspace(S_full, problem) 
 			except:
 				pass
@@ -489,11 +489,11 @@ class OMoRF(Solver) :
 			self._set_delta(self.alpha_2*self.rho_k)
 
 
-			print(f'unsuccessful counter: {self.unsuccessful_iteration_counter}')
-			print(f'ratio: {self.ratio}')
+			# print(f'unsuccessful counter: {self.unsuccessful_iteration_counter}')
+			# print(f'ratio: {self.ratio}')
 			
 			if self.unsuccessful_iteration_counter >= 3 and self.ratio < 0:
-				print('UNSUCCESSFUL 3 OR MORE TIMES')
+				# print('UNSUCCESSFUL 3 OR MORE TIMES')
 				if self.rho_k >= 250*self.rho_min:
 					# self.rho_k = self.alpha_1*self.rho_k
 					self._set_rho_k(self.alpha_1*self.rho_k)
@@ -766,7 +766,7 @@ class OMoRF(Solver) :
 		# BdsCheck: 1 stands for forward, -1 stands for backward, 0 means central diff.
 		BdsCheck = np.subtract(forward, backward)
 
-		print(f'BdsCheck: {BdsCheck}')
+		# print(f'BdsCheck: {BdsCheck}')
 
 		FnPlusMinus = np.zeros((problem.dim, 3))
 		grad = np.zeros(problem.dim)
@@ -825,7 +825,7 @@ class OMoRF(Solver) :
 				grad[i] = (fn - fn2) / FnPlusMinus[i, 2]
 
 
-		print(f'grad shape: {grad.shape}')
+		# print(f'grad shape: {grad.shape}')
 		return grad
 
 
@@ -841,17 +841,17 @@ class OMoRF(Solver) :
 		"""
 		grads = np.zeros(X.shape)
 
-		print(f'shape of X: {X.shape}')
+		# print(f'X: {X}')
 
 		#fill out each row 
 		for idx,x_val in enumerate(X) : 
 			x_solution = self.create_new_solution(x_val, problem)
 			grads[idx, :] = self.finite_difference_gradient(x_solution, problem)
 
-		print(f'grads: {grads}')
+		# print(f'grads: {grads}')
 		return grads 
 
-	def _fit_subspace(self, X:np.ndarray,problem: Problem) -> None:
+	def _fit_subspace(self, X:np.ndarray, problem: Problem) -> None:
 		"""
 		Takes the active subspace and fits
 
@@ -860,7 +860,7 @@ class OMoRF(Solver) :
 			problem (Problem)
 		"""
 		grads = self._get_grads(X, problem) 
-		self.U.fit(grads) 
+		self.U.fit(grads, self.d) 
 
 
 	def solve(self, problem):
@@ -893,7 +893,7 @@ class OMoRF(Solver) :
 
 		#set up initial Solution
 		current_x = problem.factors["initial_solution"]
-		print(f'initial solution: {current_x}')
+		# print(f'initial solution: {current_x}')
 		self.current_solution = self.create_new_solution(current_x, problem)
 		self.recommended_solns.append(self.current_solution)
 		self.intermediate_budgets.append(self.expended_budget)
@@ -951,12 +951,12 @@ class OMoRF(Solver) :
 		#This constructs the sample set for the model construction
 		S_red, f_red = self._sample_set(problem, 'new', full_space=False)
 
-
+		# print(f'AS Matrix: {self.U.U}')
 		self.local_model = PolynomialRidgeApproximation(self.deg, self.d, problem, self.poly_basis)
 		# self.local_model.fit(S_red, f_red, U0=self.U.U)
 		
 		while self.expended_budget < problem.factors['budget'] :
-			print(f'K: {self.k}')
+			# print(f'K: {self.k}')
 			#if rho has been decreased too much we end the algorithm  
 			if self.rho_k <= self.rho_min:
 				break
@@ -987,7 +987,7 @@ class OMoRF(Solver) :
 			self.recommended_solns.append(self.current_solution) 
 			self.intermediate_budgets.append(self.expended_budget)
 
-			print(f'EXPENDED BUDGET: {self.expended_budget}')
+			# print(f'EXPENDED BUDGET: {self.expended_budget}')
 
 			self.k+=1
 
@@ -1024,7 +1024,7 @@ class OMoRF(Solver) :
 		s_new = res.x
 		# m_new = res.fun 
 
-		print(f'CANDIDATE SOLUTION: {s_new}')
+		# print(f'CANDIDATE SOLUTION: {s_new}')
 
 		for i in range(problem.dim):
 			if s_new[i] <= problem.lower_bounds[i]:
@@ -1032,7 +1032,7 @@ class OMoRF(Solver) :
 			elif s_new[i] >= problem.upper_bounds[i]:
 				s_new[i] = problem.upper_bounds[i] - 0.01
 
-		print(f'CANDIDATE SOLUTION (AFTER CONSTRAINTS):{s_new}')
+		# print(f'CANDIDATE SOLUTION (AFTER CONSTRAINTS):{s_new}')
 
 		candidate_solution = self.create_new_solution(tuple(s_new), problem)
 
@@ -1088,10 +1088,10 @@ class OMoRF(Solver) :
 		S_red, f_red = self._sample_set(problem, 'replace', S_red, f_red, s_new, fval_tilde, full_space=False)
 		S_full, f_full = self._sample_set(problem, 'replace', S_full, f_full, s_new, fval_tilde)
 
-		print(f'RATIO COMPARISON VALUE: {self.ratio}')
+		# print(f'RATIO COMPARISON VALUE: {self.ratio}')
 
 		if self.ratio >= eta_2:
-			print('VERY SUCCESSFUL ITERATION')
+			# print('VERY SUCCESSFUL ITERATION')
 			self._set_counter(0)
 			# self.delta_k = max(gamma_2*self.delta_k, gamma_3*step_dist)
 			self._set_delta(max(gamma_2*self.delta_k, gamma_3*step_dist))
@@ -1100,7 +1100,7 @@ class OMoRF(Solver) :
 			self.s_old = s_new
 		
 		elif self.ratio >= eta_1:
-			print('SUCCESSFUL ITERATION')
+			# print('SUCCESSFUL ITERATION')
 			self._set_counter(0)
 			# self.delta_k = max(gamma_1*self.delta_k, step_dist, self.rho_k)
 			self._set_delta(max(gamma_1*self.delta_k, step_dist, self.rho_k))
@@ -1109,7 +1109,7 @@ class OMoRF(Solver) :
 			self.s_old = s_new
 
 		else:
-			print('UNSUCCESSFUL ITERATION')
+			# print('UNSUCCESSFUL ITERATION')
 			self._set_counter(1)
 			# self.delta_k = max(min(gamma_1*self.delta_k, step_dist), self.rho_k)
 			self._set_delta(max(min(gamma_1*self.delta_k, step_dist), self.rho_k))
