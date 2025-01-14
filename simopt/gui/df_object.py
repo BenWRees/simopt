@@ -1,7 +1,7 @@
 import tkinter as tk
 from abc import ABC, abstractmethod
 from tkinter import ttk
-from typing import Literal, Union
+from typing import Callable, Literal, Union
 
 
 class DFFactor(ABC):
@@ -739,6 +739,146 @@ class DFList(DFFactor):
         super().__init__(name, description)
         self.__default = tk.StringVar(value=str(default))
 
+class DFString(DFFactor):
+    """Class to store string factors for problems and solvers."""
+
+    @property
+    def type(self) -> tk.StringVar:
+        """The type of the factor."""
+        return tk.StringVar(value="str")
+
+    @property
+    def default(self) -> tk.StringVar:
+        """The default value of the factor."""
+        return self.__default
+
+    @default.setter
+    def default(self, default: tk.Variable) -> None:
+        if not isinstance(default, tk.StringVar):
+            error_msg = "Default value must be a StringVar."
+            raise ValueError(error_msg)
+        self.__default = default
+
+    @property
+    def default_eval(self) -> list:
+        """Evaluated default value of the factor."""
+        try:
+            return str(eval(self.default.get()))
+        except ValueError:
+            raise ValueError(
+                f"Default value for {self.name.get()} must be a string."
+            ) from None
+
+    def __init__(self, name: str, description: str, default: str) -> None:
+        """Initialize the list factor class.
+
+        Parameters
+        ----------
+        name : str
+            The name of the factor
+        description : str
+            The description of the factor
+        default : str
+            The default value of the factor
+
+        """
+        super().__init__(name, description)
+        self.__default = tk.StringVar(value=str(default))
+
+class DFDict(DFFactor):
+    """Class to store dictionary factors for problems and solvers."""
+
+    @property
+    def type(self) -> tk.StringVar:
+        """The type of the factor."""
+        return tk.StringVar(value="dict")
+
+    @property
+    def default(self) -> tk.StringVar:
+        """The default value of the factor."""
+        return self.__default
+
+    @default.setter
+    def default(self, default: tk.Variable) -> None:
+        if not isinstance(default, tk.StringVar):
+            error_msg = "Default value must be a StringVar."
+            raise ValueError(error_msg)
+        self.__default = default
+
+    @property
+    def default_eval(self) -> list:
+        """Evaluated default value of the factor."""
+        try:
+            return dict(eval(self.default.get()))
+        except ValueError:
+            raise ValueError(
+                f"Default value for {self.name.get()} must be a dictionary."
+            ) from None
+
+    def __init__(self, name: str, description: str, default: dict) -> None:
+        """Initialize the dict factor class.
+
+        Parameters
+        ----------
+        name : str
+            The name of the factor
+        description : str
+            The description of the factor
+        default : dict
+            The default value of the factor
+
+        """
+        super().__init__(name, description)
+        self.__default = tk.StringVar(value=str(list(default.items())))
+
+#TODO: Implement Callable Factors
+class DFCallable(DFFactor):
+    """Class to store Callable factors for problems and solvers."""
+
+    @property
+    def type(self) -> tk.StringVar:
+        """The type of the factor."""
+        return tk.StringVar(value="Callable")
+
+    @property
+    def default(self) -> tk.StringVar:
+        """The default value of the factor."""
+        return self.__default
+
+    @default.setter
+    def default(self, default: tk.Variable) -> None:
+        if not isinstance(default, tk.StringVar):
+            error_msg = "Default value must be a StringVar."
+            raise ValueError(error_msg)
+        self.__default = default
+
+    @property
+    def default_eval(self) -> list:
+        """Evaluated default value of the factor."""
+        try:
+            return Callable(eval(self.default.get()))
+        except ValueError:
+            raise ValueError(
+                f"Default value for {self.name.get()} must be a dictionary."
+            ) from None
+
+    def __init__(self, name: str, description: str, default: Callable) -> None:
+        """Initialize the typing.Callable factor class.
+
+        Parameters
+        ----------
+        name : str
+            The name of the factor
+        description : str
+            The description of the factor
+        default : typing.Callable
+            The default value of the factor
+
+        """
+        super().__init__(name, description)
+        self.__default = tk.StringVar(value=str(Callable(default)))
+
+
 
 def spec_dict_to_df_dict(spec_dict: "dict[str, dict]") -> "dict[str, DFFactor]":
     """Convert a dictionary of specifications to a dictionary of datafarm factors.
@@ -794,6 +934,9 @@ def spec_to_df(spec_name: str, spec: dict) -> DFFactor:
         float: DFFloat,
         tuple: DFTuple,
         list: DFList,
+        str: DFString,
+        dict: DFDict,
+        Callable: DFCallable
     }
 
     # Check to see if we have a non-datafarmable integer
