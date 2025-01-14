@@ -370,6 +370,7 @@ class OMoRF(Solver) :
 
 		return f[0]
 
+	#! Add to geometry
 	def _generate_set(self, num):
 		"""
 		Generates an initial set of samples using either coordinate directions or orthogonal, random directions
@@ -387,6 +388,7 @@ class OMoRF(Solver) :
 			S[i, :] = self.s_old + np.minimum(np.maximum(bounds_l-self.s_old, direcs[i, :]), bounds_u-self.s_old)
 		return S
 
+	#! Add to Geometry
 	def _coordinate_directions(self, num_pnts, lower, upper):
 		"""
 		Generates coordinate directions
@@ -417,6 +419,7 @@ class OMoRF(Solver) :
 				direcs[i, q-1] = direcs[q, q-1]
 		return direcs
 	
+	#! Add to Geometry
 	def _get_scale(dirn, delta, lower, upper):
 		scale = delta
 		for j in range(len(dirn)):
@@ -426,6 +429,7 @@ class OMoRF(Solver) :
 				scale = min(scale, upper[j] / dirn[j])
 		return scale
 
+	#! Add to Geometry
 	def _random_directions(self, num_pnts, lower, upper):
 		"""
 		Generates orthogonal, random directions
@@ -470,6 +474,7 @@ class OMoRF(Solver) :
 			direcs[:, 2*self.n+i] = dirn * scale
 		return np.vstack((np.zeros(self.n), direcs[:, :num_pnts].T))
 
+	#! Add to Geometry
 	def _update_geometry_omorf(self, problem, S_full, f_full, S_red, f_red):
 		dist = max(self.epsilon_1*self.delta_k, self.epsilon_2*self.rho_k)
 
@@ -508,6 +513,7 @@ class OMoRF(Solver) :
 		
 		return S_full, f_full, S_red, f_red
 	
+	#! Add to Geometry
 	def _sample_set(self, problem, method, S=None, f=None, s_new=None, f_new=None, full_space=True):
 		q = self.p if full_space else self.q
 
@@ -550,6 +556,7 @@ class OMoRF(Solver) :
 		
 		return S, f
 	
+	#! Add to Geometry
 	def _LU_pivoting(self, problem, S, f, S_hat, f_hat, full_space, method=None):
 		psi_1 = 1.0e-4
 		psi_2 = 1.0 if full_space else 0.25
@@ -618,6 +625,7 @@ class OMoRF(Solver) :
 					U[k,i] -= (phi[j]*U[j,i]) / U[j,j]
 		return S, f
 
+	#! Add to Geometry
 	def _get_phi_function_and_derivative(self, S_hat, full_space):
 		Del_S = self.delta_k
 
