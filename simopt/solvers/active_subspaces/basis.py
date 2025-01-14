@@ -9,11 +9,12 @@ __all__ = ['PolynomialTensorBasis', #THIS IS A BASE CLASS TO BE INHERITED BY SPE
 	'ChebyshevTensorBasis',
 	'LaguerreTensorBasis',
 	'HermiteTensorBasis',
-	'ArnoldiPolynomialBasis', #FIX THIS ONE
+	'ArnoldiPolynomialBasis', #FIX: THIS ONE
 	'MonomialPolynomialBasis',
 	'NaturalPolynomialBasis',
 	'LagrangePolynomialBasis',
-	'NFPPolynomialBasis'
+	'NFPPolynomialBasis',
+	'Basis'
  ]
 
 
@@ -25,6 +26,7 @@ from numpy.polynomial.hermite import hermvander, hermder, hermroots
 from numpy.polynomial.laguerre import lagvander, lagder, lagroots
 from itertools import combinations_with_replacement
 from math import factorial, comb
+from copy import deepcopy
 import sympy as sp
 
 
@@ -199,17 +201,11 @@ class PolynomialTensorBasis(Basis):
 		assert X.shape[1] == self.dim, "Expected %d dimensions, got %d" % (self.dim, X.shape[1])
 		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
 
-		print('X[:,1]: ', X[:,1])
-		# print('degree: ', self.degree)
-		print('V_coordinate[1]: ', V_coordinate[1])
 		
 		V = np.ones((M, len(self.indices)), dtype = X.dtype)
 		
 		for j, alpha in enumerate(self.indices):
 			for k in range(self.dim):
-				print('shape of V_coordinate[k]: ', V_coordinate[k].shape)
-				print('shape of alpha[k]: ', alpha[k])
-				print('shape of V[:,j]: ', V[:,j].shape)
 				V[:,j] *= V_coordinate[k][:,alpha[k]]
 		return V
 
@@ -464,11 +460,11 @@ class ArnoldiPolynomialBasis(Basis):
 	"""
 	def __init__(self, degree, X=None, dim=None):
 		self.X = np.copy(np.atleast_2d(X))
-		self.dim = self.X.shape[1]
+		self.dim = dim
 		self.degree = int(degree)
-		self.indices = index_set(self.degree, self.dim)
+		self.indices = index_set(self.degree, self.dim).astype(int)
 
-		self.Q, self.R = self.arnoldi()
+		# self.Q, self.R = self.arnoldi()
 
 	
 	def __len__(self):
@@ -476,6 +472,9 @@ class ArnoldiPolynomialBasis(Basis):
 	
 	def set_X(self,X) : 
 		self.X = np.copy(np.atleast_2d(X))
+
+	def assign_interpolation_set(self,X) : 
+		self.X = self.set_X(X)
 
 	def _update_vec(self, ids):
 		# Determine which column to multiply by
@@ -521,7 +520,6 @@ class ArnoldiPolynomialBasis(Basis):
 				R[j,k] = Q[:,j].T @ q
 				q -= R[j,k]*Q[:,j]
 			
-			# print('q: ', q)
 			R[k,k] = np.linalg.norm(q)
 			Q[:,k] = q/R[k,k] if R[k,k] != 0 else 1
 
@@ -532,8 +530,7 @@ class ArnoldiPolynomialBasis(Basis):
 	def arnoldi_X(self, X):
 		r""" Generate a Vandermonde matrix corresponding to a different set of points
 		"""
-
-		self.arnoldi(X)
+		Q,R = self.arnoldi(X)
 		W = np.zeros((X.shape[0], len(self.indices)), dtype = X.dtype)
 
 		iteridx = enumerate(self.indices)
@@ -551,7 +548,6 @@ class ArnoldiPolynomialBasis(Basis):
 				w -= self.R[j,k]*W[:,j]
 			
 			W[:,k] = w/self.R[k,k] if self.R[k,k] != 0  else w
-
 		return W
 		
 
@@ -626,22 +622,16 @@ class PolynomialBasis(Basis) :
 	
 	def vander(self, interpolation_set, degree):
 		X_shape = interpolation_set.shape + (degree + 1,)
-
 		#calculate the whole row,
 		X = np.zeros(X_shape)
 		if len(interpolation_set.shape) == 1 : 
-			# print('dealing with a singular point')
 			for i in range(X_shape[0]) : 
 				for j in range(X_shape[1]) : 
-					# print(f'({i},{j})')
 					X[i,j] = self.poly_basis_fn(interpolation_set, i, j)
 		else :
 			#for each row in the interpolation set, we construct a matrix
-			# print('making a tensor matrix') 
 			for pt in interpolation_set :
 				matrix = np.zeros(X_shape[1:])
-				# print('matrix shape: ', matrix.shape)
-				# print('pt: ', pt.shape)
 				for i in range(matrix.shape[0]) : 
 					for j in range(matrix.shape[1]) : 
 						matrix[i,j] = self.poly_basis_fn(pt, i, j)
@@ -694,6 +684,7 @@ class PolynomialBasis(Basis) :
 	#Construct a matrix Row by Row
 	def V(self, X: np.ndarray) -> np.ndarray :
 		X = X.reshape(-1, self.dim)
+		self.X = X
 		X = self._scale(np.array(X))
 		M = X.shape[0]
 		assert X.shape[1] == self.dim, "Expected %d dimensions, got %d" % (self.dim, X.shape[1])
@@ -704,6 +695,7 @@ class PolynomialBasis(Basis) :
 		for j, alpha in enumerate(self.indices):
 			for k in range(self.dim):
 				V[:,j] *= V_coordinate[k][:,alpha[k]]
+
 		return V
 	
 	def DV(self, X):
@@ -785,10 +777,12 @@ class NaturalPolynomialBasis(PolynomialBasis) :
 		# val_dim = len(val) if not isinstance(val, float) or isinstance(val, int) else 1
 		point = interpolation_set[row_num]  # The row corresponds to the n-dimensional point in X
 
-		if isinstance(point, float) or isinstance(point, int) : 
+		if isinstance(point, np.float64) or isinstance(point, np.int64) : 
 			point = [point]
 
-    
+
+
+	
 		if col_num == 0:
 			return 1  # Constant term for the first column
 		
@@ -807,8 +801,6 @@ class NaturalPolynomialBasis(PolynomialBasis) :
 			component = term_position
 			if len(point) == 1 : 
 				component = 0
-			# print('point: ', point)
-			# print('component: ',component)
 			return (point[component] ** degree) / factorial(degree)
 		else:
 			# Cross terms like x_i * x_j
@@ -927,10 +919,9 @@ class MonomialPolynomialBasis(PolynomialBasis) :
 	def poly_basis_fn(self, interpolation_set, row_num, col_num):
 		interpolation_set = np.array(interpolation_set)
 		val = interpolation_set[row_num]
-		print('val: ', val)
 		#calculate the whole row,
 		row = [1] 
-		for exp in range(1, self.degree+1) : 
+		for exp in range(1, col_num+1) : 
 			row =  np.append(row, val**exp)
 
 		return row[col_num]
@@ -941,7 +932,7 @@ class MonomialPolynomialBasis(PolynomialBasis) :
 		x = sp.symbols('x')
 		
 		# Define the polynomial (1 + x)^n
-		polynomial = sum([coeff[i]*x**i for i in range(n+1)])
+		polynomial = sum([coeff[i]*x**i for i in range(len(coeff))])
 		
 		derivative = sp.diff(polynomial, x)
 
@@ -968,27 +959,38 @@ class LagrangePolynomialBasis(PolynomialBasis) :
 	def __init__(self, degree, X=None, dim=None) : 
 		super().__init__(degree, X, dim)
 
-	#lagrange polynomical function for each element in the matrix
-	#TODO: Fix the lagrange polynomial function 
+	#lagrange polynomial function for each element in the matrix 
 	def poly_basis_fn(self, interpolation_set, row_num, col_num) :
-		
-		if interpolation_set.shape == 1 : 
-			current_val = interpolation_set[row_num]
-			denom_val = interpolation_set[col_num]
-		else :		
-			current_val = interpolation_set[row_num]
-			denom_val = interpolation_set[col_num]
+		# interpolation_set = [a for a in interpolation_set]
+		# if len(interpolation_set) == 1 : 
+		# 	interpolation_set = [interpolation_set[0] for _ in range(self.degree + 1)]
+		# val = interpolation_set[row_num]
+		# def lagrange(x, i) : 
+		# 	set_excl_i = deepcopy(interpolation_set[:i] + interpolation_set[i+1:])
+		# 	# print(f'set_excl_{interpolation_set[i]}: {set_excl_i}')
+		# 	numerator = [x-a for a in set_excl_i]
+		# 	denominator = [interpolation_set[i]-a for a in set_excl_i]
+		# 	denominator = [np.inf if x == 0 else x for x in denominator]
 
-		def basis_fn(x) :
-			denominator = np.linalg.norm(denom_val - x)
-			numerator = np.linalg.norm(current_val - x)
-			if denominator == 0 : 
-				denominator = 1 
-			return numerator/denominator
-		# basis_fn = lambda x : (np.linalg.norm(current_val - x))/(np.linalg.norm(denom_val - x))
-		lagrange_list = [basis_fn(a) for idx,a in enumerate(interpolation_set) if col_num != idx]
-		lagrange = np.prod(lagrange_list)
-		return lagrange 
+		# 	# print(f'numerator: {numerator}')
+		# 	# print(f'denominator: {denominator}')
+		# 	res = np.prod([1 if a/b ==0 else a/b  for a,b in zip(numerator,denominator)])
+		# 	# print(f'result of lagrange function for point {x} at {i}: {res}')
+		# 	return res
+		if row_num == col_num :
+			return 1. 
+		else :
+			return 0.
+
+		
+		# return lagrange(val,col_num)
+	
+
+	#!!This is a cheeky fix as we known the vandermonde will be equivalent to the identity
+	def V(self, X):
+		N, _ = X.shape
+		M = len(self)
+		return np.eye(N,M)
 	
 	def _build_Dmat(self):
 		return None
