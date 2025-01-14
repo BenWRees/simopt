@@ -67,6 +67,8 @@ def initialize_subspace(X = None, fX = None, grads = None, n_grads = 100):
 	else:
 		all_grads = grads
 
+	print(f'all_grads shape: ', all_grads.shape)
+
 	# Compute SVD
 	U, s, VH = scipy.linalg.svd(all_grads.T, full_matrices = False, compute_uv = True)
 	return U	
@@ -530,7 +532,6 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 	
 	def _varpro_residual(self, X, fX, U_flat):
 		U = U_flat.reshape(X.shape[1],-1)
-
 		#V = self.V(X, U)
 		Y = (U.T @ X.T).T
 		# self.basis = self.Basis(self.degree, Y)
@@ -562,7 +563,9 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 			ZT = np.eye(V.shape[1])
 		else:
 			c = scipy.linalg.lstsq(V, fX)[0].flatten()
-			Y, s, ZT = scipy.linalg.svd(V, full_matrices = False) 
+			Y, s, ZT = scipy.linalg.svd(V, full_matrices = False)
+			s = np.array([np.inf if x == 0.0 else x for x in s]) 
+
 
 		r = fX - V.dot(c)
 	
