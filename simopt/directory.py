@@ -43,12 +43,11 @@ from simopt.solvers.neldmd import NelderMead
 from simopt.solvers.randomsearch import RandomSearch
 from simopt.solvers.spsa import SPSA
 from simopt.solvers.strong import STRONG
-from simopt.solvers.trust_region_class import trust_region
+from simopt.solvers.TrustRegion.Models import TrustRegion, OMoRF
 from simopt.solvers.SGD import SGD
 from simopt.solvers.kiefer_wolfowitz import KieferWolfowitz
 from simopt.solvers.robbins_monro import RobbinsMonro
 from simopt.solvers.mirror_descent import Mirror_Descent
-from simopt.solvers.OMoRF import OMoRF
 
 # directory dictionaries
 solver_directory: dict[str, type[Solver]] = {
@@ -59,7 +58,7 @@ solver_directory: dict[str, type[Solver]] = {
     "SPSA": SPSA,
     "ADAM": ADAM,
     "ALOE": ALOE,
-    "TRUSTREGION": trust_region,
+    "TRUSTREGION": TrustRegion,
     "SGD": SGD,
     "KIEFERWOLFOWITZ": KieferWolfowitz,
     "ROBBINSMONRO": RobbinsMonro, 
@@ -75,7 +74,7 @@ solver_unabbreviated_directory: dict[str, type[Solver]] = {
     "SPSA (SBCN)": SPSA,
     "ADAM (SBCN)": ADAM,
     "ALOE (SBCN)": ALOE,
-    "Trust Region Solver": trust_region,
+    "Trust Region Solver": TrustRegion,
     "Stochastic Gradient Descent": SGD,
     "Kiefer-Wolfowitz Algorithm": KieferWolfowitz, 
     "Robbins-Monro Root-Finding": RobbinsMonro,
