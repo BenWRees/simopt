@@ -538,7 +538,7 @@ class OMoRF(TrustRegionBase):
 			"subspace dimension": {
 				"description": "dimension size of the active subspace",
 				"datatype": int, 
-				"default": 5
+				"default": 6
 			}, 
 			"random directions": {
 				"description": "Determine to take random directions in set construction",
@@ -626,9 +626,6 @@ class OMoRF(TrustRegionBase):
 		# self.check_factor_list = {**super().check_factor_list, **self.check_factor_list()}
 		super().__init__(name, fixed_factors)
 
-	def _set_bounds(self,problem) : 
-		self.bounds = [problem.lower_bounds, problem.upper_bounds]
-
 	def _set_iterate(self):
 		ind_min = np.argmin(self.f) #get the index of the smallest function value 
 		self.s_old = self.S[ind_min,:] #get the x-val that corresponds to the smallest function value 
@@ -661,6 +658,7 @@ class OMoRF(TrustRegionBase):
 			ind_repeat = np.argmin(norm(self.S - s, ord=np.inf, axis=1))
 			f = self.f[ind_repeat]
 		else :
+			#TODO: Add Sampling method to the blackbox evaluation
 			new_solution = self.create_new_solution(tuple(s), problem) 
 			problem.simulate(new_solution, 1)
 			f = -1 * problem.minmax[0] * new_solution.objectives_mean
@@ -837,7 +835,6 @@ class OMoRF(TrustRegionBase):
 		self.recommended_solns.append(self.current_solution)
 		self.intermediate_budgets.append(self.expended_budget)
 
-		self._set_bounds(problem)
 		
 		""" 
 		self.s_old = self._apply_scaling(s_old) #shifts the old solution into the unit ball
@@ -884,13 +881,13 @@ class OMoRF(TrustRegionBase):
 		reset_budget = self.expended_budget
 
 		#get the rest of the function evaluations - write as a function
-		for i in range(1, self.d):
-			#simulate the problem at each component of f_
-			f_full[i, :] = self.blackbox_evaluation(S_full[i, :], problem)
-			self.expended_budget = reset_budget #!QUICK FIX TO CHECK IF WE NEED TO FILL f_full
-			#case where we use up our whole budget getting the function values 
-			if not self.expended_budget < problem.factors['budget'] :
-				return self.recommended_solns, self.intermediate_budget
+		# for i in range(1, self.d):
+		# 	#simulate the problem at each component of f_
+		# 	f_full[i, :] = self.blackbox_evaluation(S_full[i, :], problem)
+		# 	self.expended_budget = reset_budget #!QUICK FIX TO CHECK IF WE NEED TO FILL f_full
+		# 	#case where we use up our whole budget getting the function values 
+		# 	if not self.expended_budget < problem.factors['budget'] :
+		# 		return self.recommended_solns, self.intermediate_budget
 
 
 		
