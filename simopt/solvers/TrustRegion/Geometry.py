@@ -254,7 +254,7 @@ class OMoRFGeometry(TrustRegionGeometry) :
 		as_matrix = U
 
 		if max(norm(S_full-s_old, axis=1, ord=np.inf)) > dist:
-			S_full, f_full = self.sample_set('improve', s_old, delta_k, rho_k, f_old, U, S_full, f_full) 
+			S_full, f_full = self.sample_set('improve', s_old, delta_k, rho_k, f_old, U, S=S_full, f=f_full) #f_full is not needed to be evaluated
 			try:
 				# print('UPDATING GEOMETRY')
 				self.tr.fit_subspace(S_full, self.problem) 
@@ -263,7 +263,7 @@ class OMoRFGeometry(TrustRegionGeometry) :
 				pass
 		
 		elif max(norm(S_red-s_old, axis=1, ord=np.inf)) > dist:
-			S_red, f_red = self.sample_set('improve', s_old, delta_k, rho_k, f_old, U, S_red, f_red, full_space=False)
+			S_red, f_red = self.sample_set('improve', s_old, delta_k, rho_k, f_old, U, S=S_red, f=f_red, full_space=False)
 		
 		elif delta_k == rho_k:
 			# self.delta_k = self.alpha_2*self.rho_k
@@ -311,8 +311,8 @@ class OMoRFGeometry(TrustRegionGeometry) :
 			f = np.zeros((q, 1))
 			S[0, :] = s_old
 			f[0, :] = f_old
-			S, f = self.LU_pivoting(S, f, s_old, delta_k, S_hat, f_hat, full_space, U)
-
+			S, f = self.LU_pivoting(S, f, s_old, delta_k, S_hat, f_hat, full_space, U, evaluate_f_flag=full_space)
+		
 		elif method == 'improve':
 			S_hat = np.copy(S)
 			f_hat = np.copy(f)
@@ -323,7 +323,7 @@ class OMoRFGeometry(TrustRegionGeometry) :
 			f = np.zeros((q, 1))
 			S[0, :] = s_old
 			f[0, :] = f_old
-			S, f = self.LU_pivoting(S, f, s_old, delta_k, S_hat, f_hat, full_space, U, 'improve')
+			S, f = self.LU_pivoting(S, f, s_old, delta_k, S_hat, f_hat, full_space, U, evaluate_f_flag=full_space, method='improve')
 		
 		elif method == 'new':
 			S_hat = f_hat = np.array([])
@@ -331,11 +331,11 @@ class OMoRFGeometry(TrustRegionGeometry) :
 			f = np.zeros((q, 1))
 			S[0, :] = s_old
 			f[0, :] = f_old
-			S, f = self.LU_pivoting(S, f, s_old, delta_k, S_hat, f_hat, full_space, U, 'new')
+			S, f = self.LU_pivoting(S, f, s_old, delta_k, S_hat, f_hat, full_space, U, evaluate_f_flag=full_space, method='new')
 
 		return S, f
 	
-	def LU_pivoting(self, S, f, s_old, delta_k, S_hat, f_hat, full_space, active_subspace, method=None):
+	def LU_pivoting(self, S, f, s_old, delta_k, S_hat, f_hat, full_space, active_subspace, evaluate_f_flag=True, method=None):
 		psi_1 = 1.0e-4
 		psi_2 = 1.0 if full_space else 0.25
 
@@ -392,7 +392,8 @@ class OMoRFGeometry(TrustRegionGeometry) :
 					f_hat = np.delete(f_hat, index, 0)
 				else:
 					S[k, :] = s
-					f[k, :] = self.tr.blackbox_evaluation(s, self.problem) #!Get from TR Class
+					# if not evaluate_f_flag : #If full_space is True then we don't want to evaluate 
+					f[k, :] = self.tr.blackbox_evaluation(s, self.problem) #!This should only be evaluated if its f_red 
 			
 			#Update U factorisation in LU algorithm
 			phi = phi_function(s)
