@@ -8,6 +8,8 @@ import numpy as np
 from base import Solution, Problem, Solver
 from .solvers.active_subspaces.basis import Basis
 
+__all__ = ['finite_difference_gradient', 'matrix_multiplication']
+
 def finite_difference_gradient(new_solution: Solution, problem: Problem, alpha: float = 1.0e-8, BdsCheck: None | np.ndarray = None) -> np.ndarray :
     """Calculates a gradient approximation of the solution on the problem
 
