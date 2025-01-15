@@ -151,7 +151,7 @@ class PolynomialTensorBasis(Basis):
 		self._lb = np.min(X, axis = 0)
 		self._ub = np.max(X, axis = 0)
 
-	def _scale(self, X):
+	def scale(self, X):
 		r""" Apply the scaling to the input coordinates
 		"""
 		try:
@@ -196,7 +196,7 @@ class PolynomialTensorBasis(Basis):
 			raise NotImplementedError
 
 		X = X.reshape(-1, self.dim)
-		X = self._scale(np.array(X))
+		X = self.scale(np.array(X))
 		M = X.shape[0]
 		assert X.shape[1] == self.dim, "Expected %d dimensions, got %d" % (self.dim, X.shape[1])
 		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
@@ -235,7 +235,7 @@ class PolynomialTensorBasis(Basis):
 		This is an optimisation technique not currently implemented in the simopt library
 		"""
 		X = X.reshape(-1, self.dim)
-		X = self._scale(np.array(X))
+		X = self.scale(np.array(X))
 		M = X.shape[0]
 		c = np.array(c)
 		assert len(self.indices) == c.shape[0]
@@ -288,7 +288,7 @@ class PolynomialTensorBasis(Basis):
 			is the gradient of :code:`V[i,j]`. 
 		"""
 		X = X.reshape(-1, self.dim)
-		X = self._scale(np.array(X))
+		X = self.scale(np.array(X))
 		M = X.shape[0]
 		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
 		
@@ -339,7 +339,7 @@ class PolynomialTensorBasis(Basis):
 			is the Hessian of :code:`V[i,j]`. 
 		"""
 		X = X.reshape(-1, self.dim)
-		X = self._scale(np.array(X))
+		X = self.scale(np.array(X))
 		M = X.shape[0]
 		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
 		
@@ -435,7 +435,7 @@ class HermiteTensorBasis(PolynomialTensorBasis):
 		self._mean = np.mean(X, axis = 0)
 		self._std = np.std(X, axis = 0)
 
-	def _scale(self, X):
+	def scale(self, X):
 		try:
 			return (X - self._mean[None,:])/self._std[None,:]/np.sqrt(2)
 		except AttributeError:
@@ -665,7 +665,7 @@ class PolynomialBasis(Basis) :
 		self._lb = np.min(X, axis = 0)
 		self._ub = np.max(X, axis = 0)
 
-	def _scale(self, X):
+	def scale(self, X):
 		r""" Apply the scaling to the input coordinates
 		"""
 		try:
@@ -685,7 +685,7 @@ class PolynomialBasis(Basis) :
 	def V(self, X: np.ndarray) -> np.ndarray :
 		X = X.reshape(-1, self.dim)
 		self.X = X
-		X = self._scale(np.array(X))
+		X = self.scale(np.array(X))
 		M = X.shape[0]
 		assert X.shape[1] == self.dim, "Expected %d dimensions, got %d" % (self.dim, X.shape[1])
 		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
@@ -700,7 +700,7 @@ class PolynomialBasis(Basis) :
 	
 	def DV(self, X):
 		X = X.reshape(-1, self.dim)
-		X = self._scale(np.array(X))
+		X = self.scale(np.array(X))
 		M = X.shape[0]
 		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
 		
@@ -727,7 +727,7 @@ class PolynomialBasis(Basis) :
 	
 	def DDV(self, X):
 		X = X.reshape(-1, self.dim)
-		X = self._scale(np.array(X))
+		X = self.scale(np.array(X))
 		M = X.shape[0]
 		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
 		
