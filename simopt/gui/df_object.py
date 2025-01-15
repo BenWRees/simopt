@@ -2,7 +2,7 @@ import tkinter as tk
 from abc import ABC, abstractmethod
 from tkinter import ttk
 from typing import Callable, Literal, Union
-
+import inspect
 
 class DFFactor(ABC):
     """Class to store factors for problems and solvers."""
@@ -785,6 +785,7 @@ class DFString(DFFactor):
         super().__init__(name, description)
         self.__default = tk.StringVar(value=str(default))
 
+#TODO: Change how dictionaries are displayed in tkinter
 class DFDict(DFFactor):
     """Class to store dictionary factors for problems and solvers."""
 
@@ -829,9 +830,12 @@ class DFDict(DFFactor):
 
         """
         super().__init__(name, description)
-        self.__default = tk.StringVar(value=str(list(default.items())))
+        self.__default = tk.StringVar(value=self.dict_to_str(default))
 
-#TODO: Implement Callable Factors
+    #TODO: write function that prints strings in pretty-print format 
+    def dict_to_str(self, factor: dict[str,dict]) -> str : 
+        return str(list(factor.items()))
+
 class DFCallable(DFFactor):
     """Class to store Callable factors for problems and solvers."""
 
@@ -856,7 +860,7 @@ class DFCallable(DFFactor):
     def default_eval(self) -> list:
         """Evaluated default value of the factor."""
         try:
-            return Callable(eval(self.default.get()))
+            return eval(self.default.get())
         except ValueError:
             raise ValueError(
                 f"Default value for {self.name.get()} must be a dictionary."
@@ -876,7 +880,18 @@ class DFCallable(DFFactor):
 
         """
         super().__init__(name, description)
-        self.__default = tk.StringVar(value=str(Callable(default)))
+        self.__default = tk.StringVar(value=self.convert_fn_to_str(default))
+
+    #takes the callable function and changes it to a lambda function that is passed as a string 
+    #TODO: write function that if fn is a lambda function then just print as a string but if its a class method then convert to lambda and turn to string
+    def convert_fn_to_str(self, fn: Callable) -> str : 
+        return str(fn)
+        # In the case that fn is a instance variable in a class - convert to a lambda function
+        # if inspect.ismethod(fn):
+        #     if fn.__self__ is obj:  # Bound to instance
+        #         fn = lambda x : fn(x)
+        
+        # return inspect.getsource(fn).strip() 
 
 
 
