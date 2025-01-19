@@ -392,8 +392,8 @@ class OMoRFGeometry(TrustRegionGeometry) :
 					f_hat = np.delete(f_hat, index, 0)
 				else:
 					S[k, :] = s
-					# if not evaluate_f_flag : #If full_space is True then we don't want to evaluate 
-					f[k, :] = self.tr.blackbox_evaluation(s, self.problem) #!This should only be evaluated if its f_red 
+					if not evaluate_f_flag : #If full_space is True then we don't want to evaluate 
+						f[k, :] = self.tr.blackbox_evaluation(s, self.problem) #!This should only be evaluated if its f_red 
 			
 			#Update U factorisation in LU algorithm
 			phi = phi_function(s)
