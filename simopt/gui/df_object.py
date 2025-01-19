@@ -763,7 +763,7 @@ class DFString(DFFactor):
     def default_eval(self) -> list:
         """Evaluated default value of the factor."""
         try:
-            return str(eval(self.default.get()))
+            return str(self.default.get())
         except ValueError:
             raise ValueError(
                 f"Default value for {self.name.get()} must be a string."
