@@ -7,9 +7,39 @@ import os.path as o
 sys.path.append(o.abspath(o.join(o.dirname(sys.modules[__name__].__file__), ".."))) # type:ignore
 
 # Import the ProblemSolver class and other useful functions
-from simopt.experiment_base import ProblemsSolvers, plot_solvability_profiles
+from simopt.experiment_base import ProblemsSolvers, plot_solvability_profiles, ProblemSolver, Problem
 # from simopt.base import adaptive_sampling 
 # from ..base import adaptive_sampling
+
+
+
+def sensitivitity_analysis(problem_name: str) -> Problem :
+    """Instantiates a Problem object and applies sensitivity analsysis to reduce the dimensions of the problem
+
+    Args:
+        problem_name (str): Name of the problem whos dimensions are being reduced 
+
+    Returns:
+        Problem: The reduced-dimension Problem after sensitivity analysis 
+    """
+
+    
+
+    problem = Problem(name=problem_name)
+
+
+
+def OMoRF_experimen(problem_name: str, solver_fixed_factors: dict[str,dict]) -> ProblemSolver :
+    """This function sets up a ProblemSolver object for the solver OMoRF on the 
+
+    Args:
+        problem_name (str): The name of the problem to test the Solver on
+        solver_fixed_factors (dict[str,dict]): The solver Fixed Factors to be passed to TRUSTREGION
+
+    Returns:
+        ProblemSolver: A ProblemSolver experiment where the Solver OMoRF is testing on the problem specified in problem_name
+    """
+    pass 
 
 def main():
     solver_names = ["TRUSTREGION", "OMoRF"]
@@ -32,8 +62,8 @@ def main():
     mymetaexperiment.post_normalize(n_postreps_init_opt=50)
 
     print("Plotting results.")
-    # Produce basic plots of the solvers on the problems.
-    plot_solvability_profiles(experiments=mymetaexperiment.experiments, plot_type="cdf_solvability")
+    #Plot solvability of OMORF against TRUSTREGION
+    plot_solvability_profiles(experiments=mymetaexperiment.experiments, plot_type="diff_cdf_solvability")
 
     # Plots will be saved in the folder experiments/plots.
     print("Finished. Plots can be found in experiments/plots folder.")

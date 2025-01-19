@@ -24,12 +24,12 @@ def main() -> None:
     # Specify the names of the solver and problem to test.
     # These names are strings and should match those input to directory.py.
     # Ex:
-    solver_names = ["RNDSRCH", "ASTRODF", "NELDMD"]
-    problem_names = ["CNTNEWS-1", "SAN-1"]
+    solver_names = ["TRUSTREGION", "OMoRF", "ASTRODF"]
+    problem_names = ["DYNAMNEWS-1"]
 
     # Initialize an instance of the experiment class.
     mymetaexperiment = ProblemsSolvers(
-        solver_names=solver_names, problem_names=problem_names
+        solver_names=solver_names, problem_names=problem_names, solver_factors=[{'geometry instance': 'AstroDFGeometry', 'sampling rule': 'AdaptiveSampling', 'model type': 'RandomModelReuse'},{}, {}]
     )
 
     # Write to log file.
@@ -40,14 +40,14 @@ def main() -> None:
 
     print("Post-processing results.")
     # Run a fixed number of postreplications at all recommended solutions.
-    mymetaexperiment.post_replicate(n_postreps=50)
+    mymetaexperiment.post_replicate(n_postreps=200)
     # Find an optimal solution x* for normalization.
-    mymetaexperiment.post_normalize(n_postreps_init_opt=50)
+    mymetaexperiment.post_normalize(n_postreps_init_opt=200)
 
     print("Plotting results.")
     # Produce basic plots of the solvers on the problems.
     plot_solvability_profiles(
-        experiments=mymetaexperiment.experiments, plot_type="cdf_solvability"
+        experiments=mymetaexperiment.experiments, plot_type="cdf_solvability", solve_tol=0.1
     )
 
     # Plots will be saved in the folder experiments/plots.

@@ -1,3 +1,6 @@
+"""This experiment looks at how the performance of OMoRF varies when using different subspace dimensions
+"""
+
 """
 This script is intended to help with debugging problems and solvers.
 It create problem-solver groups (using the directory) and runs multiple
@@ -14,7 +17,7 @@ from simopt.experiment_base import ProblemSolver, ProblemsSolvers, plot_solvabil
 from simopt.directory import problem_directory
 
 
-def load_problem_solvers(bases: list[str], problem_names: list[str]) -> list[list[ProblemSolver]] : 
+def load_problem_solvers(problem_names: list[str]) -> list[list[ProblemSolver]] : 
     """
         Write the list of ProblemSolver instances for the basis experiments
 
@@ -27,19 +30,18 @@ def load_problem_solvers(bases: list[str], problem_names: list[str]) -> list[lis
     """
 
     #create list of Problem objects - share same instances now 
-    problem_instances = [problem_directory[a]() for a in problem_names]
-
+    problem_instance = [problem_directory[a]() for a in problem_names][0]
+    max_dim = len(problem_instance.factors['initial_solution']) + 1
+    dimensions = [a for a in range(1,max_dim)]
 
     problem_solver_pairs = [] 
-    for basis in bases : 
-        common_solvers = [] 
-        for problem in problem_instances : 
-            solver_factors = {'polynomial basis': basis, 'geometry instance': 'AstroDFGeometry', 'sampling rule': 'AdaptiveSampling', 'model type': 'RandomModelReuse'}
-            solver_rename = 'Trust region with ' + basis + ' Basis'
-            problem_solver = ProblemSolver(solver_name='TRUSTREGION', problem=problem, 
-                                           solver_rename=solver_rename, solver_fixed_factors=solver_factors)
-            common_solvers.append(problem_solver)
-        problem_solver_pairs.append(common_solvers)
+    for dim in dimensions : 
+
+        solver_factors = {'subspace dimension':dim}
+        solver_rename = 'Trust region with subspace dimension ' + str(dim)
+        problem_solver = ProblemSolver(solver_name='OMoRF', problem=problem_instance, 
+                                        solver_rename=solver_rename, solver_fixed_factors=solver_factors)
+        problem_solver_pairs.append([problem_solver])
 
     return problem_solver_pairs
 
@@ -60,13 +62,13 @@ def sort_problem_solvers(problemsSolvers: ProblemsSolvers) -> list[list[ProblemS
     
     return sorted_problem_solvers_list 
 
-def plot_results(problemsolvers: ProblemsSolvers, bases: list[str], problem_names: list[str]) -> None : 
-    solver_set_name = 'Trust Region with Bases: '.join([a + ' '  for a in bases[:-1]]) + bases[-1]
-    problem_set_name = 'Problems: '.join([a + ', '  for a in problem_names[:-1]]) + problem_names[-1]
+def plot_results(problemsolvers: ProblemsSolvers) -> None : 
+    solver_set_name = 'OMoRF with varying subspace dimensions'
+    problem_set_name = 'DYNAMNEWS-1'
 
 
     plot_solvability_profiles(experiments=problemsolvers.experiments, plot_type="cdf_solvability", 
-                              solver_set_name=solver_set_name, problem_set_name=problem_set_name, legend_loc='upper left', plot_title='CDF solvability of basis experiment')
+                              solver_set_name=solver_set_name, problem_set_name=problem_set_name, legend_loc='upper left', plot_title='CDF solvability of dimension experiment')
     
     myexperiments = sort_problem_solvers(problemsolvers)
     
@@ -78,29 +80,16 @@ def plot_results(problemsolvers: ProblemsSolvers, bases: list[str], problem_name
         plot_progress_curves(experiments=myexperiment, plot_type="quantile", beta=0.90, normalize=True, plot_title=f'Quantile Progress Curves of Basis {problem_name}')
 
 def main():
-    bases = [
-	'MonomialTensorBasis', 
-	'LegendreTensorBasis',
-	'ChebyshevTensorBasis',
-	'LaguerreTensorBasis',
-	'HermiteTensorBasis',
-	'NaturalPolynomialBasis',
-    'MonomialPolynomialBasis',
-	'LagrangePolynomialBasis',
-	'NFPPolynomialBasis'
-    ]
 
     problem_names = [
-        'EXAMPLE-1',
-        'SIMPLEFUNC-1',
         # 'SAN-1', #!!These two take very long. Will multithread this and then run it on iridis
         # 'FIXEDSAN-1',
-        'NETWORK-1',
+        # 'NETWORK-1',
         'DYNAMNEWS-1'
     ]
 
 
-    problem_solver_pairs = load_problem_solvers(bases, problem_names)
+    problem_solver_pairs = load_problem_solvers(problem_names)
 
     EXPERIMENT_DIR = os.path.join(os.getcwd(), "experiments", time.strftime("%Y-%m-%d_%H-%M-%S"))
     file_name_path = os.path.join(EXPERIMENT_DIR, "outputs")
@@ -124,7 +113,7 @@ def main():
 
     print("Plotting results.")
     # Produce basic plots of the solvers on the problems.
-    plot_results(mymetaexperiment, bases, problem_names)
+    plot_results(mymetaexperiment)
 
     # Plots will be saved in the folder experiments/plots.
     print("Finished. Plots can be found in experiments/plots folder.")
