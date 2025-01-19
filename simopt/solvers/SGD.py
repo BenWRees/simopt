@@ -6,6 +6,8 @@ TODO: add bounds in
 from __future__ import annotations
 from typing import Callable
 
+from simopt.linear_algebra_base import finite_difference_gradient
+
 import numpy as np
 import warnings
 warnings.filterwarnings("ignore")
@@ -213,7 +215,6 @@ class SGD(Solver):
 
 			# Create new solution based on new x
 			new_solution = self.create_new_solution(tuple(new_x), problem)
-			print('new solution: ', new_solution.x)
 			recommended_solns.append(new_solution)
 			intermediate_budgets.append(expended_budget)
 		return recommended_solns, intermediate_budgets
@@ -276,7 +277,6 @@ class SGD(Solver):
 		return np.mean(gbar,axis=0)
 
 
-	# Finite difference for approximating gradients.
 	def finite_diff(self, new_solution, BdsCheck, problem):
 		"""
 			finite difference approximation of the simulation model
@@ -296,71 +296,12 @@ class SGD(Solver):
 			The averaged gradient approximation from a number of gradient approximations at the current solutions value
 		"""
 		r = self.factors['r']
+		grads = np.zeros((problem.dim,r))
 		alpha = self.factors['alpha']
-		lower_bound = problem.lower_bounds
-		upper_bound = problem.upper_bounds
-		problem.simulate(new_solution,1)
-		grads = np.zeros((problem.dim,r)) #Take r gradient approximations
-		fn = -1 * problem.minmax[0] * new_solution.objectives_mean
-		
-		new_x = new_solution.x
+
 		for batch in range(r) :
-			# Store values for each dimension.
-			FnPlusMinus = np.zeros((problem.dim, 3))
-			grad = np.zeros(problem.dim)
-			for i in range(problem.dim):
-				# Initialization.
-				x1 = list(new_x)
-				x2 = list(new_x)
-				# Forward stepsize.
-				steph1 = alpha
-				# Backward stepsize.
-				steph2 = alpha
+			grad =  finite_difference_gradient(self,new_solution,problem, alpha=alpha, BdsCheck=BdsCheck)
 
-				# Check variable bounds.
-				if x1[i] + steph1 > upper_bound[i]:
-					steph1 = np.abs(upper_bound[i] - x1[i])
-				if x2[i] - steph2 < lower_bound[i]:
-					steph2 = np.abs(x2[i] - lower_bound[i])
-
-				# Decide stepsize.
-				# Central diff.
-				if BdsCheck[i] == 0:
-					FnPlusMinus[i, 2] = min(steph1, steph2)
-					x1[i] = x1[i] + FnPlusMinus[i, 2]
-					x2[i] = x2[i] - FnPlusMinus[i, 2]
-				# Forward diff.
-				elif BdsCheck[i] == 1:
-					FnPlusMinus[i, 2] = steph1
-					x1[i] = x1[i] + FnPlusMinus[i, 2]
-				# Backward diff.
-				else:
-					FnPlusMinus[i, 2] = steph2
-					x2[i] = x2[i] - FnPlusMinus[i, 2]
-
-				fn1 = 0 
-				fn2 = 0
-				x1_solution = self.create_new_solution(tuple(x1), problem)
-				if BdsCheck[i] != -1:
-					problem.simulate_up_to([x1_solution], 1)
-					fn1 = -1 * problem.minmax[0] * x1_solution.objectives_mean
-					# First column is f(x+h,y).
-					FnPlusMinus[i, 0] = fn1
-				
-				x2_solution = self.create_new_solution(tuple(x2), problem)
-				if BdsCheck[i] != 1:
-					problem.simulate_up_to([x2_solution], 1)
-					fn2 = -1 * problem.minmax[0] * x2_solution.objectives_mean
-					# Second column is f(x-h,y).
-					FnPlusMinus[i, 1] = fn2
-
-				# Calculate gradient.
-				if BdsCheck[i] == 0:
-					grad[i] = (fn1 - fn2) / (2 * FnPlusMinus[i, 2])
-				elif BdsCheck[i] == 1:
-					grad[i] = (fn1 - fn) / FnPlusMinus[i, 2]
-				elif BdsCheck[i] == -1:
-					grad[i] = (fn - fn2) / FnPlusMinus[i, 2]
 			grads[:,batch] = grad
 
 		grad_mean = np.mean(grads,axis=1)
