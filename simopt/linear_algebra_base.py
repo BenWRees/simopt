@@ -5,12 +5,12 @@
 
 import numpy as np 
 
-from base import Solution, Problem, Solver
+from simopt.base import Solution, Problem, Solver
 from .solvers.active_subspaces.basis import Basis
 
 __all__ = ['finite_difference_gradient', 'matrix_multiplication']
 
-def finite_difference_gradient(new_solution: Solution, problem: Problem, alpha: float = 1.0e-8, BdsCheck: None | np.ndarray = None) -> np.ndarray :
+def finite_difference_gradient(solver: Solver, new_solution: Solution, problem: Problem, alpha: float = 1.0e-8, BdsCheck: None | np.ndarray = None) -> np.ndarray :
     """Calculates a gradient approximation of the solution on the problem
 
     :math:
@@ -36,7 +36,7 @@ def finite_difference_gradient(new_solution: Solution, problem: Problem, alpha: 
     fn = -1 * problem.minmax[0] * new_solution.objectives_mean
 
     #if BdsCheck isn't implemented then we assume central finite differencing 
-    if BdsCheck ==  None : 
+    if BdsCheck is None : 
         BdsCheck =  np.zeros(problem.dim)
     
     new_x = new_solution.x
@@ -73,15 +73,15 @@ def finite_difference_gradient(new_solution: Solution, problem: Problem, alpha: 
             x2[i] = x2[i] - FnPlusMinus[i, 2]
 
         fn1, fn2 = 0,0 
-        x1_solution = Solver.create_new_solution(tuple(x1), problem)
+        x1_solution = solver.create_new_solution(tuple(x1), problem)
         if BdsCheck[i] != -1:
-            problem.simulate_up_to([x1_solution], 1)
+            problem.simulate(x1_solution)
             fn1 = -1 * problem.minmax[0] * x1_solution.objectives_mean
             # First column is f(x+h,y).
             FnPlusMinus[i, 0] = fn1
-        x2_solution = Solver.create_new_solution(tuple(x2), problem)
+        x2_solution = solver.create_new_solution(tuple(x2), problem)
         if BdsCheck[i] != 1:
-            problem.simulate_up_to([x2_solution], 1)
+            problem.simulate(x2_solution)
             fn2 = -1 * problem.minmax[0] * x2_solution.objectives_mean
             # Second column is f(x-h,y).
             FnPlusMinus[i, 1] = fn2
@@ -109,7 +109,7 @@ def matrix_multiplication(X: np.ndarray, c: np.ndarray, basis: Basis = None) -> 
         np.ndarray: A vector of shape (M,1) which represents :math:`Xc`
     """
     #in the case where X is not being used to construct a Vandermonde Matrix
-    if basis == None : 
+    if basis is None : 
         try :
             res = np.dot(X,c)
         except : #If dimension exceptions are thrown handle it 
