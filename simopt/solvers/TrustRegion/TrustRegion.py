@@ -13,6 +13,9 @@ from copy import deepcopy
 import inspect
 
 
+from simopt.linear_algebra_base import finite_difference_gradient
+
+
 from simopt.base import (
 	ConstraintType,
 	ObjectiveType,
@@ -204,23 +207,23 @@ class TrustRegionBase(Solver) :
 
 	#nice way to allow for different types of random models
 	def model_instantiation(self) :
-		class_name = self.factors['model type']
+		class_name = self.factors['model type'].strip()
 		module = importlib.import_module('simopt.solvers.TrustRegion.Models')
 		return getattr(module, class_name)
 	
 	def polynomial_basis_instantiation(self) :
-		class_name = self.factors['polynomial basis']
+		class_name = self.factors['polynomial basis'].strip()
 		module = importlib.import_module('simopt.solvers.active_subspaces.basis')
 		return getattr(module, class_name)
 
 	def sample_instantiation(self) :
-		class_name = self.factors['sampling rule']
+		class_name = self.factors['sampling rule'].strip()
 		module = importlib.import_module('simopt.solvers.TrustRegion.Sampling')
 		sampling_instance = getattr(module, class_name)(self)
 		return sampling_instance
 
 	def geometry_type_instantiation(self) :
-		class_name = self.factors['geometry instance']
+		class_name = self.factors['geometry instance'].strip()
 		module = importlib.import_module('simopt.solvers.TrustRegion.Geometry')
 		return getattr(module, class_name)
 
@@ -401,22 +404,14 @@ class TrustRegion(TrustRegionBase) :
 		new_solution = self.create_new_solution(new_x, problem)
 		recommended_solns.append(new_solution)
 		intermediate_budgets.append(expended_budget)
-		# model_construction_parameters = self.factors['model construction parameters']
-		model_construction_parameters = {
-			'structure': 'const', 
-			'degree': self.factors['polynomial degree'],
-			'nugget': 5, 
-			'Lfixed': None, 
-			'n_init': 1,
-			'mu': 1000
-		}
+		model_construction_parameters = self.factors['model construction parameters']
 		# model_construction_parameters = {
-		# 'w': 0.85, 
-		# 'mu':1000,
-		# 'beta':10, 
-		# 'criticality_threshold': 0.1, 
-		# 'skip_criticality': True,
-		# 'lambda_min': self.factors['lambda_min']
+		# 	'structure': 'const', 
+		# 	'degree': self.factors['polynomial degree'],
+		# 	'nugget': 5, 
+		# 	'Lfixed': None, 
+		# 	'n_init': 1,
+		# 	'mu': 1000
 		# }
 
 		#Dynamically load in different sampling rule, geometry type, and random model
@@ -538,7 +533,7 @@ class OMoRF(TrustRegionBase):
 			"subspace dimension": {
 				"description": "dimension size of the active subspace",
 				"datatype": int, 
-				"default": 6
+				"default": 7
 			}, 
 			"random directions": {
 				"description": "Determine to take random directions in set construction",
@@ -677,7 +672,8 @@ class OMoRF(TrustRegionBase):
 
 		return f[0]
 	
-	def finite_difference_gradient(self, new_solution: Solution, problem: Problem) -> np.ndarray :
+
+	def finite_difference_gradient(self, new_solution:Solution, problem: Problem) -> np.ndarray : 
 		"""Calculate the finite difference gradient of the problem at new_solution.
 
 		Args:
@@ -689,6 +685,25 @@ class OMoRF(TrustRegionBase):
 
 			int: The expended budget 
 		"""
+		lower_bound = problem.lower_bounds
+		upper_bound = problem.upper_bounds
+		problem.simulate(new_solution,1)
+		fn = -1 * problem.minmax[0] * new_solution.objectives_mean
+		self.expended_budget += 1
+		# new_solution = self.create_new_solution(tuple(x), problem)
+
+		new_x = new_solution.x
+		forward = np.isclose(new_x, lower_bound, atol = 10**(-7)).astype(int)
+		backward = np.isclose(new_x, upper_bound, atol = 10**(-7)).astype(int)
+		# BdsCheck: 1 stands for forward, -1 stands for backward, 0 means central diff.
+		BdsCheck = np.subtract(forward, backward)
+
+		self.expended_budget += (2*problem.dim) + 1
+		return finite_difference_gradient(self, new_solution, problem, BdsCheck=BdsCheck)
+		
+
+
+	"""def finite_difference_gradient(self, new_solution: Solution, problem: Problem) -> np.ndarray :
 		alpha = 1e-3		
 		lower_bound = problem.lower_bounds
 		upper_bound = problem.upper_bounds
@@ -763,7 +778,7 @@ class OMoRF(TrustRegionBase):
 
 
 		# print(f'grad shape: {grad.shape}')
-		return grad
+		return grad"""
 
 
 	def _get_grads(self, X: np.ndarray, problem: Problem) -> np.ndarray : 
