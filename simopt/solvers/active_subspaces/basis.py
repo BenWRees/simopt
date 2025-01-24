@@ -14,7 +14,8 @@ __all__ = ['PolynomialTensorBasis', #THIS IS A BASE CLASS TO BE INHERITED BY SPE
 	'NaturalPolynomialBasis',
 	'LagrangePolynomialBasis',
 	'NFPPolynomialBasis',
-	'Basis'
+	'Basis',
+	'AstroDFBasis'
  ]
 
 
@@ -620,8 +621,8 @@ class PolynomialBasis(Basis) :
 	def polyroots(self, coeff: np.ndarray) -> np.ndarray : 
 		raise NotImplementedError
 	
-	def vander(self, interpolation_set, degree):
-		X_shape = interpolation_set.shape + (degree + 1,)
+	def vander(self, interpolation_set):
+		X_shape = interpolation_set.shape + (self.degree + 1,)
 		#calculate the whole row,
 		X = np.zeros(X_shape)
 		if len(interpolation_set.shape) == 1 : 
@@ -639,7 +640,12 @@ class PolynomialBasis(Basis) :
 				X[i,:] = matrix 
 		return X
 
-	def assign_interpolation_set(self,X) : 
+	# @property
+	# def X(self) : 
+	# 	return self.X
+	
+	
+	def assign_interpolation_set(self, X) : 
 		self.X = X
 
 	@abstractmethod
@@ -688,7 +694,7 @@ class PolynomialBasis(Basis) :
 		X = self.scale(np.array(X))
 		M = X.shape[0]
 		assert X.shape[1] == self.dim, "Expected %d dimensions, got %d" % (self.dim, X.shape[1])
-		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
+		V_coordinate = [self.vander(X[:,k]) for k in range(self.dim)]
 		
 		V = np.ones((M, len(self.indices)), dtype = X.dtype)
 		
@@ -702,7 +708,7 @@ class PolynomialBasis(Basis) :
 		X = X.reshape(-1, self.dim)
 		X = self.scale(np.array(X))
 		M = X.shape[0]
-		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
+		V_coordinate = [self.vander(X[:,k]) for k in range(self.dim)]
 		
 		N = len(self.indices)
 		DV = np.ones((M, N, self.dim), dtype = X.dtype)
@@ -729,7 +735,7 @@ class PolynomialBasis(Basis) :
 		X = X.reshape(-1, self.dim)
 		X = self.scale(np.array(X))
 		M = X.shape[0]
-		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
+		V_coordinate = [self.vander(X[:,k]) for k in range(self.dim)]
 		
 		N = len(self.indices)
 		DDV = np.ones((M, N, self.dim, self.dim), dtype = X.dtype)
@@ -779,8 +785,6 @@ class NaturalPolynomialBasis(PolynomialBasis) :
 
 		if isinstance(point, np.float64) or isinstance(point, np.int64) : 
 			point = [point]
-
-
 
 	
 		if col_num == 0:
@@ -1036,3 +1040,36 @@ class NFPPolynomialBasis(PolynomialBasis) :
 	def solve_no_cols(self, interpolation_set):
 		return len(interpolation_set)
 	
+
+class AstroDFBasis : 
+	def __init__(self, degree, X=None, dim=None):
+		self.degree = int(degree)
+		if X is not None:
+			self.X = np.atleast_2d(X)
+			self.dim = self.X.shape[1]
+			self.set_scale(self.X)
+		elif dim is not None:
+			self.dim = int(dim)
+			self.X = None
+
+	def assign_interpolation_set(self, X) : 
+		self.X = X 
+
+	def V(self, interpolation_set: np.ndarray) -> np.ndarray : 
+		X_shape = (len(interpolation_set),self.degree*len(interpolation_set[0])+1)
+		#calculate the whole row,
+		X = np.zeros(X_shape)
+		for i in range(X_shape[0]) : 
+			for j in range(X_shape[1]) : 
+				X[i,j] = self.poly_basis_fn(interpolation_set, i, j)
+		return X
+	
+	def poly_basis_fn(self, interpolation_set, row_num, col_num) :
+		interpolation_set = np.array(interpolation_set)
+		val = interpolation_set[row_num]
+		#calculate the whole row,
+		row = [1] 
+		for exp in range(1, self.degree+1) : 
+			row =  np.append(row, val**exp)
+		return row[col_num]
+ 		
