@@ -3,7 +3,7 @@ from typing import Callable
 
 from numpy.linalg import norm, pinv, qr
 import numpy as np
-from math import ceil, isnan, isinf, comb, factorial
+from math import ceil, isnan, isinf, comb, factorial, log
 import warnings
 from scipy.optimize import minimize, NonlinearConstraint, linprog
 from scipy import optimize
@@ -73,12 +73,12 @@ class TrustRegionBase(Solver) :
 			"eta_2": {
 				"description": "threshhold for a very successful iteration",
 				"datatype": float,
-				"default": 0.7
+				"default": 0.8
 			},
 			"gamma_1": {
 				"description": "trust-region radius increase rate after a very successful iteration",
 				"datatype": float,
-				"default": 1.5
+				"default": 2.5
 			},
 			"gamma_2": {
 				"description": "trust-region radius decrease rate after an unsuccessful iteration",
@@ -108,7 +108,7 @@ class TrustRegionBase(Solver) :
 			"lambda_min": {
 				"description": "minimum sample size",
 				"datatype": int,
-				"default": 4
+				"default": 5
 			},
 			"geometry instance": {
 				"description": "Instance of the geometric behaviours of the space where trust region values are sampled from",
@@ -118,7 +118,7 @@ class TrustRegionBase(Solver) :
 			"polynomial basis": {
 				"description": "Polynomial basis to use in model construction",
 				"datatype": str, 
-				"default": "NaturalPolynomialBasis"
+				"default": "AstroDFBasis"
 			}, 
 			"polynomial degree": {
 				"description": "degree of the polynomial",
@@ -130,6 +130,11 @@ class TrustRegionBase(Solver) :
 				"datatype": str,
 				"default": "RandomModel" 
 			},
+			"ps_sufficient_reduction": {
+				"description": "use pattern search if with sufficient reduction, 0 always allows it, large value never does",
+				"datatype": float,
+				"default": 0.1,
+			},
 			"model construction parameters": {
 				"description": "List of initial parameters for the model construction",
 				"datatype": dict, 
@@ -137,8 +142,7 @@ class TrustRegionBase(Solver) :
 					'mu':1000,
 					'beta':10, 
 					'criticality_threshold': 0.1, 
-					'skip_criticality': True,
-					'lambda_min': 4
+					'skip_criticality': False,
 				}
 			}
 		}
@@ -159,7 +163,8 @@ class TrustRegionBase(Solver) :
 			"model type": self.check_random_model_type,
 			"model construction parameters": self.check_model_construction_parameters,
 			"sampling rule": self.check_sampling_rule,
-			"polynomial degree": self.check_poly_degree
+			"polynomial degree": self.check_poly_degree,
+			"ps_sufficient_reduction": self.check_ps_sufficient_reduction,
 		}
 	
 	def __init__(self, name="TRUSTREGION_BASE", fixed_factors: dict | None = None) -> None :
@@ -167,43 +172,63 @@ class TrustRegionBase(Solver) :
 		self.rho = []
 
 	def check_eta_1(self):
-		return self.factors["eta_1"] > 0
+		if self.factors["eta_1"] <= 0 :
+			raise ValueError("The threshold for a 'successful' iteration needs to be positive")
+
 
 	def check_eta_2(self):
-		return self.factors["eta_2"] > self.factors["eta_1"]
+		if self.factors["eta_2"] <= self.factors["eta_1"] :
+			raise ValueError("A 'very successful' iteration threshold needs to be greater than a 'successful' iteration threshold")
 
 	def check_gamma_1(self):
-		return self.factors["gamma_1"] > 1
+		if self.factors["gamma_1"] <= 1 :
+			raise ValueError('The trust region radius increase must be greater than 1')
 
 	def check_gamma_2(self):
-		return (self.factors["gamma_2"] < 1 and self.factors["gamma_2"] > 0)
+		if (self.factors["gamma_2"] >= 1 or self.factors["gamma_2"] <= 0) : 
+			raise ValueError('The trust region radius decrease must be between 1 and 0 (exclusive)')
 	
 	def check_delta_max(self):
-		return self.factors["delta_max"] > 0
+		if self.factors["delta_max"] <= 0 : 
+			raise ValueError('The constraint on the trust region radius must be positive')
 	
 	def check_delta(self):
-		return self.factors["delta_max"] > 0
-
+		if self.factors["delta_max"] <= 0 : 
+			raise ValueError('The initial trust region radius must be positive')
+		
 	def check_lambda_min(self):
-		return self.factors["lambda_min"] > 2
+		if self.factors["lambda_min"] <= 2 :
+			raise ValueError('The smallest sample size must be greater than 2')
 	
 	def check_geometry_instance(self) -> bool:
-		return True 
+		if self.factors['geometry instance'] is None : 
+			raise ValueError('Geometry Instance Needs to be Implemented')
 	
 	def check_poly_basis(self) -> bool:
-		return True 
+		if self.factors['polynomial basis'] is None : 
+			raise ValueError('Polynomial Basis Needs to be Implemented') 
 	
 	def check_poly_degree(self) -> bool : 
-		self.factors['polynomial degree'] >= 1
+		if self.factors['polynomial degree'] < 1 :
+			raise ValueError('Local Model Polynomial Degree must be at least 1')
 	
 	def check_random_model_type(self) -> bool:
-		return True 
+		if self.factors['model type'] is None : 
+			raise ValueError('random model type is not implemented') 
 	
-	def check_model_construction_parameters(self) -> bool :
-		return isinstance(self.factors['model construction parameters'], dict)
+	def check_model_construction_parameters(self) -> None :
+		if not isinstance(self.factors['model construction parameters'], dict) : 
+			raise ValueError('The model construction parameters must be a dictionary')
 	
-	def check_sampling_rule(self) -> bool:
-		return True 
+	def check_sampling_rule(self) -> None:
+		if self.factors['sampling rule'] is None : 
+			raise ValueError('sampling rule is not implemented')
+	
+	def check_ps_sufficient_reduction(self) -> None:
+		if self.factors["ps_sufficient_reduction"] < 0:
+			raise ValueError(
+				"ps_sufficient reduction must be greater than or equal to 0."
+			)
 
 	#nice way to allow for different types of random models
 	def model_instantiation(self) :
@@ -282,6 +307,7 @@ class TrustRegion(TrustRegionBase) :
 		
 		return symmetric_matrix
 
+
 	def solve_subproblem(self, delta, model, problem, solution, visited_pts_list) :
 		"""
 		Solve the Trust-Region subproblem either using Cauchy reduction or a black-box optimisation solver
@@ -295,7 +321,7 @@ class TrustRegion(TrustRegionBase) :
 			base.Solution - the candidate solution from the subproblem
 		"""
 		new_x = solution.x
-		fval = model.fval
+		
 		# #If using the GP model we do expected improvement
 		# if self.factors['model type'] == 'GPModel' : 
 		# 	def subproblem(s) : 
@@ -320,7 +346,7 @@ class TrustRegion(TrustRegionBase) :
 		
 		else:
 			def subproblem(s) : 
-				Hessian_matrix = self.construct_symmetric_matrix(Hessian)
+				Hessian_matrix = np.diag(Hessian)
 				return q[0] + np.dot(s,grad) + np.dot(np.matmul(s,Hessian_matrix),s)
 			
 			con_f = lambda s: norm(s)
@@ -355,7 +381,14 @@ class TrustRegion(TrustRegionBase) :
 			recommended_solns ([]): Description
 		"""
 		fval = model.fval
-		stepsize = np.subtract(candidate_solution.x, current_solution.x)
+
+		#pattern search
+		if ((min(fval) < fval_tilde) and ((fval[0] - min(fval))>= self.factors["ps_sufficient_reduction"] * delta_k**2)) or ((candidate_solution.objectives_var/ (candidate_solution.n_reps * candidate_solution.objectives_mean**2))[0]> 0.75):
+			fval_tilde = min(fval)
+			# candidate_x = y_var[fval.index(min(fval))][0]  # type: ignore
+			candidate_solution = interpolation_solns[fval.index(min(fval))]  # type: ignore
+
+		stepsize = np.subtract(np.array(candidate_solution.x), np.array(current_solution.x))
 		model_reduction = model.local_model_evaluate(np.zeros(problem.dim)) - model.local_model_evaluate(stepsize)
 		if model_reduction <= 0:
 			rho = 0
@@ -398,11 +431,14 @@ class TrustRegion(TrustRegionBase) :
 		intermediate_budgets = []
 		expended_budget = 0
 		delta_k = self.factors['delta']
+
+		self.factors['delta_max'] = self.calculate_max_radius(problem)
+
 		visited_pts_list = []
 
 		new_x = problem.factors["initial_solution"]
-		new_solution = self.create_new_solution(new_x, problem)
-		recommended_solns.append(new_solution)
+		current_solution = self.create_new_solution(new_x, problem)
+		recommended_solns.append(current_solution)
 		intermediate_budgets.append(expended_budget)
 		model_construction_parameters = self.factors['model construction parameters']
 		# model_construction_parameters = {
@@ -427,25 +463,32 @@ class TrustRegion(TrustRegionBase) :
 		while expended_budget < problem.factors["budget"]:
 			k += 1 
 
+			#get pilot run and calculate kappa 
+			if hasattr(sampling_instance.__class__, 'calculate_pilot_run') :
+				current_solution, expended_budget = sampling_instance.calculate_pilot_run(k, problem, expended_budget, current_solution, delta_k)
+			else : 
+				problem.simulate(candidate_solution, 2)
+				expended_budget += 2
+				 
+
 			#build random model 
-			current_solution, delta_k, construction_budget, interpolation_solns, visited_pts_list, sample_size = model.construct_model(new_solution, delta_k, k, expended_budget, visited_pts_list)
+			current_solution, delta_k, construction_budget, interpolation_solns, visited_pts_list = model.construct_model(current_solution, delta_k, k, expended_budget, visited_pts_list)
 			expended_budget = construction_budget # the additions to the expended budget is done in model.construct_model
 
 			#solve random model 
 			candidate_solution, visited_pts_list = self.solve_subproblem(delta_k, model, problem, current_solution, visited_pts_list)
-			#adaptive sampling - need way to include additional parameters 
-			if sampling_instance.sampling_rule.__class__.__name__ == 'adaptive_sampling' :
-				problem.simulate(candidate_solution, 1)
-				expended_budget += 1
-				sample_size = 1
-
-			candidate_solution, sampling_budget = sampling_instance(problem, candidate_solution, k, delta_k, expended_budget, sample_size, 0)
+			
+			if self.factors['crn_across_solns'] :
+				problem.simulate(candidate_solution, current_solution.n_reps) 
+				expended_budget += current_solution.n_reps 
+			else :
+				candidate_solution, expended_budget = sampling_instance(problem, candidate_solution, k, delta_k, expended_budget, 0, 0)
+			
 			fval_tilde = -1 * problem.minmax[0] * candidate_solution.objectives_mean
-			expended_budget = sampling_budget
 
 			#evaluate model
 			# model, problem, fval_tilde, delta_k, interpolation_solns, candidate_solution, recommended_solns
-			new_solution, delta_k, recommended_solns = self.evaluate_candidate_solution(model, problem, fval_tilde, delta_k, interpolation_solns, current_solution,\
+			current_solution, delta_k, recommended_solns = self.evaluate_candidate_solution(model, problem, fval_tilde, delta_k, interpolation_solns, current_solution,\
 																			   candidate_solution, recommended_solns)	
 			
 
@@ -456,6 +499,31 @@ class TrustRegion(TrustRegionBase) :
 
 		return recommended_solns, intermediate_budgets
 	
+
+	def calculate_max_radius(self, problem) : 
+		# Designate random number generator for random sampling
+		find_next_soln_rng = self.rng_list[1]
+
+		# Generate many dummy solutions without replication only to find a reasonable maximum radius
+		dummy_solns: list[tuple[int, ...]] = []
+		for _ in range(1000 * problem.dim):
+			random_soln = problem.get_random_solution(find_next_soln_rng)
+			dummy_solns.append(random_soln)
+		# Range for each dimension is calculated and compared with box constraints range if given
+		# TODO: just use box constraints range if given
+		# delta_max = min(self.factors["delta_max"], problem.upper_bounds[0] - problem.lower_bounds[0])
+		delta_max_arr: list[float | int] = []
+		for i in range(problem.dim):
+			delta_max_arr += [
+				min(
+					max([sol[i] for sol in dummy_solns])
+					- min([sol[i] for sol in dummy_solns]),
+					problem.upper_bounds[0] - problem.lower_bounds[0],
+				)
+			]
+		# TODO: update this so that it could be used for problems with decision variables at varying scales!
+		delta_max = max(delta_max_arr)
+		return delta_max 
 
 class OMoRF(TrustRegionBase):
 	"""
