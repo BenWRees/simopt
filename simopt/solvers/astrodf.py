@@ -120,7 +120,7 @@ class ASTRODF(Solver):
             "easy_solve": {
                 "description": "solve the subproblem approximately with Cauchy point",
                 "datatype": bool,
-                "default": True,
+                "default": False,
             },
             "reuse_points": {
                 "description": "reuse the previously visited points",
@@ -135,8 +135,13 @@ class ASTRODF(Solver):
             "use_gradients": {
                 "description": "if direct gradient observations are available, use them",
                 "datatype": bool,
-                "default": True,
+                "default": False,
             },
+            "expended budget": {
+                "description": "initial expended budget (in the case of Sensitivity analysis)", 
+                "datatype": int, 
+                "default": 0
+            }
         }
 
     @property
@@ -149,6 +154,7 @@ class ASTRODF(Solver):
             "gamma_2": self.check_gamma_2,
             "lambda_min": self.check_lambda_min,
             "ps_sufficient_reduction": self.check_ps_sufficient_reduction,
+            "expended budget": self.check_budget
         }
 
     def __init__(
@@ -191,7 +197,14 @@ class ASTRODF(Solver):
             raise ValueError(
                 "ps_sufficient reduction must be greater than or equal to 0."
             )
-
+        
+    def check_budget(self) -> None : 
+        if self.factors['expended budget'] < 0 : 
+            raise ValueError('The initial expended budget cannot be negative')
+        
+        if not isinstance(self.factors['expended budget'], int) : 
+            raise ValueError('The expended budget must be an integer')
+        
     def get_coordinate_vector(self, size: int, v_no: int) -> np.ndarray:
         """
         Generate the coordinate vector corresponding to the variable number v_no.
@@ -399,9 +412,7 @@ class ASTRODF(Solver):
                 # for x_0, we don't need to simulate the new solution
                 if (k == 1) and (i == 0):
                     fval.append(
-                        -1
-                        * problem.minmax[0]
-                        * incumbent_solution.objectives_mean
+                        -1 * problem.minmax[0] * incumbent_solution.objectives_mean
                     )
                     interpolation_solns.append(incumbent_solution)
                 # reuse the replications for x_k (center point, i.e., the incumbent solution)
@@ -428,9 +439,7 @@ class ASTRODF(Solver):
                         sample_size += 1
                         sig2 = incumbent_solution.objectives_var[0]
                     fval.append(
-                        -1
-                        * problem.minmax[0]
-                        * incumbent_solution.objectives_mean
+                        -1 * problem.minmax[0] * incumbent_solution.objectives_mean
                     )
                     interpolation_solns.append(incumbent_solution)
                 # else if reuse one design point, reuse the replications
@@ -467,9 +476,7 @@ class ASTRODF(Solver):
                         sample_size += 1
                         sig2 = visited_pts_list[f_index].objectives_var[0]
                     fval.append(
-                        -1
-                        * problem.minmax[0]
-                        * visited_pts_list[f_index].objectives_mean
+                        -1 * problem.minmax[0] * visited_pts_list[f_index].objectives_mean
                     )
                     interpolation_solns.append(visited_pts_list[f_index])
                 # for new points, run the simulation with pilot run
@@ -715,8 +722,7 @@ class ASTRODF(Solver):
                     pilot_run,
                     sig2,
                     delta_k,
-                    rhs_for_kappa
-                    * np.sqrt(pilot_run)
+                    rhs_for_kappa * np.sqrt(pilot_run)
                     / (delta_k ** (delta_power / 2)),
                     problem.dim,
                     delta_power,
@@ -727,8 +733,7 @@ class ASTRODF(Solver):
                 ):
                     # calculate kappa
                     kappa = (
-                        rhs_for_kappa
-                        * np.sqrt(pilot_run)
+                        rhs_for_kappa * np.sqrt(pilot_run)
                         / (delta_k ** (delta_power / 2))
                     )
                     # print("kappa "+str(kappa))
@@ -767,15 +772,10 @@ class ASTRODF(Solver):
         # use Taylor expansion if gradient available
         if enable_gradient:
             fval = (
-                np.ones(2 * problem.dim + 1)
-                * -1
-                * problem.minmax[0]
-                * incumbent_solution.objectives_mean
+                np.ones(2 * problem.dim + 1) * -1 * problem.minmax[0] * incumbent_solution.objectives_mean
             )
             grad = (
-                -1
-                * problem.minmax[0]
-                * incumbent_solution.objectives_gradients_mean[0]
+                -1 * problem.minmax[0] * incumbent_solution.objectives_gradients_mean[0]
             )
             hessian = h_k
         else:
@@ -928,8 +928,7 @@ class ASTRODF(Solver):
                 (
                     candidate_solution.objectives_var
                     / (
-                        candidate_solution.n_reps
-                        * candidate_solution.objectives_mean**2
+                        candidate_solution.n_reps * candidate_solution.objectives_mean**2
                     )
                 )[0]
                 > 0.75
@@ -969,9 +968,7 @@ class ASTRODF(Solver):
                 delta_k = min(gamma_1 * delta_k, delta_max)
             if enable_gradient:
                 candidate_grad = (
-                    -1
-                    * problem.minmax[0]
-                    * candidate_solution.objectives_gradients_mean[0]
+                    -1 * problem.minmax[0] * candidate_solution.objectives_gradients_mean[0]
                 )
                 y_k = np.array(
                     candidate_grad - grad
@@ -1063,7 +1060,7 @@ class ASTRODF(Solver):
         incumbent_x: tuple[int | float, ...] = problem.factors[
             "initial_solution"
         ]
-        expended_budget, kappa = 0, 0
+        expended_budget, kappa = self.factors['expended budget'], 0
         recommended_solns, intermediate_budgets = [], []
         incumbent_solution = self.create_new_solution(
             tuple(incumbent_x), problem
