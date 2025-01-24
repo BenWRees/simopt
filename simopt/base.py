@@ -1117,7 +1117,6 @@ class Problem(ABC):
             solution.pad_storage(num_macroreps)
         # Set the decision factors of the model.
         self.model.factors.update(solution.decision_factors)
-        print(f'solution decision_factors: \n {solution.decision_factors}')
         for _ in range(num_macroreps):
             # Generate one replication at x.
             responses, gradients = self.model.replicate(solution.rng_list)
