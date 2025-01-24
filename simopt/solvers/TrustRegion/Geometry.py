@@ -46,7 +46,7 @@ class TrustRegionGeometry :
 		arr[index] = 1.0
 		return arr
 
-	def interpolation_points(self, current_solution: np.ndarray, delta: float) -> list[np.ndarray]:
+	def interpolation_points(self, x_k: np.ndarray, delta: float) -> list[np.ndarray]:
 		"""
 		Constructs an interpolation set of 
 		
@@ -56,7 +56,6 @@ class TrustRegionGeometry :
 		Returns:
 			[np.array]: Description
 		"""
-		x_k = current_solution
 		d = self.problem.dim
 
 		Y = [x_k]
@@ -96,7 +95,7 @@ class AstroDFGeometry(TrustRegionGeometry) :
 			# stack the rotated vector
 			rotate_matrix = np.vstack((rotate_matrix,rotated_basis))
 		return rotate_matrix
-
+	
 	# compute the interpolation points (2d+1) using the rotated coordinate basis (reuse one design point)
 	def get_rotated_basis_interpolation_points(self, x_k: np.ndarray, delta: float, rotate_matrix: np.ndarray, reused_x: np.ndarray) -> list[np.ndarray]:
 		Y = [x_k]
