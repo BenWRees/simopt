@@ -85,16 +85,6 @@ class TrustRegionBase(Solver) :
 				"datatype": float,
 				"default": 0.5
 			},
-			"delta": {
-				"description": "size of the trust-region radius",
-				"datatype": float,
-				"default": 5.0
-			}, 
-			"delta_max": {
-				"description": "maximum size of the trust-region radius",
-				"datatype": float,
-				"default": 200.0
-			}, 
 			"easy_solve": {
 				"description": "solve the subproblem approximately with Cauchy point",
 				"datatype": bool,
@@ -155,8 +145,6 @@ class TrustRegionBase(Solver) :
 			"eta_2": self.check_eta_2,
 			"gamma_1": self.check_gamma_1,
 			"gamma_2": self.check_gamma_2,
-			"delta_max": self.check_delta_max,
-			"delta": self.check_delta,
 			"lambda_min": self.check_lambda_min,
 			"geometry instance": self.check_geometry_instance, 
 			"polynomial basis": self.check_poly_basis, 
@@ -188,13 +176,6 @@ class TrustRegionBase(Solver) :
 		if (self.factors["gamma_2"] >= 1 or self.factors["gamma_2"] <= 0) : 
 			raise ValueError('The trust region radius decrease must be between 1 and 0 (exclusive)')
 	
-	def check_delta_max(self):
-		if self.factors["delta_max"] <= 0 : 
-			raise ValueError('The constraint on the trust region radius must be positive')
-	
-	def check_delta(self):
-		if self.factors["delta_max"] <= 0 : 
-			raise ValueError('The initial trust region radius must be positive')
 		
 	def check_lambda_min(self):
 		if self.factors["lambda_min"] <= 2 :
@@ -321,18 +302,9 @@ class TrustRegion(TrustRegionBase) :
 			base.Solution - the candidate solution from the subproblem
 		"""
 		new_x = solution.x
-		
-		# #If using the GP model we do expected improvement
-		# if self.factors['model type'] == 'GPModel' : 
-		# 	def subproblem(s) : 
-		# 		return model.prediction(s) 
-
-		# 	con_f = lambda s: norm(s)
-		# 	nlc = NonlinearConstraint(con_f, 0, delta)
-		# 	solve_subproblem = minimize(subproblem, np.zeros(problem.dim), method='trust-constr', constraints=nlc)
-		# 	candidate_x =  new_x + solve_subproblem.x
 
 		q, grad, Hessian = model.coefficients
+		fval = model.fval
 
 		if self.factors['easy_solve'] :
 			# Cauchy reduction
@@ -347,9 +319,10 @@ class TrustRegion(TrustRegionBase) :
 		else:
 			def subproblem(s) : 
 				Hessian_matrix = np.diag(Hessian)
-				return q[0] + np.dot(s,grad) + np.dot(np.matmul(s,Hessian_matrix),s)
+				result = fval[0] + np.dot(s,grad) + np.dot(np.matmul(s,Hessian_matrix),s)
+				return float(result[0])
 			
-			con_f = lambda s: norm(s)
+			con_f = lambda s: float(norm(s))
 			nlc = NonlinearConstraint(con_f, 0, delta)
 			solve_subproblem = minimize(subproblem, np.zeros(problem.dim), method='trust-constr', constraints=nlc)
 			candidate_x =  new_x + solve_subproblem.x
@@ -357,20 +330,24 @@ class TrustRegion(TrustRegionBase) :
 
 
 		# handle the box constraints
+		new_candidate_list = []
 		for i in range(problem.dim):
 			if candidate_x[i] <= problem.lower_bounds[i]:
-				candidate_x[i] = problem.lower_bounds[i] + 0.01
+				new_candidate_list.append(problem.lower_bounds[i] + 0.01)
 			elif candidate_x[i] >= problem.upper_bounds[i]:
-				candidate_x[i] = problem.upper_bounds[i] - 0.01
+				new_candidate_list.append(problem.upper_bounds[i] - 0.01)
+			else:
+				new_candidate_list.append(candidate_x[i])
+		candidate_x = tuple(new_candidate_list)
 		
-		candidate_solution = self.create_new_solution(tuple(candidate_x), problem)
+		candidate_solution = self.create_new_solution(candidate_x, problem)
 		if self.factors['model type'] == 'RandomModelReuse' :
 			#we only append to the visited points list if we care about reusing points
 			visited_pts_list.append(candidate_solution) 
 
 		return candidate_solution, visited_pts_list
 
-	def evaluate_candidate_solution(self, model, problem, fval_tilde, delta_k, interpolation_solns, current_solution, candidate_solution, recommended_solns) :
+	def evaluate_candidate_solution(self, model, problem, fval_tilde, delta_k, interpolation_solns, current_solution, candidate_solution, recommended_solns, expended_budget, intermediate_budgets) :
 		"""
 		Evaluate the candidate solution, by looking at the ratio comparison 
 		
@@ -385,7 +362,6 @@ class TrustRegion(TrustRegionBase) :
 		#pattern search
 		if ((min(fval) < fval_tilde) and ((fval[0] - min(fval))>= self.factors["ps_sufficient_reduction"] * delta_k**2)) or ((candidate_solution.objectives_var/ (candidate_solution.n_reps * candidate_solution.objectives_mean**2))[0]> 0.75):
 			fval_tilde = min(fval)
-			# candidate_x = y_var[fval.index(min(fval))][0]  # type: ignore
 			candidate_solution = interpolation_solns[fval.index(min(fval))]  # type: ignore
 
 		stepsize = np.subtract(np.array(candidate_solution.x), np.array(current_solution.x))
@@ -394,7 +370,7 @@ class TrustRegion(TrustRegionBase) :
 			rho = 0
 		else:
 			# difference = np.subtract(candidate_solution.x, current_solution.x)
-			rho = (np.array(fval[0]) - np.array(fval_tilde)) / model_reduction
+			rho = (fval[0] - fval_tilde) / model_reduction
 
 		self.rho.append(rho)
 
@@ -404,51 +380,37 @@ class TrustRegion(TrustRegionBase) :
 			current_solution = candidate_solution
 			# final_ob = candidate_solution.objectives_mean
 			recommended_solns.append(candidate_solution)
-			# intermediate_budgets.append(expended_budget)
-			delta_k = min(delta_k, self.factors['delta_max'])
+			intermediate_budgets.append(expended_budget)
+			delta_k = min(delta_k, self.delta_max)
 			
 			# very successful: expand and accept
 			if rho >= self.factors['eta_2'] :
-				# new_x = candidate_x
-				# current_solution = candidate_solution
-				# final_ob = candidate_solution.objectives_mean
-				# recommended_solns.append(candidate_solution)
-				# intermediate_budgets.append(expended_budget)
-				delta_k = min(self.factors['gamma_1'] * delta_k, self.factors['delta_max'])
+				delta_k = min(self.factors['gamma_1'] * delta_k, self.delta_max)
 			
 		# unsuccessful: shrink and reject
 		else:
-			delta_k = min(self.factors['gamma_2'] * delta_k, self.factors['delta_max'])
+			delta_k = min(self.factors['gamma_2'] * delta_k, self.delta_max)
 			# new_solution = current_solution
-			recommended_solns.append(current_solution)
+			# recommended_solns.append(current_solution)
 			# final_ob = fval[0]
 
-		return current_solution, delta_k, recommended_solns
+		return current_solution, delta_k, recommended_solns, expended_budget, intermediate_budgets
 
 	#solve the problem - inherited from base.Solver
 	def solve(self, problem: Problem) -> tuple[list[Solution], list[int]] :
 		recommended_solns = []
 		intermediate_budgets = []
 		expended_budget = 0
-		delta_k = self.factors['delta']
 
-		self.factors['delta_max'] = self.calculate_max_radius(problem)
+		self.delta_max = self.calculate_max_radius(problem)
+		delta_k = 10 ** (ceil(log(self.delta_max * 2, 10) - 1) / problem.dim)
 
 		visited_pts_list = []
 
 		new_x = problem.factors["initial_solution"]
 		current_solution = self.create_new_solution(new_x, problem)
-		recommended_solns.append(current_solution)
-		intermediate_budgets.append(expended_budget)
 		model_construction_parameters = self.factors['model construction parameters']
-		# model_construction_parameters = {
-		# 	'structure': 'const', 
-		# 	'degree': self.factors['polynomial degree'],
-		# 	'nugget': 5, 
-		# 	'Lfixed': None, 
-		# 	'n_init': 1,
-		# 	'mu': 1000
-		# }
+
 
 		#Dynamically load in different sampling rule, geometry type, and random model
 		sampling_instance = self.sample_instantiation()
@@ -462,43 +424,70 @@ class TrustRegion(TrustRegionBase) :
 
 		while expended_budget < problem.factors["budget"]:
 			k += 1 
-
 			#get pilot run and calculate kappa 
-			if hasattr(sampling_instance.__class__, 'calculate_pilot_run') :
-				current_solution, expended_budget = sampling_instance.calculate_pilot_run(k, problem, expended_budget, current_solution, delta_k)
-			else : 
-				problem.simulate(candidate_solution, 2)
-				expended_budget += 2
-				 
+			# if hasattr(sampling_instance.__class__, 'calculate_kappa') :
+			if k == 1 and hasattr(sampling_instance.__class__, 'calculate_kappa'):
+				current_solution = self.create_new_solution(current_solution.x, problem)
+				# current_solution = self.create_new_solution(current_solution.x, problem)
+				if len(visited_pts_list) == 0:
+					visited_pts_list.append(current_solution)
+				
+				current_solution, expended_budget = sampling_instance.calculate_kappa(k, problem, expended_budget, current_solution, delta_k)
+			
+			elif self.factors['crn_across_solns'] and hasattr(sampling_instance.__class__, 'calculate_kappa'):
+				# since incument was only evaluated with the sample size of previous incumbent, here we compute its adaptive sample size
+				# adaptive sampling
+				# current_solution, expended_budget = sampling_instance(problem, k, current_solution, delta_k, expended_budget, False)
+				lambda_max = problem.factors['budget'] - expended_budget
+				sample_size = current_solution.n_reps
+				while True:
+					sig2 = current_solution.objectives_var[0]
+					stopping = sampling_instance.get_stopping_time(sig2, delta_k, k, problem, expended_budget)
+					if (sample_size >= min(stopping, lambda_max) or expended_budget >= problem.factors['budget']):
+						break
+					problem.simulate(current_solution, 1)
+					expended_budget += 1
+					sample_size += 1
+
+			#need to simulation the current solution before evaluating objective variance of the candidate solution later on
+			if k == 1 :
+				current_solution = self.create_new_solution(current_solution.x,problem)
+				# current_solution, expended_budget = sampling_instance(problem,k,current_solution,delta_k,expended_budget)
+				problem.simulate(current_solution, 1)
+				expended_budget += 1
+
+				
 
 			#build random model 
-			current_solution, delta_k, construction_budget, interpolation_solns, visited_pts_list = model.construct_model(current_solution, delta_k, k, expended_budget, visited_pts_list)
-			expended_budget = construction_budget # the additions to the expended budget is done in model.construct_model
+			current_solution, delta_k, expended_budget, interpolation_solns, visited_pts_list = model.construct_model(current_solution, delta_k, k, expended_budget, visited_pts_list)
+			# expended_budget = construction_budget # the additions to the expended budget is done in model.construct_model
 
 			#solve random model 
 			candidate_solution, visited_pts_list = self.solve_subproblem(delta_k, model, problem, current_solution, visited_pts_list)
 			
-			if self.factors['crn_across_solns'] :
-				problem.simulate(candidate_solution, current_solution.n_reps) 
-				expended_budget += current_solution.n_reps 
-			else :
-				candidate_solution, expended_budget = sampling_instance(problem, candidate_solution, k, delta_k, expended_budget, 0, 0)
-			
-			fval_tilde = -1 * problem.minmax[0] * candidate_solution.objectives_mean
+			candidate_solution, fval_tilde, expended_budget = self.sample_candidate_solution(sampling_instance, candidate_solution, current_solution, problem, k, delta_k, expended_budget)
 
 			#evaluate model
 			# model, problem, fval_tilde, delta_k, interpolation_solns, candidate_solution, recommended_solns
-			current_solution, delta_k, recommended_solns = self.evaluate_candidate_solution(model, problem, fval_tilde, delta_k, interpolation_solns, current_solution,\
-																			   candidate_solution, recommended_solns)	
+			current_solution, delta_k, recommended_solns, expended_budget, intermediate_budgets = self.evaluate_candidate_solution(model, problem, fval_tilde, delta_k, interpolation_solns, current_solution,\
+																			   candidate_solution, recommended_solns, expended_budget, intermediate_budgets)	
 			
-
-			intermediate_budgets.append(expended_budget)
-
 
 			# print('new solution: ', new_solution.x)
 
 		return recommended_solns, intermediate_budgets
 	
+
+	def sample_candidate_solution(self, sampling_instance, candidate_solution, current_solution, problem, k, delta_k, expended_budget) : 
+			if self.factors['crn_across_solns'] :
+				problem.simulate(candidate_solution, current_solution.n_reps) 
+				expended_budget += current_solution.n_reps 
+				fval_tilde = -1 * problem.minmax[0] * candidate_solution.objectives_mean
+				return candidate_solution, fval_tilde, expended_budget
+			else :
+				candidate_solution, expended_budget = sampling_instance(problem, k, candidate_solution, delta_k, expended_budget)
+				fval_tilde = -1 * problem.minmax[0] * candidate_solution.objectives_mean
+				return candidate_solution, fval_tilde, expended_budget
 
 	def calculate_max_radius(self, problem) : 
 		# Designate random number generator for random sampling
@@ -767,7 +756,7 @@ class OMoRF(TrustRegionBase):
 		BdsCheck = np.subtract(forward, backward)
 
 		self.expended_budget += (2*problem.dim) + 1
-		return finite_difference_gradient(self, new_solution, problem, BdsCheck=BdsCheck)
+		return finite_difference_gradient(new_solution, problem, BdsCheck=BdsCheck)
 		
 
 

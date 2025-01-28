@@ -29,17 +29,6 @@ from .Geometry import *
 
 __all__ = ['RandomModel', 'RandomModelReuse', 'GPModel']
 
-def calculate_kappa(tr_instance, sampling_instance, k, problem, expended_budget, current_solution, delta_k, sample_size, sig2) :
-	#calculate kappa - model construction happens once per iteration, so this will only happen once per iteration
-	if hasattr(sampling_instance.__class__, 'calculate_kappa') and k==1 :
-		#only calculate if the sampling instance has the class 'calculate_kappa' defined
-		current_solution, pilot_run, expended_budget = tr_instance.calculate_pilot_run(k, problem, expended_budget, current_solution,)
-
-		expended_budget = sampling_instance.calculate_kappa(problem, current_solution, k, delta_k, expended_budget, pilot_run, sample_size, sig2)
-	else : 
-		problem.simulate(current_solution, 2) 
-		expended_budget += 2
-
 class RandomModel :
 	"""
 	Class for a stochastic interpolation model. This is currently the best surrogate model to use in stochastic trust-region algorithms
@@ -90,17 +79,6 @@ class RandomModel :
 			j = j + 1
 			delta_k = delta * self.model_construction_parameters['w'] ** (j - 1)
 
-			#calculate kappa - model construction happens once per iteration, so this will only happen once per iteration
-			if hasattr(self.sampling_instance.__class__, "calculate_kappa") and k==1 :
-				#only calculate if the sampling instance has the class 'calculate_kappa' defined
-				lambda_max = self.problem.factors['budget'] - expended_budget
-				lambda_min = self.model_construction_parameters["lambda_min"]
-				pilot_run = ceil(max(lambda_min, min(.5 * self.problem.dim, lambda_max)) - 1)
-				self.problem.simulate(current_solution, pilot_run)
-				expended_budget += pilot_run
-				sample_size = pilot_run
-				expended_budget = self.sampling_instance.calculate_kappa(self.problem, current_solution, delta_k, k, expended_budget, sample_size)
-
 			# construct the interpolation set
 			empty_geometry = copy.deepcopy(self.geometry_instance)
 			
@@ -119,19 +97,12 @@ class RandomModel :
 				else:
 					interpolation_pt_solution = self.tr_instance.create_new_solution(tuple(Y[i]), self.problem)
 					# check if there is existing result
-					self.problem.simulate(interpolation_pt_solution, 1)
-					expended_budget += 1
-					init_sample_size = 1
-					sig_2 = 0
+					# self.problem.simulate(interpolation_pt_solution, 1)
 
-					interpolation_pt_solution, sampling_budget = self.sampling_instance(self.problem, interpolation_pt_solution, k, delta_k, expended_budget, init_sample_size, sig_2)
-
-					# current_solution = new_solution
-					expended_budget = sampling_budget
+					interpolation_pt_solution, expended_budget = self.sampling_instance(self.problem, k, interpolation_pt_solution, delta_k, expended_budget)
 
 					fval.append(-1 * self.problem.minmax[0] * interpolation_pt_solution.objectives_mean)
 					interpolation_solns.append(interpolation_pt_solution)			
-			
 			
 			# construct the model and get the model coefficients
 			q, grad, Hessian = self.coefficient(Z, fval)
@@ -149,13 +120,12 @@ class RandomModel :
 		delta_k = min(max(self.model_construction_parameters['beta'] * norm(grad), delta_k), delta)
 
 
-		return current_solution, delta_k, expended_budget, interpolation_solns, visited_pts_list, 1
+		return current_solution, delta_k, expended_budget, interpolation_solns, visited_pts_list
 
 	#Calculate the Model coefficients
 	def coefficient(self, Y: list[np.ndarray], fval: list[float]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 		d = self.problem.dim
 		Y = np.row_stack(Y) #reshape Y to be a matrix of (M,d)
-		self.poly_basis.assign_interpolation_set(Y)
 		M = self.poly_basis.V(Y) # now constructs M based on the polynomial basis being used
 		q = np.matmul(pinv(M), fval)
 				
@@ -163,7 +133,7 @@ class RandomModel :
 		grad = np.reshape(grad, d)
 
 		if self.poly_basis.degree > 1 :
-			Hessian = q[d + 1:len(fval)]
+			Hessian = q[d + 1:2*d+1]
 			Hessian = np.reshape(Hessian, d)
 		else : 
 			Hessian = np.zeros(d,)
@@ -182,8 +152,6 @@ class RandomModel :
 		interpolation_set = x_k.reshape((1,len(x_k)))
 		# interpolation_set = np.row_stack(interpolation_set)
 		X = self.poly_basis.V(interpolation_set)[0]
-		if len(X[0].shape) == 2 : 
-			X = [i[0,0] for i in X]
 		evaluation = np.dot(X,q)
 		return evaluation
 	
@@ -205,22 +173,16 @@ class RandomModelReuse(RandomModel) :
 		
 		j = 0
 
+		# self.sampling_instance.calculate_pilot_run(k, self.problem, expended_budget)
+
 
 		while True:
 			fval = []
 			j = j + 1
 			delta_k = delta * self.model_construction_parameters['w'] ** (j - 1)
 
-			if len(visited_pts_list) == 0 :
-				visited_pts_list.append(current_solution)
-	
-			# #calculate kappa - model construction happens once per iteration, so this will only happen once per iteration
-			# if hasattr(self.sampling_instance.__class__, 'calculate_kappa') and k==1 :
-			# 	#only calculate if the sampling instance has the class 'calculate_kappa' defined
-			# 	expended_budget = self.sampling_instance.calculate_kappa(self.problem, current_solution, k, delta_k, expended_budget, pilot_run, sample_size, sig2)
-			# else : 
-			# 	self.problem.simulate(current_solution, 2) 
-			# 	expended_budget += 2
+			# if len(visited_pts_list) == 0 :
+			# 	visited_pts_list.append(current_solution)
 
 			# Calculate the distance between the center point and other design points
 			Dist = []
@@ -235,7 +197,7 @@ class RandomModelReuse(RandomModel) :
 			f_index = Dist.index(max(Dist))
 
 			# If it is the first iteration or there is no design point we can reuse within the trust region, use the coordinate basis
-			if (k == 1) or (norm(np.array(x_k) - np.array(visited_pts_list[f_index].x))==0) or not reuse_points :
+			if (k == 1) or (norm(np.array(x_k) - np.array(visited_pts_list[f_index].x))==0) :
 				# Construct the interpolation set
 				empty_geometry = copy.deepcopy(self.geometry_instance)
 			
@@ -244,7 +206,10 @@ class RandomModelReuse(RandomModel) :
 
 			# Else if we will reuse one design point
 			elif k > 1:
-				first_basis = (np.array(visited_pts_list[f_index].x)-np.array(x_k)) / norm(np.array(visited_pts_list[f_index].x)-np.array(x_k))
+				visited_pts_array = np.array(visited_pts_list[f_index].x)
+				diff_array = visited_pts_array - np.array(x_k)
+				first_basis = (diff_array) / norm(diff_array)
+
 				# if first_basis has some non-zero components, use rotated basis for those dimensions
 				rotate_list = np.nonzero(first_basis)[0]
 				rotate_matrix = self.geometry_instance.get_rotated_basis(first_basis, rotate_list)
@@ -273,25 +238,19 @@ class RandomModelReuse(RandomModel) :
 				# reuse the replications for x_k (center point, i.e., the incumbent solution)
 				elif (i == 0):
 					#SAMPLING STRAT 1
-					init_sample_size = current_solution.n_reps
-					sig2 = current_solution.objectives_var
+					# init_sample_size = current_solution.n_reps
+					# sig2 = current_solution.objectives_var
 
-					current_solution, expended_budget = self.sampling_instance(self.problem, current_solution,\
-																  k, delta_k, expended_budget, init_sample_size, sig2, False)
+					current_solution, expended_budget = self.sampling_instance(self.problem, k, current_solution, delta_k, expended_budget, False)
 					
 					fval.append(-1 * self.problem.minmax[0] * current_solution.objectives_mean)
 					interpolation_solns.append(current_solution)
 
 				# else if reuse one design point, reuse the replications
-				elif (i == 1) and (norm(np.array(x_k) - np.array(visited_pts_list[f_index].x)) != 0) and reuse_points :
+				elif (i == 1) and (norm(np.array(x_k) - np.array(visited_pts_list[f_index].x)) != 0) :
 					reuse_solution = visited_pts_list[f_index]
 					#SAMPLING STRAT 2
-					init_sample_size = reuse_solution.n_reps
-					# sig2 = self.sampling_instance.sampling_rule.get_sig_2(visited_pts_list[f_index])
-					sig2 = reuse_solution.objectives_var
-					
-					reuse_solution, expended_budget = self.sampling_instance(self.problem, reuse_solution,\
-																  k, delta_k, expended_budget, init_sample_size, sig2, False)
+					reuse_solution, expended_budget = self.sampling_instance(self.problem, k, reuse_solution, delta_k, expended_budget, False)
 					fval.append(-1 * self.problem.minmax[0] * reuse_solution.objectives_mean)
 					interpolation_solns.append(reuse_solution)
 
@@ -302,8 +261,7 @@ class RandomModelReuse(RandomModel) :
 					visited_pts_list.append(interpolation_pt_solution)
 		
 					#sig2 is set to 0 here as it's calculated in the loop
-					interpolation_pt_solution, expended_budget = self.sampling_instance(self.problem, interpolation_pt_solution,\
-																		 k, delta_k, expended_budget, 0,0)
+					interpolation_pt_solution, expended_budget = self.sampling_instance(self.problem, k, interpolation_pt_solution, delta_k, expended_budget)
 					
 					fval.append(-1 * self.problem.minmax[0] * interpolation_pt_solution.objectives_mean)
 					interpolation_solns.append(interpolation_pt_solution)
