@@ -434,6 +434,8 @@ class TrustRegion(TrustRegionBase) :
 				
 				current_solution, expended_budget = sampling_instance.calculate_kappa(k, problem, expended_budget, current_solution, delta_k)
 			
+				recommended_solns.append(current_solution)
+				intermediate_budgets.append(expended_budget)
 			elif self.factors['crn_across_solns'] and hasattr(sampling_instance.__class__, 'calculate_kappa'):
 				# since incument was only evaluated with the sample size of previous incumbent, here we compute its adaptive sample size
 				# adaptive sampling
@@ -450,11 +452,13 @@ class TrustRegion(TrustRegionBase) :
 					sample_size += 1
 
 			#need to simulation the current solution before evaluating objective variance of the candidate solution later on
-			if k == 1 :
+			elif k == 1 and not hasattr(sampling_instance.__class__, 'calculate_kappa'):
 				current_solution = self.create_new_solution(current_solution.x,problem)
 				# current_solution, expended_budget = sampling_instance(problem,k,current_solution,delta_k,expended_budget)
 				problem.simulate(current_solution, 1)
 				expended_budget += 1
+				recommended_solns.append(current_solution)
+				intermediate_budgets.append(expended_budget)
 
 				
 
