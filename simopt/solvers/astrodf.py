@@ -350,14 +350,7 @@ class ASTRODF(Solver):
 
             # If it is the first iteration or there is no design point we can reuse within the trust region, use the coordinate basis
 
-            if (
-                (k == 1)
-                or (
-                    norm(np.array(x_k) - np.array(visited_pts_list[f_index].x))
-                    == 0
-                )
-                or not reuse_points
-            ):
+            if ((k == 1) or (norm(np.array(x_k) - np.array(visited_pts_list[f_index].x)) == 0) or not reuse_points):
                 # Construct the interpolation set
                 var_y = self.get_coordinate_basis_interpolation_points(
                     x_k, delta_k, problem
@@ -429,10 +422,7 @@ class ASTRODF(Solver):
                             problem.dim,
                             delta_power,
                         )
-                        if (
-                            sample_size >= min(stopping, lambda_max)
-                            or expended_budget >= budget
-                        ):
+                        if (sample_size >= min(stopping, lambda_max) or expended_budget >= budget):
                             break
                         problem.simulate(incumbent_solution, 1)
                         expended_budget += 1
@@ -443,17 +433,7 @@ class ASTRODF(Solver):
                     )
                     interpolation_solns.append(incumbent_solution)
                 # else if reuse one design point, reuse the replications
-                elif (
-                    (i == 1)
-                    and (
-                        norm(
-                            np.array(x_k)
-                            - np.array(visited_pts_list[f_index].x)
-                        )
-                        != 0
-                    )
-                    and reuse_points
-                ):
+                elif ((i == 1) and (norm(np.array(x_k)- np.array(visited_pts_list[f_index].x)) != 0) and reuse_points):
                     sample_size = visited_pts_list[f_index].n_reps
                     sig2 = visited_pts_list[f_index].objectives_var[0]
                     # adaptive sampling
