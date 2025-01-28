@@ -229,7 +229,7 @@ class KieferWolfowitz(Solver):
 			The averaged gradient approximation from a number of gradient approximations at the current solutions value
 		"""
 		alpha = self.factors['stepsize function c'](n)
-		return finite_difference_gradient(self, new_solution, problem, alpha=alpha, BdsCheck=BdsCheck)
+		return finite_difference_gradient(new_solution, problem, alpha=alpha, BdsCheck=BdsCheck)
 
 
 	# def finite_diff(self, new_solution, BdsCheck, problem, n):
