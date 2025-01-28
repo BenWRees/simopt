@@ -4,13 +4,20 @@
 """
 
 import numpy as np 
+from mrg32k3a.mrg32k3a import MRG32k3a
 
 from simopt.base import Solution, Problem, Solver
 from .solvers.active_subspaces.basis import Basis
 
+
 __all__ = ['finite_difference_gradient', 'matrix_multiplication']
 
-def finite_difference_gradient(solver: Solver, new_solution: Solution, problem: Problem, alpha: float = 1.0e-8, BdsCheck: None | np.ndarray = None) -> np.ndarray :
+def create_new_solution(point: tuple, problem: Problem) -> Solution : 
+    new_solution = Solution(tuple(point), problem)
+    new_solution.attach_rngs([MRG32k3a() for _ in range(problem.model.n_rngs)])
+    return new_solution
+
+def finite_difference_gradient(new_solution: Solution, problem: Problem, alpha: float = 1.0e-8, BdsCheck: None | np.ndarray = None) -> np.ndarray :
     """Calculates a gradient approximation of the solution on the problem
 
     :math:
@@ -73,13 +80,13 @@ def finite_difference_gradient(solver: Solver, new_solution: Solution, problem: 
             x2[i] = x2[i] - FnPlusMinus[i, 2]
 
         fn1, fn2 = 0,0 
-        x1_solution = solver.create_new_solution(tuple(x1), problem)
+        x1_solution = create_new_solution(tuple(x1), problem)
         if BdsCheck[i] != -1:
             problem.simulate(x1_solution)
             fn1 = -1 * problem.minmax[0] * x1_solution.objectives_mean
             # First column is f(x+h,y).
             FnPlusMinus[i, 0] = fn1
-        x2_solution = solver.create_new_solution(tuple(x2), problem)
+        x2_solution = create_new_solution(tuple(x2), problem)
         if BdsCheck[i] != 1:
             problem.simulate(x2_solution)
             fn2 = -1 * problem.minmax[0] * x2_solution.objectives_mean
