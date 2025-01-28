@@ -300,7 +300,7 @@ class SGD(Solver):
 		alpha = self.factors['alpha']
 
 		for batch in range(r) :
-			grad =  finite_difference_gradient(self,new_solution,problem, alpha=alpha, BdsCheck=BdsCheck)
+			grad =  finite_difference_gradient(new_solution,problem, alpha=alpha, BdsCheck=BdsCheck)
 
 			grads[:,batch] = grad
 
