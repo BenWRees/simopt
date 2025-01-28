@@ -1073,3 +1073,25 @@ class AstroDFBasis :
 			row =  np.append(row, val**exp)
 		return row[col_num]
  		
+
+class BasisCombination(PolynomialBasis) :
+	"""
+		Class combines any multiple of the polynomial bases together when constructing the vandermonde matrix 
+	""" 
+	def __init__(self, degree, X=None, dim=None):
+		super().__init__(degree, X, dim)
+
+	def combine_bases(self, *bases) :
+		self.bases = bases 
+
+
+
+	def poly_basis_fn(self, interpolation_set, row_num, col_num): 
+		pass 
+
+class BasisFittingGA : 
+	"""
+		A genetic algorithm that chooses the best polynomial basis to use 
+	"""
+	def __init__(self) : 
+		pass
