@@ -5547,7 +5547,8 @@ class ProblemsSolvers:
             self.file_header = ""
             self.experiment_name = ""
         # For some reason some of these variables weren't being assigned to the
-        # class attributes. TODO: Fix this.
+        # class attributes. 
+        # TODO: Fix this.
 
         output_dir = os.path.join(EXPERIMENT_DIR, "outputs")
         if not os.path.exists(output_dir):
