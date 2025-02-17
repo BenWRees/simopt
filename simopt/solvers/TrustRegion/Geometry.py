@@ -11,10 +11,10 @@ from scipy.stats import linregress
 import importlib
 from math import comb
 
-from simopt.solvers.active_subspaces.basis import *
-from simopt.solvers.active_subspaces.polyridge import * 
-from simopt.solvers.active_subspaces.subspace import *
-from simopt.solvers.active_subspaces.index_set import IndexSet
+# from simopt.solvers.active_subspaces.basis import *
+# from simopt.solvers.active_subspaces.polyridge import * 
+# from simopt.solvers.active_subspaces.subspace import *
+# from simopt.solvers.active_subspaces.index_set import IndexSet
 
 from.TrustRegion import TrustRegionBase
 
@@ -141,7 +141,6 @@ class OMoRFGeometry(TrustRegionGeometry) :
 		self.d = kwargs['d']
 		self.q = kwargs['q']
 		self.p = kwargs['p']
-		# self.__dict__.update(kwargs)
 		self.index_set = index_set
 
 		super().__init__(problem)
@@ -194,6 +193,9 @@ class OMoRFGeometry(TrustRegionGeometry) :
 		return direcs
 	
 	def get_scale(self, dirn, delta, lower, upper):
+		"""
+			Sets the max distance for each direction in the current trust region 
+		"""
 		scale = delta
 		for j in range(len(dirn)):
 			if dirn[j] < 0.0:
@@ -219,7 +221,7 @@ class OMoRFGeometry(TrustRegionGeometry) :
 			Q = np.zeros((self.n, ninactive))
 			Q[inactive, :] = Qred
 			for i in range(ninactive):
-				# scale = self._get_scale(Q[:,i], self.delta_k, lower, upper) 
+				scale = self.get_scale(Q[:,i], self.delta_k, lower, upper) 
 				direcs[:, i] = scale * Q[:,i]
 				scale = self.get_scale(-Q[:,i], delta_k, lower, upper)
 				direcs[:, self.n+i] = -scale * Q[:,i]
@@ -255,9 +257,8 @@ class OMoRFGeometry(TrustRegionGeometry) :
 		if max(norm(S_full-s_old, axis=1, ord=np.inf)) > dist:
 			S_full, f_full = self.sample_set('improve', s_old, delta_k, rho_k, f_old, U, S=S_full, f=f_full) #f_full is not needed to be evaluated
 			try:
-				# print('UPDATING GEOMETRY')
-				self.tr.fit_subspace(S_full, self.problem) 
-				as_matrix = self.tr.U.U
+				self.tr.calculate_subspace(S_full, f_full, delta_k) 
+				as_matrix = self.tr.U
 			except:
 				pass
 		
@@ -265,29 +266,17 @@ class OMoRFGeometry(TrustRegionGeometry) :
 			S_red, f_red = self.sample_set('improve', s_old, delta_k, rho_k, f_old, U, S=S_red, f=f_red, full_space=False)
 		
 		elif delta_k == rho_k:
-			# self.delta_k = self.alpha_2*self.rho_k
-			# self._set_delta(self.alpha_2*self.rho_k)
 			delta_k = self.alpha_2* rho_k
 
-
-			# print(f'unsuccessful counter: {self.unsuccessful_iteration_counter}')
-			# print(f'ratio: {self.ratio}')
-			
 			if unsuccessful_iteration_counter >= 3 and ratio < 0:
 				# print('UNSUCCESSFUL 3 OR MORE TIMES')
 				if rho_k >= 250*self.rho_min:
-					# self.rho_k = self.alpha_1*self.rho_k
-					# self._set_rho_k(self.alpha_1*self.rho_k)
 					rho_k = self.alpha_1*rho_k
 				
 				elif 16*self.rho_min < rho_k < 250*self.rho_min:
-					# self.rho_k = np.sqrt(self.rho_k*self.rho_min)
-					# self._set_rho_k(np.sqrt(self.rho_k*self.rho_min))
 					rho_k = np.sqrt(rho_k*self.rho_min)
 				
 				else:
-					# self.rho_k = self.rho_min
-					# self._set_rho_k(self.rho_min)
 					rho_k = self.rho_min
 		
 		return S_full, f_full, S_red, f_red, delta_k, rho_k, as_matrix
@@ -391,8 +380,7 @@ class OMoRFGeometry(TrustRegionGeometry) :
 					f_hat = np.delete(f_hat, index, 0)
 				else:
 					S[k, :] = s
-					if not evaluate_f_flag : #If full_space is True then we don't want to evaluate 
-						f[k, :] = self.tr.blackbox_evaluation(s, self.problem) #!This should only be evaluated if its f_red 
+					f[k, :] = self.tr.blackbox_evaluation(s, self.problem) 
 			
 			#Update U factorisation in LU algorithm
 			phi = phi_function(s)
@@ -429,10 +417,10 @@ class OMoRFGeometry(TrustRegionGeometry) :
 
 		else :
 			if S_hat.size > 0:
-				Del_S = max(norm(np.dot(S_hat-s_old, active_subspace), axis=1))
+				Del_S = max(norm(np.dot(S_hat-s_old, active_subspace.T), axis=1))
 			
 			def phi_function(s):
-				u = np.divide(np.dot((s - s_old), active_subspace), Del_S)
+				u = np.divide(np.dot((s - s_old), active_subspace.T), Del_S)
 				# print(f'shape of u: {u.shape}')
 				try:
 					m,n = u.shape
@@ -448,7 +436,7 @@ class OMoRFGeometry(TrustRegionGeometry) :
 					return phi
 			
 			def phi_function_deriv(s):
-				u = np.divide(np.dot((s - s_old), active_subspace), Del_S)
+				u = np.divide(np.dot((s - s_old), active_subspace.T), Del_S)
 				phi_deriv = np.zeros((self.d, self.q))
 				for i in range(self.d):
 					for k in range(1, self.q):
@@ -457,7 +445,7 @@ class OMoRFGeometry(TrustRegionGeometry) :
 							tmp[i] = 1
 							phi_deriv[i,k] = self.index_set[k, i] * np.prod(np.divide(np.power(u, self.index_set[k,:]-tmp), factorial(self.index_set[k,:]))) 
 				phi_deriv = np.divide(phi_deriv.T, Del_S).T
-				return np.dot(active_subspace.U, phi_deriv)
+				return np.dot(active_subspace, phi_deriv)
 		
 		return phi_function, phi_function_deriv
 	
