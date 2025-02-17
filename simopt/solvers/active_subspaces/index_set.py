@@ -295,7 +295,7 @@ def total_order_basis(orders):
 	dimensions = len(orders)
 	highest_order = np.max(orders)
 	# Check what the cardinality will be, stop if too large!
-	L = int(np.math.factorial(highest_order+dimensions)/(np.math.factorial(highest_order)*np.math.factorial(dimensions)))
+	L = int(mt.factorial(highest_order+dimensions)/(mt.factorial(highest_order)*mt.factorial(dimensions)))
 	# Check cardinality
 	if L >= CARD_LIMIT_HARD:
 		raise Exception('Cardinality %.1e is >= hard cardinality limit %.1e' %(L,CARD_LIMIT_HARD))
