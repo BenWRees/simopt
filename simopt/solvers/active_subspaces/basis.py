@@ -689,6 +689,8 @@ class PolynomialBasis(Basis) :
 
 	#Construct a matrix Row by Row
 	def V(self, X: np.ndarray) -> np.ndarray :
+		# print(f'dimension: {self.dim}')
+		# print(f'shape of X: {X.shape}')
 		X = X.reshape(-1, self.dim)
 		self.X = X
 		X = self.scale(np.array(X))
