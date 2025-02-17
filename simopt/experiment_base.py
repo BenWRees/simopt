@@ -1376,7 +1376,7 @@ class ProblemSolver:
 
         # Create an empty list for each budget
         post_replicates = []
-        # Loop over all recommended solutions.
+        #!Loop over all recommended solutions.
         for budget_index in range(len(self.all_intermediate_budgets[mrep])):
             x = self.all_recommended_xs[mrep][budget_index]
             fresh_soln = Solution(x, self.problem)
@@ -1387,6 +1387,7 @@ class ProblemSolver:
                 fresh_soln.attach_rngs(rng_list=baseline_rngs, copy=True)
             else:
                 fresh_soln.attach_rngs(rng_list=baseline_rngs, copy=False)
+            #! Simulate the problem at each solution of a given macroreplication post_replication number of times 
             self.problem.simulate(
                 solution=fresh_soln, num_macroreps=self.n_postreps
             )
@@ -1433,7 +1434,7 @@ class ProblemSolver:
             raise TypeError(error_msg)
 
         bootstrap_curves = []
-        # Uniformly resample M macroreplications (with replacement) from 0, 1, ..., M-1.
+        #! Uniformly resample M macroreplications (with replacement) from 0, 1, ..., M-1.
         # Subsubstream 0: reserved for this outer-level bootstrapping.
         bs_mrep_idxs = bootstrap_rng.choices(
             range(self.n_macroreps), k=self.n_macroreps
@@ -1441,8 +1442,8 @@ class ProblemSolver:
         # Advance RNG subsubstream to prepare for inner-level bootstrapping.
         bootstrap_rng.advance_subsubstream()
         # Subsubstream 1: reserved for bootstrapping at x0 and x*.
-        # Bootstrap sample post-replicates at common x0.
-        # Uniformly resample L postreps (with replacement) from 0, 1, ..., L-1.
+        #! Bootstrap sample post-replicates at common x0.
+        #! Uniformly resample L postreps (with replacement) from 0, 1, ..., L-1.
         bs_postrep_idxs = bootstrap_rng.choices(
             range(self.n_postreps_init_opt), k=self.n_postreps_init_opt
         )
@@ -1454,8 +1455,8 @@ class ProblemSolver:
         # This means the same postreplication indices will be used for resampling at x0 and x*.
         if self.crn_across_init_opt:
             bootstrap_rng.reset_subsubstream()
-        # Bootstrap sample postreplicates at reference optimal solution x*.
-        # Uniformly resample L postreps (with replacement) from 0, 1, ..., L.
+        #! Bootstrap sample postreplicates at reference optimal solution x*.
+        #! Uniformly resample L postreps (with replacement) from 0, 1, ..., L.
         bs_postrep_idxs = bootstrap_rng.choices(
             range(self.n_postreps_init_opt), k=self.n_postreps_init_opt
         )
@@ -1468,11 +1469,11 @@ class ProblemSolver:
         # Advance RNG subsubstream to prepare for inner-level bootstrapping.
         # Will now be at start of subsubstream 2.
         bootstrap_rng.advance_subsubstream()
-        # Bootstrap within each bootstrapped macroreplication.
+        #! Bootstrap within each bootstrapped macroreplication.
         # Option 1: Simpler (default) CRN scheme, which makes for faster code.
         if self.crn_across_budget and not self.crn_across_macroreps:
             for idx in range(self.n_macroreps):
-                mrep = bs_mrep_idxs[idx]
+                mrep = bs_mrep_idxs[idx] #*The M-th bootstrapped macroreplication 
                 # Inner-level bootstrapping over intermediate recommended solutions.
                 est_objectives = []
                 # Same postreplication indices for all intermediate budgets on
@@ -1480,6 +1481,10 @@ class ProblemSolver:
                 bs_postrep_idxs = bootstrap_rng.choices(
                     range(self.n_postreps), k=self.n_postreps
                 )
+                #! For constructing the estimated objectives of the M-th macroreplication we either use:
+                #! 1. The mean from the bootstrapping samples of the postreplications at x_0
+                #! 2. The mean from the bootstrapping samples of the postreplications at x^*
+                #! 3. The mean of the bootstrapping resamples at the corresponding budget
                 for budget in range(len(self.all_intermediate_budgets[mrep])):
                     # If solution is x0...
                     if self.all_recommended_xs[mrep][budget] == self.x0:
@@ -1643,8 +1648,9 @@ class ProblemSolver:
 
         if not os.path.exists(EXPERIMENT_DIR):
             os.makedirs(EXPERIMENT_DIR)
+        experiment_name = self.solver.name + '_ON_' + self.problem.name + "_experiment_results.txt"
         results_filepath = os.path.join(
-            EXPERIMENT_DIR, "experiment_results.txt"
+            EXPERIMENT_DIR, experiment_name
         )
 
         with open(results_filepath, "w") as file:
@@ -6051,6 +6057,7 @@ class ProblemsSolvers:
             # for p in self.problem_names:
             #     for s in self.solver_names:
             #         file.write(f"\t{s}_on_{p}.pickle\n")
+
         file.close()
 
     def report_group_statistics(
