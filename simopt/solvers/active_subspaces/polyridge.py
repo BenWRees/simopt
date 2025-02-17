@@ -442,7 +442,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
 	################################################################################	
 	# Specialized Affine fits
-	def _fit_affine(self, X, fX): #TODO: Fix BoxDomain code in this function
+	def _fit_affine(self, X, fX): 
 		r""" Solves the affine 
 		"""
 		# Normalize the domain 
