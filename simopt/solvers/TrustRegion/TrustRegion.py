@@ -1,16 +1,18 @@
 from __future__ import annotations
 from typing import Callable
 
-from numpy.linalg import norm, pinv, qr
+from numpy.linalg import norm, pinv, qr, lstsq
 import numpy as np
 from math import ceil, isnan, isinf, comb, factorial, log
 import warnings
 from scipy.optimize import minimize, NonlinearConstraint, linprog
 from scipy import optimize
+from scipy.stats import linregress
 warnings.filterwarnings("ignore")
 import importlib
 from copy import deepcopy
 import inspect
+import traceback
 
 
 from simopt.linear_algebra_base import finite_difference_gradient
@@ -26,8 +28,8 @@ from simopt.base import (
 )
 
 from simopt.solvers.active_subspaces.basis import *
-from simopt.solvers.active_subspaces.polyridge import *
-from simopt.solvers.active_subspaces.subspace import ActiveSubspace
+# from simopt.solvers.active_subspaces.polyridge import *
+# from simopt.solvers.active_subspaces.subspace import ActiveSubspace
 from simopt.solvers.active_subspaces.index_set import IndexSet
 
 from .Sampling import SamplingRule
@@ -424,6 +426,8 @@ class TrustRegion(TrustRegionBase) :
 
 		while expended_budget < problem.factors["budget"]:
 			k += 1 
+			print(f'iteration: {k} \t expended budget {expended_budget} \t current objective function value: {current_solution.x}')
+
 			#get pilot run and calculate kappa 
 			# if hasattr(sampling_instance.__class__, 'calculate_kappa') :
 			if k == 1 and hasattr(sampling_instance.__class__, 'calculate_kappa'):
@@ -571,10 +575,10 @@ class OMoRF(TrustRegionBase):
 				"datatype": tuple, 
 				"default": (2.0,10.0)
 			},
-			"initial radius": {
+			"delta": {
 				"description": "initial trust-region radius",
 				"datatype": float, 
-				"default": 0.0
+				"default": 5.0
 			}, 
 			"gamma_3": {
 				"description": "trust_region radius increase rate after a very successful iteration",
@@ -594,7 +598,7 @@ class OMoRF(TrustRegionBase):
 			"subspace dimension": {
 				"description": "dimension size of the active subspace",
 				"datatype": int, 
-				"default": 7
+				"default": 1
 			}, 
 			"random directions": {
 				"description": "Determine to take random directions in set construction",
@@ -625,7 +629,7 @@ class OMoRF(TrustRegionBase):
 	def check_factor_list(self) -> dict[str, Callable] : 
 		new_check_list = {
 			"interpolation update tol":self.check_tolerance,
-			"initial radius": self.check_initial_radius,
+			"delta": self.check_initial_radius,
 			"gamma_3": self.check_gamma_3,
 			"gamma_shrinking": self.check_gamma_shrinking,
 			"omega_shrinking": self.check_omega_shrinking,
@@ -642,7 +646,7 @@ class OMoRF(TrustRegionBase):
 		return self.factors['interpolation update tol'] >(0,0) and self.factors['interpolation update tol'] <= (1,1)
 	
 	def check_initial_radius(self) -> bool:
-		return self.factors['initial radius'] > 0
+		return self.factors['delta'] > 0
 	
 	def check_gamma_3(self) -> bool:
 		return self.factors['gamma_3'] > 0
@@ -682,11 +686,44 @@ class OMoRF(TrustRegionBase):
 		# self.check_factor_list = {**super().check_factor_list, **self.check_factor_list()}
 		super().__init__(name, fixed_factors)
 
-	def _set_iterate(self):
-		ind_min = np.argmin(self.f) #get the index of the smallest function value 
-		self.s_old = self.S[ind_min,:] #get the x-val that corresponds to the smallest function value 
-		self.f_old = self.f[ind_min] #get the smallest function value 
+	#! Do not use this. Will reset the function value if it is wrong
+	def _set_iterate(self, problem):
+		if problem.minmax[0] == -1 :
+			ind_min = np.argmin(self.f) #get the index of the smallest function value 
+			self.s_old = self.S[ind_min,:] #get the x-val that corresponds to the smallest function value 
+			self.f_old = self.f[ind_min] #get the smallest function value 
+		else : 
+			ind_min = np.argmax(self.f) #get the index of the largest function value 
+			self.s_old = self.S[ind_min,:] #get the x-val that corresponds to the largest function value 
+			self.f_old = self.f[ind_min] #get the largest function value 
 
+	
+	"""	
+	def _get_scale(dirn, delta, lower, upper):
+		scale = delta
+		for j in range(len(dirn)):
+			if dirn[j] < 0.0:
+				scale = min(scale, lower[j] / dirn[j])
+			elif dirn[j] > 0.0:
+				scale = min(scale, upper[j] / dirn[j])
+		return scale
+
+	def _apply_scaling(self, S):
+		if self.bounds is not None and self.scale_bounds:
+			shift = self.bounds[0].copy()
+			scale = self.bounds[1] - self.bounds[0]
+			return np.divide((S - shift), scale)
+		else:
+			return S
+
+	def _remove_scaling(self, S):
+		if self.bounds is not None and self.scale_bounds:
+			shift = self.bounds[0].copy()
+			scale = self.bounds[1] - self.bounds[0]
+			return shift + np.multiply(S, scale)
+		else:
+			return S
+	"""
 
 	def _set_delta(self, val) : 
 		self.delta_k = val
@@ -695,6 +732,8 @@ class OMoRF(TrustRegionBase):
 		self.unsuccessful_iteration_counter = count 
 
 	def _set_ratio(self, ratio) : 
+		if type(ratio) == list or isinstance(ratio, np.ndarray): 
+			ratio = ratio[0]
 		self.ratio = ratio 
 
 	def _set_rho_k(self, value):
@@ -708,13 +747,12 @@ class OMoRF(TrustRegionBase):
 		self.S is array-like of all the x values 
 		self.f is a 1-d array of function values 
 		"""
-		#If S has 1 or more points in it and the point being evaluated is not unique. Just grab the existing fn. value
+		# If S has 1 or more points in it and the point being evaluated is not unique. Just grab the existing fn. value
 		if self.S.size > 0 and np.unique(np.vstack((self.S, s)), axis=0).shape[0] == self.S.shape[0]:
 			s = s.reshape(1,-1)
 			ind_repeat = np.argmin(norm(self.S - s, ord=np.inf, axis=1))
 			f = self.f[ind_repeat]
 		else :
-			#TODO: Add Sampling method to the blackbox evaluation
 			new_solution = self.create_new_solution(tuple(s), problem) 
 			problem.simulate(new_solution, 1)
 			f = -1 * problem.minmax[0] * new_solution.objectives_mean
@@ -729,10 +767,129 @@ class OMoRF(TrustRegionBase):
 			else:
 				self.S = np.vstack((self.S, s))
 				self.f = np.vstack((self.f, f))
-			
+		
 
 		return f[0]
 	
+
+
+	def calculate_subspace(self, S, f, delta_k) -> np.ndarray:
+		""" Calculate the Active Subspace
+
+		Args:
+			S (np.ndarray): A matrix of shape (M,n) of sample points
+			f (np.ndarray): A column vector of shape (M,1)
+			problem (simopt.Problem): The optimisation problem to solve on
+
+		Returns:
+			np.ndarray: The active subspace matrix of shape (n,d)
+		"""				
+
+		#construct covariance matrix
+		M, n = S.shape
+		num_grad_lb = 2.0 * self.d * np.log(n)
+
+		if M < num_grad_lb:
+			warnings.warn('Number of gradient evaluation points is likely to be insufficient. Consider resampling!', UserWarning)
+		
+		covar = self._get_grads(S, f, delta_k) 
+		weights = np.ones((M, 1)) / M
+		R = covar * weights
+		C = np.dot(covar.T, R)
+
+
+		# Compute eigendecomposition!
+		e, W = np.linalg.eigh(C)
+		idx = e.argsort()[::-1]
+		eigs = e[idx]
+		eigVecs = W[:, idx]
+		if hasattr(self, 'data_scaler'):
+			Xmax, Xmin = np.max(S,axis=0), np.min(S,axis=0)
+			scale_factors = 2.0 / (Xmax - Xmin)
+			eigVecs = scale_factors[:, np.newaxis] * eigVecs
+			eigVecs = np.linalg.qr(eigVecs)[0]
+
+		subspace = eigVecs
+		eigenvalues = eigs
+
+		U0 = subspace[:,0].reshape(-1,1) #this is a column vector
+		U1 = subspace[:,1:]
+	   
+
+	   #Add the other d-1 columns to U0 by selecting the columns of U1 with the largest coefficients of determination
+		for i in range(self.d-1):
+			R = []
+			#loop through each column
+			for j in range(U1.shape[1]):
+				#stack U with the AS and the jth column of the orthogonal complement
+				U = np.hstack((U0, U1[:, j].reshape(-1,1)))
+				Y = np.dot(S, U) #map the sample points to the reduced subspace 
+				
+				# print(f'shape of Y: {Y.shape}')
+				
+				coeff = self.construct_model(Y, f, self.poly_basis_subspace, U=U)
+				sample_pts = [] 
+				for pt in Y : 
+					pt = np.array(pt).reshape(-1,1)
+					sample_pts.append(self.eval_model(pt, self.poly_basis_subspace, coeff=coeff))
+
+				# r = linregress(sample_pts, f).rvalue
+				sample_pts = np.array(sample_pts).reshape(-1,)
+				_, _, r, _, _ = linregress(sample_pts, f.flatten())
+
+				R.append(r**2) #coefficient of determination
+			index = np.argmax(R)
+			U0 = np.hstack((U0, U1[:, index].reshape(-1,1))) #add the column corresponding to the largest coefficient of determination in the orthogonal complement to AS
+			U1 = np.delete(U1, index, 1) #remove feature that was added 
+	   
+
+		self.U = U0.T
+		return self.U
+
+
+	
+	def construct_model(self, S, f, poly_basis, U=None) -> list[float] : 
+		"""Construct the interpolation model by solving the linear solution V(Y)coeff = fvals
+
+		Args:
+			S (np.ndarray): A (M,d) array of sample points
+			f (np.ndarray): A (M,1) column vector of function evaluations
+			poly_basis (Basis): The poly_basis being used 
+			U (np.ndarray): The active subspace matrix
+
+		Returns:
+			list[float]: The coefficients of the model
+		"""
+		# S = S.T
+		if U is None : 
+			U = self.U
+
+		Y = np.matmul(S, U.T) #This is throwing an exception
+
+		if not isinstance(Y, np.ndarray) :
+			Y = np.row_stack(Y) #reshape Y to be a matrix of (M,d)
+		M = poly_basis.V(Y) # now constructs M based on the polynomial basis being used
+		# print(f'shape of M: {M.shape}')
+		q = np.matmul(pinv(M), f)
+				
+		return q
+	
+
+	def eval_model(self, x_k, poly_basis, coeff=None) : 
+		if coeff is None : 
+			coeff = self.coefficients
+
+		if len(x_k) != poly_basis.dim : 
+			x_k = list(x_k.flatten())
+			diff = poly_basis.dim - len(x_k)
+			x_k += [0] * diff
+			x_k = np.array(x_k)
+		interpolation_set = x_k.reshape((1,len(x_k)))
+		# interpolation_set = np.row_stack(interpolation_set)
+		X = poly_basis.V(interpolation_set)[0]
+		evaluation = np.dot(X,coeff)
+		return evaluation
+
 
 	def finite_difference_gradient(self, new_solution:Solution, problem: Problem) -> np.ndarray : 
 		"""Calculate the finite difference gradient of the problem at new_solution.
@@ -748,9 +905,9 @@ class OMoRF(TrustRegionBase):
 		"""
 		lower_bound = problem.lower_bounds
 		upper_bound = problem.upper_bounds
-		problem.simulate(new_solution,1)
-		fn = -1 * problem.minmax[0] * new_solution.objectives_mean
-		self.expended_budget += 1
+		# problem.simulate(new_solution,1)
+		# fn = -1 * problem.minmax[0] * new_solution.objectives_mean
+		# self.expended_budget += 1
 		# new_solution = self.create_new_solution(tuple(x), problem)
 
 		new_x = new_solution.x
@@ -761,34 +918,27 @@ class OMoRF(TrustRegionBase):
 
 		self.expended_budget += (2*problem.dim) + 1
 		return finite_difference_gradient(new_solution, problem, BdsCheck=BdsCheck)
+
+	def finite_differencing(self,x_val: np.ndarray, model_coeff: list[float], delta_k: float) : 
+		lower_bound = x_val - delta_k
+		upper_bound = x_val + delta_k
+
+
+		fn = self.eval_model(x_val, self.poly_basis_subspace, coeff=model_coeff)
+
 		
-
-
-	"""def finite_difference_gradient(self, new_solution: Solution, problem: Problem) -> np.ndarray :
-		alpha = 1e-3		
-		lower_bound = problem.lower_bounds
-		upper_bound = problem.upper_bounds
-		problem.simulate(new_solution,1)
-		fn = -1 * problem.minmax[0] * new_solution.objectives_mean
-		self.expended_budget += 1
-		# new_solution = self.create_new_solution(tuple(x), problem)
-
-		new_x = new_solution.x
-		forward = np.isclose(new_x, lower_bound, atol = 10**(-7)).astype(int)
-		backward = np.isclose(new_x, upper_bound, atol = 10**(-7)).astype(int)
-		# BdsCheck: 1 stands for forward, -1 stands for backward, 0 means central diff.
-		BdsCheck = np.subtract(forward, backward)
-
-		# print(f'BdsCheck: {BdsCheck}')
-
-		FnPlusMinus = np.zeros((problem.dim, 3))
-		grad = np.zeros(problem.dim)
-		for i in range(problem.dim):
+		BdsCheck =  np.zeros(self.n)
+		
+		FnPlusMinus = np.zeros((self.n, 3))
+		grad = np.zeros(self.n)
+		for i in range(self.n):
 			# Initialization.
-			x1 = list(new_x)
-			x2 = list(new_x)
-			steph1 = alpha
-			steph2 = alpha
+			x1 = deepcopy(x_val.tolist())
+			x2 = deepcopy(x_val.tolist())
+			# Forward stepsize.
+			steph1 = 1.0e-8
+			# Backward stepsize.
+			steph2 = 1.0e-8
 
 			# Check variable bounds.
 			if x1[i] + steph1 > upper_bound[i]:
@@ -811,21 +961,15 @@ class OMoRF(TrustRegionBase):
 				FnPlusMinus[i, 2] = steph2
 				x2[i] = x2[i] - FnPlusMinus[i, 2]
 
-			fn1 = 0 
-			fn2 = 0
-			x1_solution = self.create_new_solution(tuple(x1), problem)
+			fn1, fn2 = 0,0 
+			x1 = np.array(x1)
 			if BdsCheck[i] != -1:
-				problem.simulate_up_to([x1_solution], 1)
-				fn1 = -1 * problem.minmax[0] * x1_solution.objectives_mean
-				self.expended_budget +=1
+				fn1 = self.eval_model(x1, self.poly_basis_subspace, coeff=model_coeff)
 				# First column is f(x+h,y).
 				FnPlusMinus[i, 0] = fn1
-			
-			x2_solution = self.create_new_solution(tuple(x2), problem)
+			x2 = np.array(x2)
 			if BdsCheck[i] != 1:
-				problem.simulate_up_to([x2_solution], 1)
-				fn2 = -1 * problem.minmax[0] * x2_solution.objectives_mean
-				self.expended_budget +=1
+				fn2 = self.eval_model(x2, self.poly_basis_subspace, coeff=model_coeff)
 				# Second column is f(x-h,y).
 				FnPlusMinus[i, 1] = fn2
 
@@ -838,11 +982,10 @@ class OMoRF(TrustRegionBase):
 				grad[i] = (fn - fn2) / FnPlusMinus[i, 2]
 
 
-		# print(f'grad shape: {grad.shape}')
-		return grad"""
+		return grad 
 
 
-	def _get_grads(self, X: np.ndarray, problem: Problem) -> np.ndarray : 
+	def _get_grads(self, X: np.ndarray, f: np.ndarray, delta_k: float) -> np.ndarray : 
 		"""Calculate gradients 
 
 		Args:
@@ -854,26 +997,19 @@ class OMoRF(TrustRegionBase):
 		"""
 		grads = np.zeros(X.shape)
 
-		# print(f'X: {X}')
+		# #fill out each row 
+		# for idx,x_val in enumerate(X) : 
+		# 	x_solution = self.create_new_solution(x_val, problem)
+		# 	grads[idx, :] = self.finite_difference_gradient(x_solution, problem)
 
-		#fill out each row 
-		for idx,x_val in enumerate(X) : 
-			x_solution = self.create_new_solution(x_val, problem)
-			grads[idx, :] = self.finite_difference_gradient(x_solution, problem)
+		#Construct a local model over the space of subspace interpolation points
+		coeff = self.construct_model(X, f, self.poly_basis_subspace)
 
-		# print(f'grads: {grads}')
+		for idx, x_val in enumerate(X) : 
+			grads[idx, :] = self.finite_differencing(x_val, coeff, delta_k)
+
+
 		return grads 
-
-	def fit_subspace(self, X:np.ndarray, problem: Problem) -> None:
-		"""
-		Takes the active subspace and fits
-
-		Args:
-			X (np.ndarray): (N,m) matrix of N x-values
-			problem (Problem)
-		"""
-		grads = self._get_grads(X, problem) 
-		self.U.fit(grads, self.d) 
 
 
 	def solve(self, problem):
@@ -891,6 +1027,7 @@ class OMoRF(TrustRegionBase):
 		self._set_delta(self.factors['delta'])
 		# self.rho_k = self.delta_k
 		self._set_rho_k(self.delta_k) 
+		self._set_counter(0)
 		self.rhos = []
 		self.deltas = []
 		self.n = problem.dim
@@ -935,68 +1072,62 @@ class OMoRF(TrustRegionBase):
 
 
 		#basis construction
-		 
-		# This returns 
 		index_set = IndexSet('total-order', orders=np.tile([2], self.q))
 		self.index_set = index_set.get_basis()[:,range(self.d-1, -1, -1)]
 		
-		self.poly_basis = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], dim=self.factors['subspace dimension'])
+		self.poly_basis_model = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], dim=self.factors['subspace dimension'])
+		self.poly_basis_subspace = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], dim=self.n)
 		self.geometry_instance = self.geometry_type_instantiation()(problem, self, self.index_set, **geo_factors)
-
-		#instantiate ActiveSubspace and use it to construct the active subspace matrix 
-		self.U = ActiveSubspace()
 
 		self.s_old = np.array(current_x)
 		self.f_old = self.blackbox_evaluation(self.s_old,problem)
 
 		# Construct the sample set for the subspace 
-		S_full = self.geometry_instance.generate_set(self.d, self.s_old, self.delta_k)
-		f_full = np.zeros((self.d, 1))
+		S_full = self.geometry_instance.generate_set(self.n + 1, self.s_old, self.delta_k)
+		f_full = np.zeros((self.n + 1, 1))
 		f_full[0, :] = self.f_old #first row gets the old function values 
 
-		reset_budget = self.expended_budget
 
-		#get the rest of the function evaluations - write as a function
-		# for i in range(1, self.d):
-		# 	#simulate the problem at each component of f_
-		# 	f_full[i, :] = self.blackbox_evaluation(S_full[i, :], problem)
-		# 	self.expended_budget = reset_budget #!QUICK FIX TO CHECK IF WE NEED TO FILL f_full
-		# 	#case where we use up our whole budget getting the function values 
-		# 	if not self.expended_budget < problem.factors['budget'] :
-		# 		return self.recommended_solns, self.intermediate_budget
+		# get the rest of the function evaluations - write as a function
+		for i in range(1, self.n+1):
+			#simulate the problem at each component of f_
+			new_solution = self.create_new_solution(S_full[i, :], problem)
+			problem.simulate(new_solution, 1)
+			self.expended_budget += 1
+			f_full[i, :] = -1 * problem.minmax[0] * new_solution.objectives_mean
+			# self.expended_budget = reset_budget 
+			#case where we use up our whole budget getting the function values 
+			if self.expended_budget > problem.factors['budget'] :
+				return self.recommended_solns, self.intermediate_budget
 
 
 		
+		#This is needed to ensure that model construction in the subspace works
+		self.U = np.eye(self.n, self.n)
 
 		#initial subspace calculation - requires gradients of f_full 
-		self.fit_subspace(S_full, problem)
-		# self.s_old = self.U._U.T @ self.s_old 
-		# print(f's_old shape (after mapping):{self.s_old.shape}')
+		self.calculate_subspace(S_full, f_full, self.delta_k)
 
 		#This constructs the sample set for the model construction
-		S_red, f_red = self.geometry_instance.sample_set('new', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U.U, full_space=False)
-
-		# print(f'AS Matrix: {self.U.U}')
-		self.local_model = PolynomialRidgeApproximation(self.deg, self.d, problem, self.poly_basis)
-		# self.local_model.fit(S_red, f_red, U0=self.U.U)
+		S_red, f_red = self.geometry_instance.sample_set('new', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U, full_space=False)
 		
 		while self.expended_budget < problem.factors['budget'] :
-			# print(f'K: {self.k}')
+			print(f'\niteration: {self.k} \t expended budget {self.expended_budget} \t current objective function value: {self.f_old}')
 			#if rho has been decreased too much we end the algorithm  
 			if self.rho_k <= self.rho_min:
 				break
 			
 			#BUILD MODEL
 			try: 
-				self.local_model.fit(S_red, f_red, U0=self.U.U) #this should be the model instance construct model
-			except: #thrown if the sample set is not defined properly 
-				S_red, f_red = self.geometry_instance.sample_set('improve', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U.U, S_red, f_red, full_space=False)
+				self.coefficients = self.construct_model(S_red, f_red, self.poly_basis_model) #this should be the model instance construct model
+			except : #thrown if the sample set is not defined properly 
+				print(traceback.format_exc())
+				S_red, f_red = self.geometry_instance.sample_set('improve', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U, S_red, f_red, full_space=False)
 				self.intermediate_budgets.append(self.expended_budget)
 				continue 
 
 			#SOLVE THE SUBPROBLEM
 			candidate_solution, S_full, S_red, f_full, f_red, reset_flag = self.solve_subproblem(problem, S_full, S_red, f_full, f_red)
-
 			candidate_fval = self.blackbox_evaluation(np.array(candidate_solution.x),problem)
 
 			if reset_flag :
@@ -1007,16 +1138,12 @@ class OMoRF(TrustRegionBase):
 			
 			#EVALUATE THE CANDIDATE SOLUTION
 			S_red, S_full, f_red, f_full = self.evaluate_candidate_solution(problem, candidate_fval, candidate_solution, S_red, S_full, f_red, f_full)
-		
-
-			self.recommended_solns.append(self.current_solution) 
-			self.intermediate_budgets.append(self.expended_budget)
 
 			# print(f'EXPENDED BUDGET: {self.expended_budget}')
 
 			self.k+=1
 
-
+		print(f'recommended solutions: \n {[a.x for a in  self.recommended_solns]}')
 		return self.recommended_solns, self.intermediate_budgets
 
 
@@ -1029,27 +1156,17 @@ class OMoRF(TrustRegionBase):
 		omega_s = self.factors['omega_shrinking']
 		reset_flag = False
 
-		# bounds_l = np.maximum(np.array(self.bounds[0]).reshape(self.s_old.shape), self.s_old-self.delta_k)
-		# bounds_u = np.minimum(np.array(self.bounds[1]).reshape(self.s_old.shape), self.s_old+self.delta_k)
+		cons =  NonlinearConstraint(lambda x : norm(x), 0, self.delta_k)
 		
-		# #The bounds here are the trust region bounds in each dimension - can change to taking the norm of x
-		# bounds = []
-		# for i in range(self.n):
-		# 	bounds.append((bounds_l[i], bounds_u[i]))
-
-
-		cons =  NonlinearConstraint(lambda x : norm(self.s_old - x), 0, self.delta_k)
 		
-			
-		# res = minimize(lambda x: np.asscalar(self.local_model.eval(x)), self.s_old, \
-		# 		method='TNC', jac=lambda x: np.dot(self.U, my_poly.get_polyfit_grad(np.dot(x,self.U))).flatten(), \
-		# 		bounds=bounds, options={'disp': False})
-		obj = lambda x: self.local_model.eval(x)[0]
-		res = minimize(obj, self.s_old, method='trust-constr', constraints=cons, options={'disp': False})
-		s_new = res.x
+		obj = lambda x: self.eval_model(np.dot(x,self.U.T), self.poly_basis_model).item()
+		res = minimize(obj, np.zeros(problem.dim), method='trust-constr', constraints=cons, options={'disp': False})
+		step_dist = res.x
+		print(f'stepsize: {step_dist}')
+		s_new = self.s_old + step_dist
 		# m_new = res.fun 
 
-		# print(f'CANDIDATE SOLUTION: {s_new}')
+		print(f'CANDIDATE SOLUTION: {s_new}')
 
 		for i in range(problem.dim):
 			if s_new[i] <= problem.lower_bounds[i]:
@@ -1057,7 +1174,6 @@ class OMoRF(TrustRegionBase):
 			elif s_new[i] >= problem.upper_bounds[i]:
 				s_new[i] = problem.upper_bounds[i] - 0.01
 
-		# print(f'CANDIDATE SOLUTION (AFTER CONSTRAINTS):{s_new}')
 
 		candidate_solution = self.create_new_solution(tuple(s_new), problem)
 
@@ -1065,17 +1181,17 @@ class OMoRF(TrustRegionBase):
 
 		# Safety step implemented in BOBYQA
 		if step_dist < omega_s*self.rho_k:
-			# self.ratio= -0.1
-			self._set_ratio(-0.1)
+			self.ratio= -0.1
 			self._set_counter(3)
 			# self.delta_k = max(0.5*self.delta_k, self.rho_k)
 			self._set_delta(max(0.5*self.delta_k, self.rho_k))
-			S_full, f_full, S_red, f_red, delta_k, rho_k, U = self.geometry_instance.update_geometry_omorf(self.s_old, self.f_old, self.delta_k, self.rho_k, self.U.U, S_full, f_full, S_red, f_red, self.unsuccessful_iteration_counter, self.ratio)
-			self.U.set_U(U)
+			# self.d += 1 #increase the dimension
+			S_full, f_full, S_red, f_red, delta_k, rho_k, U = self.geometry_instance.update_geometry_omorf(self.s_old, self.f_old, self.delta_k, self.rho_k, self.U, S_full, f_full, S_red, f_red, self.unsuccessful_iteration_counter, self.ratio)
+			self.U = U
 			self._set_delta(delta_k)
 			self._set_rho_k(rho_k)
 		
-		#this is a breaking condition
+		# #this is a breaking condition
 		if self.rho_k <= self.rho_min:
 			reset_flag=True
 
@@ -1090,43 +1206,61 @@ class OMoRF(TrustRegionBase):
 		eta_2 = self.factors['eta_2']
 		s_new = np.array(candidate_solution.x)
 		
-		del_f = self.f_old - fval_tilde #self.f_old - f_new 
+		model_eval_old = self.eval_model(np.dot(self.s_old, self.U.T), self.poly_basis_model).item()
+		model_eval_new = self.eval_model(np.dot(s_new, self.U.T), self.poly_basis_model).item()
+
+		print(f'DIFFERENCE IN CANDIDATE EVALUATION AT MODEL AND FUNCTION: {abs(fval_tilde - model_eval_new)}')
+
+		#! ONLY ISSUE IS THAT IT ACCEPTS GROWING VALUES - DUE TO BIG DIFFERENCE BETWEEN model_eval_new AND fval_tilde
+		del_f =  self.f_old - fval_tilde #self.f_old - f_new 
 		# del_m = np.asscalar(my_poly.get_polyfit(np.dot(self.s_old,self.U))) - m_new
-		del_m = self.local_model.eval(self.s_old)[0] - self.local_model.eval(s_new)[0]
+		del_m = model_eval_old - model_eval_new
+
+		print(f'The model evaluation for the old value is {model_eval_old} and for the candidate value it is {model_eval_new}')
+		print(f'The old function value is {self.f_old} and the new function value is {fval_tilde}')
+
+		print(f'numerator of ratio is {del_f} and the denominator is {del_m}')
 
 		step_dist = norm(np.array(candidate_solution.x) - self.s_old, ord=np.inf)
 
 		#in the case that the denominator is very small 
-		if abs(del_m) < 100*np.finfo(float).eps:
-			# self.ratio = 1.0
+		if abs(del_m) < 100*np.finfo(float).eps :
+		# if del_m <= 0:
 			self._set_ratio(1.0)
-		else:
-			# self.ratio = del_f/del_m
-			self._set_ratio(del_f/del_m)
 
-		self._set_iterate
+		#! Need to handle the case where the model evaluation is increasing when it should be decreasing - should reject this!
+		# elif norm(model_eval_new - fval_tilde) > abs(self.f_old - fval_tilde) :
+		elif fval_tilde > self.f_old :
+		# elif ((self.f_old < fval_tilde ) and problem.minmax[0] == 1) or ((self.f_old > fval_tilde ) and problem.minmax[0] == -1) : 
+			self._set_ratio(0.0)
+		else:
+			self._set_ratio((del_f/del_m))
+
+		# self._set_iterate(problem)
 
 		"""ind_min = np.argmin(self.f) #get the index of the smallest function value 
 		self.s_old = self.S[ind_min,:] #get the x-val that corresponds to the smallest function value 
 		self.f_old = np.asscalar(self.f[ind_min]) #get the smallest function value""" 
 
 		#add candidate value and corresponding fn val to interpolation sets
-		S_red, f_red = self.geometry_instance.sample_set('replace', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U.U, S_red, f_red, s_new, fval_tilde, full_space=False)
-		S_full, f_full = self.geometry_instance.sample_set('replace', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U.U, S_full, f_full, s_new, fval_tilde)
+		S_red, f_red = self.geometry_instance.sample_set('replace', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U, S_red, f_red, s_new, fval_tilde, full_space=False)
+		S_full, f_full = self.geometry_instance.sample_set('replace', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U, S_full, f_full, s_new, fval_tilde)
 
-		# print(f'RATIO COMPARISON VALUE: {self.ratio}')
+		print(f'RATIO COMPARISON VALUE: {self.ratio}')
 
 		if self.ratio >= eta_2:
-			# print('VERY SUCCESSFUL ITERATION')
+			print('VERY SUCCESSFUL ITERATION')
 			self._set_counter(0)
 			# self.delta_k = max(gamma_2*self.delta_k, gamma_3*step_dist)
 			self._set_delta(max(gamma_2*self.delta_k, gamma_3*step_dist))
 			self.current_solution = candidate_solution
+			self.recommended_solns.append(self.current_solution) 
+			self.intermediate_budgets.append(self.expended_budget)
 			self.f_old = fval_tilde
 			self.s_old = s_new
 		
 		elif self.ratio >= eta_1:
-			# print('SUCCESSFUL ITERATION')
+			print('SUCCESSFUL ITERATION')
 			self._set_counter(0)
 			# self.delta_k = max(gamma_1*self.delta_k, step_dist, self.rho_k)
 			self._set_delta(max(gamma_1*self.delta_k, step_dist, self.rho_k))
@@ -1135,12 +1269,12 @@ class OMoRF(TrustRegionBase):
 			self.s_old = s_new
 
 		else:
-			# print('UNSUCCESSFUL ITERATION')
-			self._set_counter(1)
+			print('UNSUCCESSFUL ITERATION')
+			self._set_counter(self.unsuccessful_iteration_counter + 1)
 			# self.delta_k = max(min(gamma_1*self.delta_k, step_dist), self.rho_k)
 			self._set_delta(max(min(gamma_1*self.delta_k, step_dist), self.rho_k))
-			S_full, f_full, S_red, f_red, delta_k, rho_k, U = self.geometry_instance.update_geometry_omorf(self.s_old, self.f_old, self.delta_k, self.rho_k, self.U.U, S_full, f_full, S_red, f_red, self.unsuccessful_iteration_counter, self.ratio)
-			self.U.set_U(U)
+			S_full, f_full, S_red, f_red, delta_k, rho_k, U = self.geometry_instance.update_geometry_omorf(self.s_old, self.f_old, self.delta_k, self.rho_k, self.U, S_full, f_full, S_red, f_red, self.unsuccessful_iteration_counter, self.ratio)
+			self.U = U 
 			self._set_delta(delta_k)
 			self._set_rho_k(rho_k)
 
