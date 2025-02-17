@@ -34,6 +34,7 @@ from simopt.models.san import SAN, SANLongestPath
 from simopt.models.sscont import SSCont, SSContMinCost
 from simopt.models.tableallocation import TableAllocation, TableAllocationMaxRev
 from simopt.models.simple_function import SimpleFunctionModel, SimpleFunctionProblem
+from simopt.models.Gross_model import GrossModel, GrossProblem
 
 # Import Solvers
 from simopt.solvers.adam import ADAM
@@ -105,6 +106,7 @@ problem_directory: dict[str, type[Problem]] = {
     "NETWORK-1": NetworkMinTotalCost,
     "AMUSEMENTPARK-1": AmusementParkMinDepart,
     "SIMPLEFUNC-1": SimpleFunctionProblem,
+    "GROSS-1": GrossProblem
 }
 
 problem_unabbreviated_directory: dict[str, type[Problem]] = {
@@ -130,6 +132,7 @@ problem_unabbreviated_directory: dict[str, type[Problem]] = {
     "Min Total Cost for Communication Networks System (SDCN)": NetworkMinTotalCost,
     "Min Total Departed Visitors for Amusement Park (SDDN)": AmusementParkMinDepart,
     "Minimise a Deterministic Function with Additive Noise": SimpleFunctionProblem,
+    "Minimise a Smooth Continuous Function as seen in Gross": GrossProblem
 }
 model_directory: dict[str, type[Model]] = {
     "EXAMPLE": ExampleModel,
@@ -151,6 +154,7 @@ model_directory: dict[str, type[Model]] = {
     "NETWORK": Network,
     "AMUSEMENTPARK": AmusementPark,
     "SIMEPLFUNC": SimpleFunctionModel,
+    "GROSS": GrossModel,
 }
 model_problem_unabbreviated_directory: dict[str, str] = {
     "Min Deterministic Function + Noise (SUCG)": "EXAMPLE",
@@ -175,6 +179,7 @@ model_problem_unabbreviated_directory: dict[str, str] = {
     "Min Total Cost for Communication Networks System (SDCN)": "NETWORK",
     "Min Total Departed Visitors for Amusement Park (SDDN)": "AMUSEMENTPARK",
     "Minimise a Deterministic Function with Additive Noise": "SIMPLEFUNC",
+    "Minimise a Smooth Continuous Function as seen in Gross": "GROSS"
 }
 model_problem_class_directory: dict[str, type[Model]] = {
     "Min Deterministic Function + Noise (SUCG)": ExampleModel,
@@ -198,7 +203,8 @@ model_problem_class_directory: dict[str, type[Model]] = {
     "Min Mean Longest Path for Fixed Stochastic Activity Network (SBCG)": FixedSAN,
     "Min Total Cost for Communication Networks System (SDCN)": Network,
     "Min Total Departed Visitors for Amusement Park (SDDN)": AmusementPark,
-    "Minimise a Deterministic Function with Additive Noise": SimpleFunctionModel
+    "Minimise a Deterministic Function with Additive Noise": SimpleFunctionModel,
+    "Minimise a Smooth Continuous Function as seen in Gross": GrossModel
 }
 model_unabbreviated_directory: dict[str, type[Model]] = {
     "Deterministic Function + Noise": ExampleModel,
@@ -220,4 +226,5 @@ model_unabbreviated_directory: dict[str, type[Model]] = {
     "Communication Networks System": Network,
     "Amusement Park (SDDN)": AmusementPark,
     "Deterministic Function with Additive Noise": SimpleFunctionModel,
+    "Minimise a Smooth Continuous Function as seen in Gross": GrossModel,
 }
