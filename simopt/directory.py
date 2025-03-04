@@ -49,6 +49,7 @@ from simopt.solvers.SGD import SGD
 from simopt.solvers.kiefer_wolfowitz import KieferWolfowitz
 from simopt.solvers.robbins_monro import RobbinsMonro
 from simopt.solvers.mirror_descent import Mirror_Descent
+from simopt.solvers.ASTROMoRF import ASTROMoRF
 
 # directory dictionaries
 solver_directory: dict[str, type[Solver]] = {
@@ -65,6 +66,7 @@ solver_directory: dict[str, type[Solver]] = {
     "ROBBINSMONRO": RobbinsMonro, 
     "MIRRORDESCENT": Mirror_Descent,
     "OMoRF": OMoRF,
+    "ASTROMoRF": ASTROMoRF
 }
 
 solver_unabbreviated_directory: dict[str, type[Solver]] = {
@@ -81,6 +83,7 @@ solver_unabbreviated_directory: dict[str, type[Solver]] = {
     "Robbins-Monro Root-Finding": RobbinsMonro,
     "Stochastic Mirror Descent": Mirror_Descent,
     "Optimisation by Moving Ridge Functions": OMoRF,
+    "Adaptive Sampling by Moving Ridge Functions": ASTROMoRF
 }
 
 problem_directory: dict[str, type[Problem]] = {
