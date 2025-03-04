@@ -30,7 +30,14 @@ def load_problem_solvers(bases: list[str], problem_names: list[str]) -> list[lis
     problem_instances = [problem_directory[a]() for a in problem_names]
 
 
-    problem_solver_pairs = [] 
+    #Add ASTRODF 
+    astro_df_problems = []
+    for problem in problem_instances : 
+        ps = ProblemSolver(solver_name='ASTRODF', problem=problem)
+        astro_df_problems.append(ps)
+
+    problem_solver_pairs = [astro_df_problems]
+
     for basis in bases : 
         common_solvers = [] 
         for problem in problem_instances : 
@@ -79,6 +86,7 @@ def plot_results(problemsolvers: ProblemsSolvers, bases: list[str], problem_name
 
 def main():
     bases = [
+    'LagrangePolynomialBasis',
 	'MonomialTensorBasis', 
 	'LegendreTensorBasis',
 	'ChebyshevTensorBasis',
@@ -86,8 +94,8 @@ def main():
 	'HermiteTensorBasis',
 	'NaturalPolynomialBasis',
     'MonomialPolynomialBasis',
-	'LagrangePolynomialBasis',
-	'NFPPolynomialBasis'
+	'NFPPolynomialBasis',
+    'AstroDFBasis'
     ]
 
     problem_names = [
@@ -95,7 +103,7 @@ def main():
         'SIMPLEFUNC-1',
         # 'SAN-1', #!!These two take very long. Will multithread this and then run it on iridis
         # 'FIXEDSAN-1',
-        'NETWORK-1',
+        # 'NETWORK-1',
         'DYNAMNEWS-1'
     ]
 
