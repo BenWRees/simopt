@@ -10,7 +10,7 @@ from simopt.base import Solution, Problem, Solver
 from .solvers.active_subspaces.basis import Basis
 
 
-__all__ = ['finite_difference_gradient', 'matrix_multiplication']
+__all__ = ['finite_difference_gradient', 'matrix_multiplication', 'create_new_solution']
 
 def create_new_solution(point: tuple, problem: Problem) -> Solution : 
     new_solution = Solution(tuple(point), problem)
