@@ -13,6 +13,7 @@ import importlib
 from copy import deepcopy
 import inspect
 import traceback
+import matplotlib.pyplot as plt 
 
 
 from simopt.linear_algebra_base import finite_difference_gradient
@@ -31,6 +32,7 @@ from simopt.solvers.active_subspaces.basis import *
 # from simopt.solvers.active_subspaces.polyridge import *
 # from simopt.solvers.active_subspaces.subspace import ActiveSubspace
 from simopt.solvers.active_subspaces.index_set import IndexSet
+
 
 from .Sampling import SamplingRule
 from .TrustRegion import * 
@@ -578,7 +580,7 @@ class OMoRF(TrustRegionBase):
 			"delta": {
 				"description": "initial trust-region radius",
 				"datatype": float, 
-				"default": 5.0
+				"default": 0.5
 			}, 
 			"gamma_3": {
 				"description": "trust_region radius increase rate after a very successful iteration",
@@ -619,8 +621,10 @@ class OMoRF(TrustRegionBase):
 				"description": "initial rho when shrinking", 
 				"datatype": float, 
 				"default": 1.0e-8
-			}
+			},
 		}
+		super().factors['eta_1'] = 0.1
+		super().factors['eta_2'] = 0.7
 		super().factors['geometry instance'] = 'OMoRFGeometry'
 		super().factors['polynomial basis'] = 'NaturalPolynomialBasis'
 		return {**super().specifications, **new_specifications}
@@ -637,7 +641,7 @@ class OMoRF(TrustRegionBase):
 			"random directions": self.check_random_directions,
 			"alpha_1": self.check_alpha_1,
 			"alpha_2": self.check_alpha_2,
-			"rho_min": self.check_rho_min
+			"rho_min": self.check_rho_min,
 			}
 		return {**super().check_factor_list, **new_check_list}
 
@@ -1029,7 +1033,8 @@ class OMoRF(TrustRegionBase):
 		self._set_rho_k(self.delta_k) 
 		self._set_counter(0)
 		self.rhos = []
-		self.deltas = []
+		self.budgets = [0]
+		self.deltas = [self.delta_k]
 		self.n = problem.dim
 		self.deg = self.factors['polynomial degree'] 
 		self.q = comb(self.d + self.deg, self.deg) +  self.n * self.d #int(0.5*(self.d+1)*(self.d+2))
@@ -1143,10 +1148,17 @@ class OMoRF(TrustRegionBase):
 
 			self.k+=1
 
-		print(f'recommended solutions: \n {[a.x for a in  self.recommended_solns]}')
+		self.plot_deltas_against_budget()
 		return self.recommended_solns, self.intermediate_budgets
 
+	def plot_deltas_against_budget(self) :
+		plt.plot(self.budgets, self.deltas)
+		plt.title('trust region radius against expended budget')
+		plt.show()
 
+		plt.scatter(self.budgets[1:], self.rhos,marker='x')
+		plt.title('ratios against expended budget')
+		plt.show()
 
 	def solve_subproblem(self, problem: Problem, S_full:np.ndarray, S_red: np.ndarray, f_full: float, f_red: float) :
 		"""
@@ -1224,17 +1236,19 @@ class OMoRF(TrustRegionBase):
 		step_dist = norm(np.array(candidate_solution.x) - self.s_old, ord=np.inf)
 
 		#in the case that the denominator is very small 
-		if abs(del_m) < 100*np.finfo(float).eps :
-		# if del_m <= 0:
-			self._set_ratio(1.0)
+		# if abs(del_m) < 100*np.finfo(float).eps :
+		# # if del_m <= 0:
+		# 	self._set_ratio(1.0)
 
 		#! Need to handle the case where the model evaluation is increasing when it should be decreasing - should reject this!
 		# elif norm(model_eval_new - fval_tilde) > abs(self.f_old - fval_tilde) :
-		elif fval_tilde > self.f_old :
+		if del_f < 0 :
 		# elif ((self.f_old < fval_tilde ) and problem.minmax[0] == 1) or ((self.f_old > fval_tilde ) and problem.minmax[0] == -1) : 
 			self._set_ratio(0.0)
 		else:
 			self._set_ratio((del_f/del_m))
+
+		self.rhos.append(self.ratio)
 
 		# self._set_iterate(problem)
 
@@ -1252,20 +1266,24 @@ class OMoRF(TrustRegionBase):
 			print('VERY SUCCESSFUL ITERATION')
 			self._set_counter(0)
 			# self.delta_k = max(gamma_2*self.delta_k, gamma_3*step_dist)
-			self._set_delta(max(gamma_2*self.delta_k, gamma_3*step_dist))
+			self._set_delta(max(gamma_1*self.delta_k, gamma_3*step_dist))
 			self.current_solution = candidate_solution
 			self.recommended_solns.append(self.current_solution) 
 			self.intermediate_budgets.append(self.expended_budget)
 			self.f_old = fval_tilde
 			self.s_old = s_new
+			
+			
 		
 		elif self.ratio >= eta_1:
 			print('SUCCESSFUL ITERATION')
 			self._set_counter(0)
 			# self.delta_k = max(gamma_1*self.delta_k, step_dist, self.rho_k)
-			self._set_delta(max(gamma_1*self.delta_k, step_dist, self.rho_k))
+			self._set_delta(max(gamma_2*self.delta_k, step_dist, self.rho_k))
 			self.current_solution = candidate_solution
 			self.f_old = fval_tilde
+			self.recommended_solns.append(self.current_solution) 
+			self.intermediate_budgets.append(self.expended_budget)
 			self.s_old = s_new
 
 		else:
@@ -1278,5 +1296,7 @@ class OMoRF(TrustRegionBase):
 			self._set_delta(delta_k)
 			self._set_rho_k(rho_k)
 
+		self.deltas.append(self.delta_k)
+		self.budgets.append(self.expended_budget)
 		return S_red, S_full, f_red, f_full
 	
