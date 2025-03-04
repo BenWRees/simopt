@@ -130,6 +130,10 @@ class PolynomialTensorBasis(Basis):
 	def __len__(self):
 		return len(self.indices)
 	
+	def __name__(self) : 
+		raise NotImplementedError
+
+	
 	def assign_interpolation_set(self,X) : 
 		self.X = X
 
@@ -195,7 +199,6 @@ class PolynomialTensorBasis(Basis):
 			X = self.X
 		elif X is None:
 			raise NotImplementedError
-
 		X = X.reshape(-1, self.dim)
 		X = self.scale(np.array(X))
 		M = X.shape[0]
@@ -388,6 +391,9 @@ class MonomialTensorBasis(PolynomialTensorBasis):
 		self.polyroots = np.polynomial.polynomial.polyroots
 		PolynomialTensorBasis.__init__(self, *args, **kwargs)	
 
+	def __name__(self) : 
+		return "MonomialTensorBasis"
+
 
 	
 class LegendreTensorBasis(PolynomialTensorBasis):
@@ -400,6 +406,9 @@ class LegendreTensorBasis(PolynomialTensorBasis):
 		self.polyroots = legroots
 		PolynomialTensorBasis.__init__(self, *args, **kwargs)	
 
+	def __name__(self) : 
+		return "LegendreTensorBasis"
+
 class ChebyshevTensorBasis(PolynomialTensorBasis):
 	"""A tensor product basis of bounded total degree built from the Chebyshev polynomials
 	
@@ -409,6 +418,10 @@ class ChebyshevTensorBasis(PolynomialTensorBasis):
 		self.polyder = chebder
 		self.polyroots = chebroots
 		PolynomialTensorBasis.__init__(self, *args, **kwargs)	
+
+	def __name__(self) : 
+		return "LegendreTensorBasis"
+	
 	
 	
 
@@ -422,6 +435,9 @@ class LaguerreTensorBasis(PolynomialTensorBasis):
 		self.polyroots = lagroots
 		PolynomialTensorBasis.__init__(self, *args, **kwargs)	
 
+	def __name__(self) : 
+		return "LaguerreTensorBasis"
+
 class HermiteTensorBasis(PolynomialTensorBasis):
 	"""A tensor product basis of bounded total degree built from the Hermite polynomials
 
@@ -430,7 +446,10 @@ class HermiteTensorBasis(PolynomialTensorBasis):
 		self.vander = hermvander
 		self.polyder = hermder
 		self.polyroots = hermroots
-		PolynomialTensorBasis.__init__(self, *args, **kwargs)	
+		PolynomialTensorBasis.__init__(self, *args, **kwargs)
+
+	def __name__(self) : 
+		return "HermiteTensorBasis"	
 
 	def _set_scale(self, X):
 		self._mean = np.mean(X, axis = 0)
@@ -466,6 +485,9 @@ class ArnoldiPolynomialBasis(Basis):
 		self.indices = index_set(self.degree, self.dim).astype(int)
 
 		# self.Q, self.R = self.arnoldi()
+
+	def __name__(self) : 
+		return "ArnoldiPolynomialBasis"
 
 	
 	def __len__(self):
@@ -606,6 +628,9 @@ class PolynomialBasis(Basis) :
 		self.indices = index_set(self.degree, self.dim).astype(int)
 		self._build_Dmat()
 		
+	def __name__(self) : 
+		raise NotImplementedError
+
 	def __len__(self):
 		return len(self.indices)
 	
@@ -779,6 +804,9 @@ class NaturalPolynomialBasis(PolynomialBasis) :
 	def __init__(self, degree, X=None, dim=None) : 
 		super().__init__(degree, X, dim)
 
+	def __name__(self) : 
+		return "NaturalPolynomialBasis"
+
 	#TODO: the factorial(degree) in this function can lead to a stackoverflow due to the recursive limit being reached
 	def poly_basis_fn(self, interpolation_set, row_num, col_num):
 		# val = interpolation_set[row_num]
@@ -922,6 +950,9 @@ class MonomialPolynomialBasis(PolynomialBasis) :
 	def __init__(self, degree, X=None, dim=None):
 		super().__init__(degree, X, dim)
 
+	def __name__(self) : 
+		return "MonomialPolynomialBasis"
+
 	def poly_basis_fn(self, interpolation_set, row_num, col_num):
 		interpolation_set = np.array(interpolation_set)
 		val = interpolation_set[row_num]
@@ -964,6 +995,9 @@ class MonomialPolynomialBasis(PolynomialBasis) :
 class LagrangePolynomialBasis(PolynomialBasis) : 
 	def __init__(self, degree, X=None, dim=None) : 
 		super().__init__(degree, X, dim)
+
+	def __name__(self) : 
+		return "LagrangePolynomialBasis"
 
 	#lagrange polynomial function for each element in the matrix 
 	def poly_basis_fn(self, interpolation_set, row_num, col_num) :
@@ -1018,6 +1052,9 @@ class NFPPolynomialBasis(PolynomialBasis) :
 	def __init__(self, degree, X=None, dim=None) : 
 		super().__init__(degree, X, dim) 
 
+	def __name__(self) :
+		return "NFPPolynomialBasis"
+
 	#TODO: Fix the polynomial basis function
 	def poly_basis_fn(self, interpolation_set, row_num, col_num) :
 		if col_num == 0 : 
@@ -1054,6 +1091,9 @@ class AstroDFBasis :
 			self.dim = int(dim)
 			self.X = None
 
+	def __name__(self) : 
+		return "AstroDFBasis"
+
 	def assign_interpolation_set(self, X) : 
 		self.X = X 
 
@@ -1076,6 +1116,7 @@ class AstroDFBasis :
 		return row[col_num]
  		
 
+#! UNFINISHED CLASSES 
 class BasisCombination(PolynomialBasis) :
 	"""
 		Class combines any multiple of the polynomial bases together when constructing the vandermonde matrix 
