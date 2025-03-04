@@ -247,7 +247,7 @@ class OMoRFGeometry(TrustRegionGeometry) :
 			scale = self.get_scale(dirn, delta_k, lower, upper)
 			direcs[:, 2*self.n+i] = dirn * scale
 		return np.vstack((np.zeros(self.n), direcs[:, :num_pnts].T))
-
+ 
 
 	def update_geometry_omorf(self, s_old, f_old, delta_k, rho_k, U, S_full, f_full, S_red, f_red, unsuccessful_iteration_counter, ratio):
 		dist = max(self.epsilon_1*delta_k, self.epsilon_2*rho_k)
