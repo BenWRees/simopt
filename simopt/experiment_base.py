@@ -1628,6 +1628,66 @@ class ProblemSolver:
         with open(file_path, "xb") as file:
             pickle.dump(self, file, pickle.HIGHEST_PROTOCOL)
 
+    def log_experiments_csv(self, experiment_name: None | str = None, save_to_excel: None | bool = True) -> list[pd.DataFrame] : 
+        """Creates a xlsx file for a problem_object pair that stores the intermediate budgets and the recommended solutions for each macroreplications
+
+            Each pandas dataframe contains four columns | BUDGET | RECOMMENDED SOLUTION | ESTIMATED OBJECTIVE FUNCTION VALUE | OPTIMALITY GAP
+            With each dataframe representing one macroreplication. 
+
+            Each dataframe is then saved as a separate sheet in a xlsx file
+
+        Args:
+            experiment_name (None | str, optional): The file path for where to store the excel files. Defaults to None.
+            save_to_excel (None | bool, optional): Flag for writing the dataframes to an external excel sheet. Defaults to True
+
+        Returns:
+            list[pd.DataFrame]: A list of DataFrames for each Macroreplication of a ProblemSolver
+        """        
+        #create file path        
+        if not os.path.exists(EXPERIMENT_DIR):
+            os.makedirs(EXPERIMENT_DIR)
+        if experiment_name is None :
+            experiment_name = self.solver.name + '_ON_' + self.problem.name + "_experiment_results.xlsx"
+        results_filepath = os.path.join(
+            EXPERIMENT_DIR, experiment_name
+        )
+
+        #build dataframes for each macroreplication
+        column_names = ['Budget', 'Recommended Solution']
+        if self.has_postreplicated : 
+            column_names.append('Estimated Objective')
+        if self.xstar is not None : 
+            column_names.append('OPTIMALITY GAP')
+        dataframes_list = []
+        for mrep in range(self.n_macroreps) : 
+            macrorep_dataframe = pd.DataFrame(columns=column_names)
+            for idx,budget in enumerate(range(len(self.all_intermediate_budgets[mrep]))) : 
+                #build row 
+                row_data = []
+                row_data.append(round(self.all_intermediate_budgets[mrep][budget], 4))
+                row_data.append(tuple([round(float(x), 4) for x in self.all_recommended_xs[mrep][budget]]))
+                if self.has_postreplicated : 
+                    row_data.append(round(self.all_est_objectives[mrep][budget], 4))
+                if self.xstar is not None : 
+                    rec_sol = tuple([round(x, 4) for x in self.all_recommended_xs[mrep][budget]]) 
+                    row_data.append(tuple([round(abs(float(rec_sol[a])-float(self.xstar[a])),4) for a in range(len(self.xstar))]))
+                #add row to dataframe 
+                macrorep_dataframe.loc[idx] = row_data 
+            dataframes_list.append(macrorep_dataframe)
+
+
+        #save list of dataframes to xslx file 
+        if save_to_excel :
+            with pd.ExcelWriter(results_filepath, engine='openpyxl') as writer:
+                for idx,df in enumerate(dataframes_list) :
+                    macro_no = str(idx+1) 
+                    sheet_name = 'Macroreplication ' + macro_no 
+                    df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+                writer.book.active = 0
+
+        return dataframes_list
+
     def log_experiment_results(self, print_solutions: bool = True) -> None:
         """Create readable .txt file from a problem-solver pair's .pickle file.
 
@@ -5987,6 +6047,25 @@ class ProblemsSolvers:
             os.makedirs(output_dir)
         with open(self.file_name_path, "wb") as file:
             pickle.dump(self, file, pickle.HIGHEST_PROTOCOL)
+
+    def log_experiments_csv(self, save_to_excel: None | bool = True) -> list[list[pd.DataFrame]] :
+        """A copy of the ProblemSolver method to record data to excel sheets for multiple problem solver pairs 
+
+        Args:
+            save_to_excel (None | bool, optional): Flag for writing the dataframes to an external excel sheet. Defaults to True
+
+        Returns:
+            list[pd.DataFrame]: A list of DataFrames for each Macroreplication of a ProblemSolver
+
+        Returns:
+            list[list[pd.DataFrame]]: A list of individual ProblemSolver pairs with each list in the list being dataframes of macroreplications.
+        """
+        list_df = []
+        for ps in [a for x in self.experiments for a in x] : 
+            experiment_name = ps.solver.name + '_ON_' + ps.problem.name + "_experiment_results.xlsx" 
+            list_df.append(ps.log_experiments_csv(experiment_name, save_to_excel))
+        
+        return list_df
 
     def log_group_experiment_results(self) -> None:
         """Create readable .txt file describing the solvers and problems that make up the ProblemSolvers object."""
