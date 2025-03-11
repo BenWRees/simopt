@@ -7,8 +7,11 @@ The use of Active Subspace reduction allows for a reduced number of interpolatio
 
 """
 
-#TODO: - Fix how rho_k is handlded 
-#TODO: - Check over function signatures 
+#TODO: FIX how subspace dimension 1 problems are handled 
+#TODO: Fix how rho_k is handlded - look at updating trust region radius updates
+#TODO: FIX GEOMETRY IMPROVEMENT 
+#?: SEE IF WE CAN REDUCE THE NUMBER OF TIMES WE HAVE TO SAMPLE - may reduce the interpolation set size? 
+#?: SEE IF WE CAN REUSE MORE THAN ONE DESIGN POINT - Not possible as then we won't have a span of the region
 from __future__ import annotations
 from typing import Callable
 
@@ -188,7 +191,7 @@ class ASTROMoRF(Solver):
 			"subspace dimension": {
 				"description": "dimension size of the active subspace",
 				"datatype": int, 
-				"default": 7
+				"default": 3
 			}, 
 			"random directions": {
 				"description": "Determine to take random directions in set construction",
@@ -209,6 +212,11 @@ class ASTROMoRF(Solver):
 				"description": "initial rho when shrinking", 
 				"datatype": float, 
 				"default": 1.0e-8
+			}, 
+			"max iterations": {
+				"description": "maximum number of iterations for the gauss newton",
+				"datatype": int, 
+				"default": 100
 			}
 		}
 	
@@ -234,7 +242,8 @@ class ASTROMoRF(Solver):
 			"random directions": self.check_random_directions,
 			"alpha_1": self.check_alpha_1,
 			"alpha_2": self.check_alpha_2,
-			"rho_min": self.check_rho_min
+			"rho_min": self.check_rho_min, 
+			"max iterations": self.check_iterations
 			}
 		
 
@@ -310,6 +319,12 @@ class ASTROMoRF(Solver):
 			raise ValueError(
 				"ps_sufficient reduction must be greater than or equal to 0."
 			)
+		
+	def check_iterations(self) -> None :
+		if type(self.factors['max iterations']) is not int : 
+			raise ValueError(
+				"the maximum number of iterations has to be an integer"
+			)
 
 	def __init__(self, name="ASTROMoRF", fixed_factors: dict | None = None) -> None:
 		"""
@@ -348,16 +363,14 @@ class ASTROMoRF(Solver):
 
 		self.delta_max = self.calculate_max_radius(problem)
 
-		# self.delta_k = self.factors['delta']
 		self.delta_k = 10 ** (ceil(log(self.delta_max * 2, 10) - 1) / problem.dim)
-		# self.rho_k = self.delta_k
 		self.rho_k = self.delta_k
 		self.rhos = []
 		self.deltas = []
 		self.n = problem.dim
 		self.d = self.factors['subspace dimension']
 		self.deg = self.factors['polynomial degree'] 
-		self.q = comb(self.d + self.deg, self.deg) +  self.n * self.d #int(0.5*(self.d+1)*(self.d+2))
+		self.q = int(0.5*(self.d+1)*(self.d+2)) # comb(self.d + self.deg, self.deg) +  self.n * self.d
 		self.p = self.n+1
 		self.epsilon_1, self.epsilon_2 = self.factors['interpolation update tol'] #epsilon is the tolerance in the interpolation set update 
 		self.random_initial = self.factors['random directions']
@@ -376,16 +389,18 @@ class ASTROMoRF(Solver):
 		self.intermediate_budgets.append(self.expended_budget)
 		self.visited_points = [self.current_solution]
 
-		self.basis = self.polynomial_basis_instantiation()(self.deg, None, problem.dim)
+		self.basis = self.polynomial_basis_instantiation()(self.deg, problem, X=None, dim=problem.dim)
+		self.reduced_basis = self.polynomial_basis_instantiation()(self.deg, problem, X=None, dim=self.d)
 		index_set = IndexSet('total-order', orders=np.tile([2], self.q))
 		self.index_set = index_set.get_basis()[:,range(self.d-1, -1, -1)]
-
-		self.reduced_basis = self.polynomial_basis_instantiation()(self.deg, None, self.d)
-
 
 	def solve(self, problem):
 		#initialise factors: 
 		self.initialise_factors(problem)
+
+		# X = self.construct_interpolation_set()
+
+		print(f'the problem {problem.name} has a dimension of {problem.dim}')
 
 		k = 0
 
@@ -418,21 +433,30 @@ class ASTROMoRF(Solver):
 					problem.simulate(self.current_solution, 1)
 					self.expended_budget += 1
 					sample_size += 1
+				
+				print('\nCALCULATED KAPPA\n')
 
 				
 
 			#build random model 
 			self.current_solution, self.delta_k, self.fval, self.expended_budget, interpolation_solns, self.U, self.visited_points, self.gamma_k, self.beta_k, self.mu_k = self.construct_model(problem, self.current_solution, self.delta_k, k, self.expended_budget, self.visited_points, self.gamma_k, self.beta_k, self.mu_k)
 
+			print('CONSTRUCTED MODEL\n')
 			#solve random model 
 			candidate_solution, self.delta_k, self.visited_points = self.solve_subproblem(problem, self.current_solution, self.delta_k, self.visited_points, self.U)
 			
+			print('FOUND CANDIDATE SOLUTION \n')
+
 			#sample candidate solution
 			candidate_solution, fval_tilde = self.blackbox_evaluation(problem, solution=candidate_solution)
 
+			print('ADAPTIVELY SIMULATED CANDIDATE SOLUTION \n')
+
 			#evaluate model
 			self.current_solution, self.delta_k, self.recommended_solns, self.expended_budget, self.intermediate_budgets = self.evaluate_candidate_solution(problem, self.U, self.fval, fval_tilde, self.delta_k, interpolation_solns, self.current_solution, candidate_solution, self.recommended_solns, self.expended_budget, self.intermediate_budgets)	
-			
+
+			print('EVALUATED CANDIDATE SOLUTION \n')
+
 
 			# print('new solution: ', new_solution.x)
 
@@ -473,7 +497,6 @@ class ASTROMoRF(Solver):
 		
 		obj = lambda x: self.model_evaluate(x, U).item(0)
 		stepsize = minimize(obj, np.zeros(self.n), method='trust-constr', constraints=cons, options={'disp': False}).x
-		print(f'stepsize: {stepsize}')
 		s_new = np.array(current_solution.x) + stepsize
 
 		print(f'CANDIDATE SOLUTION: {s_new}')
@@ -501,7 +524,6 @@ class ASTROMoRF(Solver):
 	def evaluate_candidate_solution(self, problem, U, fval, fval_tilde, delta_k, interpolation_solns, current_solution, candidate_solution, recommended_solns, expended_budget, intermediate_budgets) :
 
 		#pattern search
-		print(f'fval: {fval}')
 		#TODO: fval should be a list of the solution of all the interpolation solutions 
 		if ((min(fval) < fval_tilde) and ((fval[0] - min(fval))>= self.factors["ps_sufficient_reduction"] * delta_k**2)) or ((candidate_solution.objectives_var[0]/ (candidate_solution.n_reps * candidate_solution.objectives_mean[0]**2)) > 0.75):
 			fval_tilde = min(fval)
@@ -676,10 +698,11 @@ class ASTROMoRF(Solver):
 
 	def construct_model(self, problem: Problem, current_solution: Solution, delta_k: float, k: int, expended_budget: int, visited_points_list: list[Solution], gamma_k: float, beta_k: float, mu_k: float) : 
 		#construct initial active subspace 
-		U0 = self.initialise_subspace(current_solution, delta_k)
+		# U0 = self.initialise_subspace_rand(current_solution, delta_k)
+		init_S_full = self.generate_set(problem, self.d, np.array(current_solution.x), delta_k) #(d, n)
+		U, _ = np.linalg.qr(init_S_full.T)
 
-		#construct initial interpolation set 
-		X = self.construct_interpolation_set(current_solution, problem, U0, delta_k, k, visited_points_list)
+		X = self.construct_interpolation_set(current_solution, problem, U, delta_k, k, visited_points_list)
 		# print(f'interpolation set shape: {X.shape}')
 
 		#evaluate the X values
@@ -689,23 +712,29 @@ class ASTROMoRF(Solver):
 		visited_points_list.extend([a[0] for a in sols_and_fX])
 		interpolation_solutions = [a[0] for a in sols_and_fX]
 
+		print('\n CONSTRUCTED INTERPOLATION SET\n')
+
 		#get the function value of the current solution - this is the first value in the array of X values 
 		fval = fX.flatten().tolist()
 		# print(f'fval: {fval}')
 
 		#run the variable projection algorithm 
-		active_subspace, coefficients, visited_points_list, fval, fX, expended_budget, delta_k, gamma_k, beta_k, mu_k  = self.var_proj_model(problem, current_solution, X, fX, fval, U0, visited_points_list, self.d, self.deg, delta_k, gamma_k, beta_k, mu_k) 
+		active_subspace, coefficients, visited_points_list, fX, expended_budget, delta_k, gamma_k, beta_k, mu_k  = self.var_proj_model(problem, current_solution, X, fX, U, visited_points_list, self.d, self.deg, delta_k, gamma_k, beta_k, mu_k) 
 		#model_vals is a dictionary containing the step length reduction, Armijo Tolerance, and criticality threshold
+
+		print('COMPLETED VARIABLE PROJECTION\n')
 
 		self.coefficients = coefficients
 
 		return current_solution, delta_k, fval, expended_budget, interpolation_solutions, active_subspace, self.visited_points, gamma_k, beta_k, mu_k
 	
-	def model_evaluate(self, X, U) : 
+	def model_evaluate(self, X, U, coeff=None) : 
+		if coeff is None : 
+			coeff = self.coefficients
 		X = np.array(X)	
 		Y = (U.T @ X.T).T
 		V = self.reduced_basis.V(Y)
-		Vc = V @ self.coefficients
+		Vc = V @ coeff
 		return Vc 
 
 	def grad(self, X, coeff, U):
@@ -715,18 +744,22 @@ class ASTROMoRF(Solver):
 		else:
 			one_d = False	
 		
-		DV = self.reduced_basis.DV(X)
+		#currently DV is of the number of iteraitons
+		DV = self.reduced_basis.DV(X) #should be shape (problem.dim, len(coeff), self.d)
+
 		# Compute gradient on projected space
-		Df = np.tensordot(DV, coeff, axes = (1,0))
+		Df = np.tensordot(DV, coeff, axes = (1,0)) #should be shape (problem.dim, self.d, 1)
+
 		# Inflate back to whole space
-		Df = np.tensordot(Df, U.T, axes=(1,0))
+		Df = np.tensordot(Df, U.T, axes=(1,0)) #result should be shape (problem.dim, 1, problem.dim) - should also be tensor product between Df and U and should be between self.d
+		
 		if one_d:
 			return Df.reshape(X.shape[1])
 		else:
-			return np.squeeze(Df, axis=1)
+			return np.squeeze(Df, axis=1) #needs to be shape (problem.dim, problem.dim)
 
 
-	def initialise_subspace(self, current_solution: Solution, delta_k: float) -> np.ndarray : 
+	def initialise_subspace_rand(self, current_solution: Solution, delta_k: float) -> np.ndarray : 
 		"""build the initial subspace by sampling points within the trust region
 
 		Args:
@@ -736,6 +769,7 @@ class ASTROMoRF(Solver):
 		Returns:
 			np.ndarray: _description_
 		"""
+		#TODO: Change from normal distribution to using generating set 
 		#inner function to allow for mapping 
 		def Z_mapped(Z, current_solution, delta_k) : 
 			x_k = np.array(current_solution.x)
@@ -754,18 +788,128 @@ class ASTROMoRF(Solver):
 
 		#need to translate and scale the points into the trust region 
 		Z = Z_mapped(Z, current_solution, delta_k)
+		#! Z = self.generate_set(problem, self.d, np.array(self.current_solution.x), self.delta_k).T 
 		#undergo QR decomposition to get initial U 
 		U, _ =  np.linalg.qr(Z)
 
 		return U 
+	
+	#* This is a more accurate subspace to start with 
+	def initialise_subspace_covar(self, U0: np.ndarray, coeff: np.ndarray, S_full: np.ndarray) -> np.ndarray :
+		#construct covariance matrix
+		covar = self.construct_covar(S_full, self.delta_k, U0, coeff) # (n, n)
+		#perform eigenvalue decomposition   
+		eigvals, eigvecs = np.linalg.eigh(covar) 
+		#sort the eigenvalues in descending order
+		sorted_indices = np.argsort(eigvals)[::-1]
 
-	def var_proj_model(self, problem: Problem, current_solution: Solution, X: np.ndarray, fX: np.ndarray, fval: list[float], U: np.ndarray, visited_pts: list[Solution], d: int, deg: int, delta_k: float, gamma_k: float, beta_k: float, mu_k: float, conv_tol: float = 1e-05) -> tuple[
+		#return the eigenvectors as the new active subspace
+		return eigvecs[:, sorted_indices[:self.d]]  # (n, d)
+
+
+	def finite_differencing(self,x_val: np.ndarray, model_coeff: list[float], U: np.ndarray, delta_k: float) : 
+		lower_bound = x_val - delta_k
+		upper_bound = x_val + delta_k
+
+
+		fn = self.model_evaluate(x_val, U, coeff=model_coeff)
+
+		
+		BdsCheck =  np.zeros(self.n)
+		
+		FnPlusMinus = np.zeros((self.n, 3))
+		grad = np.zeros(self.n)
+		for i in range(self.n):
+			# Initialization.
+			x1 = deepcopy(x_val.tolist())
+			x2 = deepcopy(x_val.tolist())
+			# Forward stepsize.
+			steph1 = 1.0e-8
+			# Backward stepsize.
+			steph2 = 1.0e-8
+
+			# Check variable bounds.
+			if x1[i] + steph1 > upper_bound[i]:
+				steph1 = np.abs(upper_bound[i] - x1[i])
+			if x2[i] - steph2 < lower_bound[i]:
+				steph2 = np.abs(x2[i] - lower_bound[i])
+
+			# Decide stepsize.
+			# Central diff.
+			if BdsCheck[i] == 0:
+				FnPlusMinus[i, 2] = min(steph1, steph2)
+				x1[i] = x1[i] + FnPlusMinus[i, 2]
+				x2[i] = x2[i] - FnPlusMinus[i, 2]
+			# Forward diff.
+			elif BdsCheck[i] == 1:
+				FnPlusMinus[i, 2] = steph1
+				x1[i] = x1[i] + FnPlusMinus[i, 2]
+			# Backward diff.
+			else:
+				FnPlusMinus[i, 2] = steph2
+				x2[i] = x2[i] - FnPlusMinus[i, 2]
+
+			fn1, fn2 = 0,0 
+			x1 = np.array(x1)
+			if BdsCheck[i] != -1:
+				fn1 = self.model_evaluate(x1, U, coeff=model_coeff)
+				# First column is f(x+h,y).
+				FnPlusMinus[i, 0] = fn1
+			x2 = np.array(x2)
+			if BdsCheck[i] != 1:
+				fn2 = self.model_evaluate(x2, U, coeff=model_coeff)
+				# Second column is f(x-h,y).
+				FnPlusMinus[i, 1] = fn2
+
+			# Calculate gradient.
+			if BdsCheck[i] == 0:
+				grad[i] = (fn1 - fn2) / (2 * FnPlusMinus[i, 2])
+			elif BdsCheck[i] == 1:
+				grad[i] = (fn1 - fn) / FnPlusMinus[i, 2]
+			elif BdsCheck[i] == -1:
+				grad[i] = (fn - fn2) / FnPlusMinus[i, 2]
+
+
+		return grad 
+
+	def construct_covar(self, X: np.ndarray, delta_k: float, U0: np.ndarray, coeff: list[float]) -> np.ndarray : 
+		"""Calculate covariance matrix  
+
+		Args:
+			X (np.ndarray): (N,m) matrix of N x-vals to be evaluated
+			problem (Problem): 
+
+		Returns:
+			np.ndarray: (N,m) matrix of N gradients evaluated at each row of X
+		"""
+		rbf_kernel = lambda xi, xj : np.exp(-np.linalg.norm(xi - xj)**2 / (2 * 1.0**2))
+
+		M,n = X.shape
+		covar = np.zeros((M,M))
+
+		finite_diffs = []
+		for x_val in X : 
+			finite_diffs.append(self.finite_differencing(x_val, coeff, U0, delta_k))
+
+		for i in range(M):
+			for j in range(M):
+				base_cov = rbf_kernel(X[i], X[j])
+				diff_cov = np.dot(finite_diffs[i], finite_diffs[j]) if finite_diffs[i].shape == finite_diffs[j].shape else 0
+				covar[i, j] = base_cov * (1 + diff_cov)
+
+
+		return covar 
+
+	def var_proj_model(self, problem: Problem, current_solution: Solution, X: np.ndarray, fX: np.ndarray, U: np.ndarray, visited_pts: list[Solution], d: int, deg: int, delta_k: float, gamma_k: float, beta_k: float, mu_k: float, conv_tol: float = 1e-05) -> tuple[
 		np.ndarray,
 		list[float],
+		list[Solution],
 		np.ndarray,
 		int,
 		float,
-		list[Solution]
+		float, 
+		float, 
+		float,
 		] : 
 		"""_summary_
 
@@ -785,7 +929,7 @@ class ASTROMoRF(Solver):
 		n = 1
 		# previous_U = np.full((self.n,self.d),np.inf)
 		#loop until U has converged in the GN step 
-		while True :
+		while True and n <= self.factors['max iterations'] :
 			# print(f'iteration number of the variable projection model: {n}')
 			#! Calculate the coefficients of the model
 			coeff = self.coefficient(X,fX,U)
@@ -813,6 +957,7 @@ class ASTROMoRF(Solver):
 			U0_flat = U.flatten() 
 			# print('undergoing gauss newton step')
 			U_flat, gamma_k, beta_k = self.gauss_newton(residual, jacobian, U0_flat, gamma_k, beta_k) 
+			# print(f'\n GAUSS NEWTON STEP COMPLETED AT ITERATION {n}')
 			# print('finished gauss newton step')
 			U_plus = U_flat.reshape(-1, self.d)
 
@@ -828,7 +973,7 @@ class ASTROMoRF(Solver):
 			
 		coeff, U = self.finish(X, fX, U) #realigns the active subspace and also recalculates the model coefficients 
 		print(f'Finished variable projection model with {n} iterations')
-		return U, coeff, visited_pts, fval, fX, self.expended_budget, delta_k, gamma_k, beta_k, mu_k
+		return U, coeff, visited_pts, fX, self.expended_budget, delta_k, gamma_k, beta_k, mu_k
 		
 
 
@@ -840,7 +985,6 @@ class ASTROMoRF(Solver):
 		return coeff
 
 
-	#TODO: Clean up this function
 	# Remove profile from grads  
 	def finish(self, X, fX, U):
 		r""" Given final U, rotate and find coefficients
@@ -855,10 +999,12 @@ class ASTROMoRF(Solver):
 
 
 		if U.shape[1] > 1 : 
-			Ur = scipy.linalg.svd(grads.T, full_matrices = False)[0]
-			U = Ur @ U
+			Ur = scipy.linalg.svd(grads.T, full_matrices = False)[0] #grads.T should be (problem.dim, problem.dim)
+			U = Ur @ U #should be (problem.dim,d) => Ur should have shape (problem.dim, problem.dim)
 		else : 
-			U = U.dot(np.diag(np.sign(np.mean(grads, axis = 0))))
+			print(f'mean of grads: {np.mean(grads, axis=0).shape}') #this needs to be (problem.dim, problem.dim)
+			U = (U.T @ np.sign(grads)).T 
+			print(f'shape of U after rotating: {U.shape}')
 	
 		# Step 3: final fit	
 		coeff = self.coefficient(X, fX, U)
@@ -879,7 +1025,7 @@ class ASTROMoRF(Solver):
 		Y = (U.T @ X.T).T
 		# self.basis = self.Basis(self.degree, Y)
 		V = self.reduced_basis.V(Y)
-		if self.basis.__name__ == 'ArnoldiPolynomialBasis':
+		if self.reduced_basis.__name__ == 'ArnoldiPolynomialBasis':
 			# In this case, V is orthonormal
 			c = V.T @ fX
 		else:
@@ -899,7 +1045,7 @@ class ASTROMoRF(Solver):
 		DV = self.reduced_basis.DV(Y)
 
 		# if isinstance(self.basis, ArnoldiPolynomialBasis):
-		if self.basis.__name__ == 'ArnoldiPolynomialBasis' : 
+		if self.reduced_basis.__name__ == 'ArnoldiPolynomialBasis' : 
 			# In this case, V is orthonormal
 			c = V.T @ fX
 			Y = np.copy(V)
@@ -982,7 +1128,7 @@ class ASTROMoRF(Solver):
 		
 		t = 1
 		n = 1
-		while True and n <= 100 :
+		while True and n <= self.factors['max iterations'] :
 			try:
 				# print(f'starting linesearch with iteration {n}')
 				x = self.grassmann_trajectory(x0, p, t) #* line 26 
@@ -1151,9 +1297,10 @@ class ASTROMoRF(Solver):
 
 		Y = [x_k]
 		epsilon = 0.01
+		#build the basis that spans the trust region in the projected space 
 		for i in range(0, self.d):
-			plus = U.T @ Y[0] + delta * self.standard_basis(problem, i, self.d)
-			minus = U.T @ Y[0] - delta * self.standard_basis(problem, i, self.d)
+			plus = (U.T @ Y[0]) + delta * self.standard_basis(problem, i, self.d)
+			minus = (U.T @ Y[0]) - delta * self.standard_basis(problem, i, self.d)
 
 			if sum(x_k) != 0: #check if x_k is not the origin
 				# block constraints
@@ -1164,7 +1311,13 @@ class ASTROMoRF(Solver):
 
 			Y.append(U @ plus)
 			Y.append(U @ minus)
-		return Y
+
+		#fill the remaining points with vectors in the span of current Y
+		if (2*self.d + 1) < problem.dim : 
+			remaining_pts = problem.dim - (2*self.d + 1) 
+			for idx in range(remaining_pts) : 
+				Y.append(Y[idx] + Y[-idx])	
+		return Y #!should contain problem.dim interp olation points 
 
 
 	# generate the basis (rotated coordinate) (the first vector comes from the visited design points (origin basis)
@@ -1172,7 +1325,6 @@ class ASTROMoRF(Solver):
 		rotate_matrix = np.array(first_basis)
 		rotation = np.matrix([[0, -1], [1, 0]])
 
-		# print(f'rotate index: {rotate_index}')
 		#! We have 7 points in the visited points list, leading to a rotate index of length 7, we want a rotate 
 
 		# rotate the coordinate basis based on the first basis vector (first_basis)
@@ -1197,8 +1349,8 @@ class ASTROMoRF(Solver):
 			if i == 0:
 				plus = np.array(reused_x)
 			else:
-				plus = Y[0] + U @ (delta * rotate_matrix[i])
-			minus = Y[0] - U @ (delta * rotate_matrix[i])
+				plus = Y[0] + (U @ np.array(delta * rotate_matrix[i]).reshape(-1,1)).reshape(-1,).tolist()
+			minus = Y[0] - (U @ np.array(delta * rotate_matrix[i]).reshape(-1,1)).reshape(-1,).tolist()
 
 			if sum(x_k) != 0:
 				# block constraints
@@ -1214,7 +1366,21 @@ class ASTROMoRF(Solver):
 
 			Y.append(plus)
 			Y.append(minus)
-		return Y
+		if len(Y) < problem.dim : 
+			remaining_pts = problem.dim % (2*self.d + 1)
+			#? I need to make sure that 
+			for idx in range(remaining_pts) : 
+				new_pt = Y[idx] + Y[-idx]
+
+				#check constraints 
+				for j in range(problem.dim):
+					if new_pt[j] <= problem.lower_bounds[j]:
+						minus[j] = problem.lower_bounds[j] + epsilon
+					elif new_pt[j] >= problem.upper_bounds[j]:
+						new_pt[j] = problem.upper_bounds[j] - epsilon
+					
+
+		return Y #!should contain problem.dim interpolation points 
 
 
 	#! This is the only sample set construction method that gets called 
