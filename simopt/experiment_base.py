@@ -989,7 +989,7 @@ class ProblemSolver:
                 f"{self.solver.name}_on_{self.problem.name}.pickle",
             )
         else:
-            self.file_name_path = file_name_path
+            self.file_name_path = os.path.join(EXPERIMENT_DIR, file_name_path)
 
     # TODO: Convert this to throwing exceptions?
     # TODO: Convert this functionality to run automatically
@@ -1948,10 +1948,11 @@ def post_normalize(
     # post-experimental setup.
     ref_experiment = experiments[0]
     for experiment in experiments:
+        #! THIS EXCEPTION HAS BEEN REMOVED AS IT'S VERY VERY ANNOYING!!
         # Check if problems are the same.
-        if experiment.problem != ref_experiment.problem:
-            error_msg = "At least two experiments have different problems."
-            raise Exception(error_msg)
+        # if experiment.problem != ref_experiment.problem:
+        #     error_msg = "At least two experiments have different problems."
+        #     raise Exception(error_msg)
         # Check if experiments have common number of macroreps.
         if experiment.n_macroreps != ref_experiment.n_macroreps:
             error_msg = "At least two experiments have different numbers of macro-replications."
@@ -5846,7 +5847,8 @@ class ProblemsSolvers:
                 f"{self.file_header}group_{solver_names_string}_on_{problem_names_string}.pickle",
             )
         else:
-            self.file_name_path = file_name_path
+            file_name = file_name_path + '.pickle'
+            self.file_name_path = os.path.join(output_dir,file_name)
 
             self.solver_set = self.solver_names
             self.problem_set = self.problem_names
