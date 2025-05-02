@@ -114,7 +114,7 @@ class PolynomialTensorBasis(Basis):
  
 	"""
 
-	def __init__(self, degree, X = None, dim = None):
+	def __init__(self, degree, problem, X = None, dim = None):
 		self.degree = int(degree)
 		if X is not None:
 			self.X = np.atleast_2d(X)
@@ -291,7 +291,9 @@ class PolynomialTensorBasis(Basis):
 			Derivative of Vandermonde matrix where :code:`Vp[i,j,:]`
 			is the gradient of :code:`V[i,j]`. 
 		"""
-		X = X.reshape(-1, self.dim)
+		if len(X.shape) == 1:
+			X = X.reshape(1,-1)
+		# X = X.reshape(-1, self.dim)
 		X = self.scale(np.array(X))
 		M = X.shape[0]
 		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
@@ -342,7 +344,9 @@ class PolynomialTensorBasis(Basis):
 			Second derivative of Vandermonde matrix where :code:`Vpp[i,j,:,:]`
 			is the Hessian of :code:`V[i,j]`. 
 		"""
-		X = X.reshape(-1, self.dim)
+		if len(X.shape) == 1:
+			X = X.reshape(1,-1)
+		# X = X.reshape(-1, self.dim)
 		X = self.scale(np.array(X))
 		M = X.shape[0]
 		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
@@ -478,7 +482,7 @@ class HermiteTensorBasis(PolynomialTensorBasis):
 class ArnoldiPolynomialBasis(Basis):
 	r""" Construct a stable polynomial basis for arbitrary points using Vandermonde+Arnoldi
 	"""
-	def __init__(self, degree, X=None, dim=None):
+	def __init__(self, degree, problem, X=None, dim=None):
 		self.X = np.copy(np.atleast_2d(X))
 		self.dim = dim
 		self.degree = int(degree)
@@ -615,7 +619,7 @@ class PolynomialBasis(Basis) :
 	#vander - vandermonde matrix of the polynomial basis series
 	#polyroots - the roots of the of the polynomial basis series 
 
-	def __init__(self, degree, X=None, dim=None) : 
+	def __init__(self, degree, problem, X=None, dim=None) : 
 		self.degree = int(degree)
 		if X is not None:
 			self.X = np.atleast_2d(X)
@@ -801,8 +805,11 @@ class PolynomialBasis(Basis) :
 
 
 class NaturalPolynomialBasis(PolynomialBasis) : 
-	def __init__(self, degree, X=None, dim=None) : 
-		super().__init__(degree, X, dim)
+	# def __init__(self, degree, problem, X=None, dim=None) : 
+	# 	super().__init__(degree, problem, X, dim)
+
+	def __init__(self, *args, **kwargs) : 
+		PolynomialBasis.__init__(self, *args, **kwargs)
 
 	def __name__(self) : 
 		return "NaturalPolynomialBasis"
@@ -947,8 +954,12 @@ class NaturalPolynomialBasis(PolynomialBasis) :
 
 
 class MonomialPolynomialBasis(PolynomialBasis) : 
-	def __init__(self, degree, X=None, dim=None):
-		super().__init__(degree, X, dim)
+	# def __init__(self, degree, problem, X=None, dim=None):
+	# 	super().__init__(degree, problem, X, dim)
+
+	def __init__(self, *args, **kwargs) : 
+		PolynomialBasis.__init__(self, *args, **kwargs)
+
 
 	def __name__(self) : 
 		return "MonomialPolynomialBasis"
@@ -993,8 +1004,12 @@ class MonomialPolynomialBasis(PolynomialBasis) :
 		return 1 + (len(val)*self.degree)
 	
 class LagrangePolynomialBasis(PolynomialBasis) : 
-	def __init__(self, degree, X=None, dim=None) : 
-		super().__init__(degree, X, dim)
+	# def __init__(self, degree, problem, X=None, dim=None) : 
+	# 	super().__init__(degree,  X, dim)
+
+	def __init__(self, *args, **kwargs) : 
+		PolynomialBasis.__init__(self, *args, **kwargs)
+
 
 	def __name__(self) : 
 		return "LagrangePolynomialBasis"
@@ -1049,8 +1064,12 @@ class LagrangePolynomialBasis(PolynomialBasis) :
 		return len(interpolation_set)
 	
 class NFPPolynomialBasis(PolynomialBasis) : 
-	def __init__(self, degree, X=None, dim=None) : 
-		super().__init__(degree, X, dim) 
+	# def __init__(self, degree, X=None, dim=None) : 
+	# 	super().__init__(degree, X, dim) 
+
+	def __init__(self, *args, **kwargs) : 
+		PolynomialBasis.__init__(self, *args, **kwargs)
+
 
 	def __name__(self) :
 		return "NFPPolynomialBasis"
@@ -1081,7 +1100,7 @@ class NFPPolynomialBasis(PolynomialBasis) :
 	
 
 class AstroDFBasis : 
-	def __init__(self, degree, X=None, dim=None):
+	def __init__(self, degree, problem, X=None, dim=None):
 		self.degree = int(degree)
 		if X is not None:
 			self.X = np.atleast_2d(X)
@@ -1121,8 +1140,8 @@ class BasisCombination(PolynomialBasis) :
 	"""
 		Class combines any multiple of the polynomial bases together when constructing the vandermonde matrix 
 	""" 
-	def __init__(self, degree, X=None, dim=None):
-		super().__init__(degree, X, dim)
+	def __init__(self, *args, **kwargs) : 
+		PolynomialBasis.__init__(self, *args, **kwargs)
 
 	def combine_bases(self, *bases) :
 		self.bases = bases 
