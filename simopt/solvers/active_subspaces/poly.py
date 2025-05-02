@@ -419,7 +419,9 @@ class PolynomialFunction(BaseFunction):
 		else:
 			return self.V(X).dot(self.coef)
 
-	def grad(self, X):
+	def grad(self, X, coef=None):
+		if coef is None : 
+			coef = self.coef
 		if len(X.shape) == 1:
 			one_d = True
 			X = X.reshape(1,-1)	
@@ -428,7 +430,7 @@ class PolynomialFunction(BaseFunction):
 		
 		DV = self.DV(X)
 		# Compute gradient on projected space
-		Df = np.tensordot(DV, self.coef, axes = (1,0))
+		Df = np.tensordot(DV, coef, axes = (1,0))
 		# Inflate back to whole space
 		if one_d:
 			return Df.reshape(X.shape[1])
