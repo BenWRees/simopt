@@ -35,6 +35,9 @@ from simopt.models.sscont import SSCont, SSContMinCost
 from simopt.models.tableallocation import TableAllocation, TableAllocationMaxRev
 from simopt.models.simple_function import SimpleFunctionModel, SimpleFunctionProblem
 from simopt.models.Gross_model import GrossModel, GrossProblem
+from simopt.models.rosenbrock import RosenbrockFunction, RosenbrockFunctionProblem
+from simopt.models.zakharov import ZakharovFunction, ZakharovFunctionProblem
+from simopt.models.fourierresidual import FourierFunction, FourierResidualProblem
 
 # Import Solvers
 from simopt.solvers.adam import ADAM
@@ -66,7 +69,7 @@ solver_directory: dict[str, type[Solver]] = {
     "ROBBINSMONRO": RobbinsMonro, 
     "MIRRORDESCENT": Mirror_Descent,
     "OMoRF": OMoRF,
-    "ASTROMoRF": ASTROMoRF
+    "ASTROMoRF": ASTROMoRF,
 }
 
 solver_unabbreviated_directory: dict[str, type[Solver]] = {
@@ -83,7 +86,7 @@ solver_unabbreviated_directory: dict[str, type[Solver]] = {
     "Robbins-Monro Root-Finding": RobbinsMonro,
     "Stochastic Mirror Descent": Mirror_Descent,
     "Optimisation by Moving Ridge Functions": OMoRF,
-    "Adaptive Sampling by Moving Ridge Functions": ASTROMoRF
+    "Adaptive Sampling by Moving Ridge Functions": ASTROMoRF, 
 }
 
 problem_directory: dict[str, type[Problem]] = {
@@ -109,7 +112,10 @@ problem_directory: dict[str, type[Problem]] = {
     "NETWORK-1": NetworkMinTotalCost,
     "AMUSEMENTPARK-1": AmusementParkMinDepart,
     "SIMPLEFUNC-1": SimpleFunctionProblem,
-    "GROSS-1": GrossProblem
+    "GROSS-1": GrossProblem, 
+    "ROSENBROCK-1": RosenbrockFunctionProblem,
+    "ZAKHAROV-1": ZakharovFunctionProblem,
+    "FOURIER-1": FourierResidualProblem
 }
 
 problem_unabbreviated_directory: dict[str, type[Problem]] = {
@@ -135,7 +141,10 @@ problem_unabbreviated_directory: dict[str, type[Problem]] = {
     "Min Total Cost for Communication Networks System (SDCN)": NetworkMinTotalCost,
     "Min Total Departed Visitors for Amusement Park (SDDN)": AmusementParkMinDepart,
     "Minimise a Deterministic Function with Additive Noise": SimpleFunctionProblem,
-    "Minimise a Smooth Continuous Function as seen in Gross": GrossProblem
+    "Minimise a Smooth Continuous Function as seen in Gross": GrossProblem, 
+    "Minimise The multidimensional Rosenbrock Function": RosenbrockFunctionProblem,
+    "Minimise The multidimensional Zakharov Function": ZakharovFunctionProblem,
+    "Find the Value for which the Fourier Series fits the series of Values": FourierResidualProblem
 }
 model_directory: dict[str, type[Model]] = {
     "EXAMPLE": ExampleModel,
@@ -158,6 +167,9 @@ model_directory: dict[str, type[Model]] = {
     "AMUSEMENTPARK": AmusementPark,
     "SIMEPLFUNC": SimpleFunctionModel,
     "GROSS": GrossModel,
+    "ROSENBROCK": RosenbrockFunction,
+    "ZAKHAROV": ZakharovFunction,
+    "FOURIER": FourierFunction
 }
 model_problem_unabbreviated_directory: dict[str, str] = {
     "Min Deterministic Function + Noise (SUCG)": "EXAMPLE",
@@ -182,7 +194,10 @@ model_problem_unabbreviated_directory: dict[str, str] = {
     "Min Total Cost for Communication Networks System (SDCN)": "NETWORK",
     "Min Total Departed Visitors for Amusement Park (SDDN)": "AMUSEMENTPARK",
     "Minimise a Deterministic Function with Additive Noise": "SIMPLEFUNC",
-    "Minimise a Smooth Continuous Function as seen in Gross": "GROSS"
+    "Minimise a Smooth Continuous Function as seen in Gross": "GROSS", 
+    "Minimise The multidimensional Rosenbrock Function": "ROSENBROCK",
+    "Minimise The multidimensional Zakharov Function": "ZAKHAROV",
+    "Find the Value for which the Fourier Series fits the series of Values": "FOURIER"
 }
 model_problem_class_directory: dict[str, type[Model]] = {
     "Min Deterministic Function + Noise (SUCG)": ExampleModel,
@@ -207,7 +222,10 @@ model_problem_class_directory: dict[str, type[Model]] = {
     "Min Total Cost for Communication Networks System (SDCN)": Network,
     "Min Total Departed Visitors for Amusement Park (SDDN)": AmusementPark,
     "Minimise a Deterministic Function with Additive Noise": SimpleFunctionModel,
-    "Minimise a Smooth Continuous Function as seen in Gross": GrossModel
+    "Minimise a Smooth Continuous Function as seen in Gross": GrossModel, 
+    "Minimise The multidimensional Rosenbrock Function": RosenbrockFunction,
+    "Minimise The multidimensional Zakharov Function": ZakharovFunction,
+    "Find the Value for which the Fourier Series fits the series of Values": FourierFunction
 }
 model_unabbreviated_directory: dict[str, type[Model]] = {
     "Deterministic Function + Noise": ExampleModel,
@@ -230,4 +248,7 @@ model_unabbreviated_directory: dict[str, type[Model]] = {
     "Amusement Park (SDDN)": AmusementPark,
     "Deterministic Function with Additive Noise": SimpleFunctionModel,
     "Minimise a Smooth Continuous Function as seen in Gross": GrossModel,
+    "Minimise The multidimensional Rosenbrock Function": RosenbrockFunction,
+    "Minimise The multidimensional Zakharov Function": ZakharovFunction,
+    "Find the Value for which the Fourier Series fits the series of Values": FourierFunction
 }
