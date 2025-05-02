@@ -21,6 +21,7 @@ from .poly import PolynomialFunction
 from .local_linear import local_linear_grads  
 
 from simopt.base import (Problem)
+from simopt.solvers.GeometryImprovement import GeometryImprovement
 
 
 #From .misc
@@ -94,8 +95,10 @@ class PolynomialRidgeFunction(RidgeFunction):
 			np.ndarray: The vandermonde matrix computed from the samples X.
 		"""
 		if U is None: U = self._U
+		if len(X.shape) == 1 :
+			X = X.reshape(-1,1)
 		X = np.array(X)	
-		Y = (U.T @ X.T).T
+		Y = U.T @ X
 		return self.Basis.V(Y)
 
 	def DV(self, X, U = None):
@@ -173,8 +176,8 @@ class IllposedException(Exception):
 
 def orth(U):
 	""" Orthgonalize, but keep directions"""
-	U, R = np.linalg.qr(U, mode = 'reduced')
-	U = np.dot(U, np.diag(np.sign(np.diag(R)))) 
+	U, R = np.linalg.qr(U, mode = 'reduced') 
+	U = np.dot(U, np.diag(np.sign(np.diag(R))))
 	return U
 
 def inf_norm_fit(A, b):
@@ -217,7 +220,8 @@ def two_norm_fit(A,b):
 		\min_{x} \| \mathbf{A} \mathbf{x} - \mathbf{b}\|_2
 
 	"""
-	return scipy.linalg.lstsq(A, b)[0]
+	return np.matmul(np.linalg.pinv(A), b)
+	# return scipy.linalg.lstsq(A, b)[0]
 
 def bound_fit(A, b, norm = 2):
 	r""" solve a norm constrained problem
@@ -304,7 +308,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		SIAM J. Sci. Comput. Vol 40, No 3, pp A1566--A1589, DOI:10.1137/17M1117690.
 	"""
 
-	def __init__(self, degree: int, subspace_dimension: int, problem: Problem, basis: Basis, 
+	def __init__(self, degree: int, subspace_dimension: int, problem: Problem, basis: Basis, geometry_instance: GeometryImprovement,
 		norm: int = 2, n_init = 1, scale = True, keep_data = True,
 		rotate = True, **kwargs):
 
@@ -351,6 +355,8 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		assert isinstance(scale, bool)
 		self.scale = scale
 
+		self.geometry_improvement = geometry_instance
+
 		# assert norm in [1,2,'inf', np.inf], "Invalid norm specified"
 		# if norm == 'inf': norm = np.inf
 		self.norm = norm
@@ -359,7 +365,8 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		# self.bound = problem.bound
 
 		#TODO: Handle how bounds are dealt with. Should rely on problem object
-		if self.problem.constraint_type == 'unconstrained':
+		self.bound = None
+		"""if self.problem.constraint_type == 'unconstrained':
 			self.bound = None 
 		else :
 			if self.problem.upper_bounds == np.nan :
@@ -367,7 +374,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 			elif self.problem.lower_bounds == np.nan:
 				self.bound = 'upper'
 			else : 
-				self.bound = None
+				self.bound = None"""
 
 		# super().__init__(basis = self.Basis(self.degree), coef = None, U = None)
 
@@ -376,7 +383,6 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
 	def __str__(self):
 		return "<PolynomialRidgeApproximation degree %d, subspace dimension %d>" % (self.degree, self.subspace_dimension)
-
 
 	def fit_fixed_subspace(self, X, fX, U):
 		r"""
@@ -387,7 +393,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		self._finish(X, fX, U)
 		
 
-	def fit(self, X, fX, U0 = None):
+	def fit(self, X, fX, x, f, delta_k, interpolation_sols, visited_pts_list, U0 = None):
 		r""" Given samples, fit the polynomial ridge approximation.
 
 		Parameters
@@ -403,6 +409,8 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		X = np.array(X)
 		fX = np.array(fX).flatten()	
 
+		self.delta_k = delta_k
+
 		assert X.shape[0] == fX.shape[0], "Dimensions of input do not match"
 
 		# Check if we have enough data to make problem overdetermined
@@ -411,10 +419,11 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		d = self.degree
 		n_param = scipy.special.comb(n+d, d)	# Polynomial contribution
 		n_param += m*n - (n*(n+1))//2			# Number of parameters in Grassmann manifold
-		if len(fX) < n_param:
-			mess = "A polynomial ridge approximation of degree %d and subspace dimension %d of a %d-dimensional function " % (d, n, m)
-			mess += "requires at least %d samples to not be underdetermined" % (n_param, )
-			raise UnderdeterminedException(mess) 	
+		#! REMOVED CHECK FOR UNDERTERMINED MODEL 
+		# if len(fX) < n_param:
+		# 	mess = "A polynomial ridge approximation of degree %d and subspace dimension %d of a %d-dimensional function " % (d, n, m)
+		# 	mess += "requires at least %d samples to not be underdetermined" % (n_param, )
+		# 	raise UnderdeterminedException(mess) 	
 
 		# Special case where solution is convex and no iteration is required
 		if self.subspace_dimension == 1 and self.degree == 1:
@@ -433,7 +442,18 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 			
 		# Orthogonalize just to make sure the starting value satisfies constraints	
 		U0 = orth(U0)
-			
+
+		#* undergo geometry improvement on X, by calculating coefficients and checking they meet criticality conditions
+		while True : 
+			self.coef = self._fit_coef(X, fX, U0)
+			Y = (U0.T @ X.T).T
+			if delta_k <= np.linalg.norm(self.profile.grad(Y))*1000 : 
+				self.delta_k = delta_k
+				self.interpolation_sols = interpolation_sols
+				break
+			else :
+				X, fX, interpolation_sols, visited_pts_list, delta_k = self.geometry_improvement.improve_geometry(x, f, delta_k, U0, visited_pts_list, X, fX)
+
 		# TODO Implement multiple initializations
 		if self.norm == 2 and self.bound == None:
 			return self._fit_varpro(X, fX, U0, **kwargs)
@@ -606,7 +626,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 			# Apply the pseudoinverse
 			n = self.subspace_dimension
 			Delta_flat = -ZT[:-n**2,:].T.dot(np.diag(1/s[:-n**2]).dot(Y[:,:-n**2].T.dot(r)))
-			return Delta_flat, s[:-n**2]
+			return Delta_flat, s#s[:-n**2] #!changed to giving all of s
 
 		def jacobian(U_flat):
 			return self._varpro_jacobian(X, fX, U_flat)
@@ -616,7 +636,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
 		U0_flat = U0.flatten() 
 		U_flat, info = gauss_newton(residual, jacobian, U0_flat,
-			trajectory = self._grassmann_trajectory, gnsolver = None, **kwargs) 
+			trajectory = self._grassmann_trajectory, gnsolver = gn_solver, **kwargs) #!Changed gnsolver argument from None to gn_solver
 		
 		U = U_flat.reshape(-1, self.subspace_dimension)
 		
