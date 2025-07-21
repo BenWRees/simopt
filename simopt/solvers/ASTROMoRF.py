@@ -1,3 +1,4 @@
+#type: ignore
 """
 Summary
 -------
@@ -16,22 +17,26 @@ The use of Active Subspace reduction allows for a reduced number of interpolatio
 #?: SEE IF WE CAN REDUCE THE NUMBER OF TIMES WE HAVE TO SAMPLE - may reduce the interpolation set size? 
 #?: SEE IF WE CAN REUSE MORE THAN ONE DESIGN POINT - Not possible as then we won't have a span of the region
 from __future__ import annotations
+import warnings
+
+warnings.filterwarnings("ignore")
 from typing import Callable
 import os
 import time
+from math import ceil, isnan, isinf, comb, log, floor
+import importlib
+from copy import deepcopy
+import inspect
+import random 
+import csv
 
 from numpy.linalg import norm, pinv, qr
 import numpy as np
-from math import ceil, isnan, isinf, comb, log
-import warnings
 from scipy.optimize import minimize, NonlinearConstraint, linprog
 from scipy import optimize
 from scipy.special import factorial
 import scipy
-warnings.filterwarnings("ignore")
-import importlib
-from copy import deepcopy
-import inspect
+import math
 
 import matplotlib.pyplot as plt
 
@@ -52,10 +57,8 @@ from simopt.solvers.active_subspaces.basis import *
 from simopt.solvers.active_subspaces.index_set import IndexSet
 from simopt.solvers.active_subspaces.polyridge import PolynomialRidgeApproximation
 from simopt.solvers.GeometryImprovement import GeometryImprovement
+from simopt.solvers.TrustRegion.Sampling import SamplingRule
 
-
-class BadStep(Exception):
-	pass
 
 #TODO: Rewrite model construction with adaptive sampling 
 class ASTROMoRF(Solver):
@@ -117,7 +120,7 @@ class ASTROMoRF(Solver):
 				"datatype": bool,
 				"default": True
 			},
-			"original sampling rule" : {
+			"original_sampling_rule" : {
 				"description": "Flag to enable original sampling rule",
 				"datatype": bool, 
 				"default": False
@@ -155,7 +158,7 @@ class ASTROMoRF(Solver):
 			"lambda_min": {
 				"description": "minimum sample size",
 				"datatype": int,
-				"default": 5
+				"default": 7
 			},
 			"polynomial basis": {
 				"description": "Polynomial basis to use in model construction",
@@ -226,14 +229,29 @@ class ASTROMoRF(Solver):
 				"description": "maximum number of iterations for the gauss newton",
 				"datatype": int, 
 				"default": 100
-			}, 
+			},
+			'old_implementation' : {
+				"description": "Flag to enable old implementation of ASTROMoRF",
+				"datatype": bool,
+				"default": True
+			},
+			'performance_benchmarking_flag' : {
+				"description": "Flag to enable performance benchmarking",
+				"datatype": bool,
+				"default": False
+			},
+			# "sampling rule" : { #! Added in to run sampling experiment
+			# 	"description": "An instance of the sampling rule being used",
+			# 	"datatype": str,
+			# 	"default": 'ASTROMoRFSampling'
+			# },  
 		}
 	
 	@property
 	def check_factor_list(self) -> dict[str, Callable] : 
 		return {
 			"crn_across_solns": self.check_crn_across_solns,
-			"original sampling rule": self.check_sampling_flag,
+			"original_sampling_rule": self.check_sampling_flag,
 			"eta_1": self.check_eta_1,
 			"eta_2": self.check_eta_2,
 			"gamma_1": self.check_gamma_1,
@@ -255,10 +273,13 @@ class ASTROMoRF(Solver):
 			"rho_min": self.check_rho_min, 
 			"max iterations": self.check_iterations,
 			"rho_min": self.check_rho_min,
+			'old_implementation': self.check_old_implementation,
+			'performance_benchmarking_flag': self.check_performance_benchmarking_flag,
+			# "sampling rule": self.check_sampling_rule, #! Added in to run sampling experiment
 			}
 		
 	def check_sampling_flag(self) -> bool : 
-		return isinstance(self.factors['original sampling rule'], bool)
+		return isinstance(self.factors['original_sampling_rule'], bool)
 	
 	def check_tolerance(self) -> bool:
 		return self.factors['interpolation update tol'] >(0,0) and self.factors['interpolation update tol'] <= (1,1)
@@ -293,6 +314,20 @@ class ASTROMoRF(Solver):
 		if self.factors['rho_min'] <= 0 : 
 			raise ValueError('rho_min needs to be positive')
 
+	#! Added in to run sampling experiment
+	# def check_sampling_rule(self) -> None:
+	# 	if self.factors['sampling rule'] is None : 
+	# 		raise ValueError('sampling rule is not implemented')
+
+	def check_performance_benchmarking_flag(self) -> bool:
+		if self.factors['performance_benchmarking_flag'] not in [True, False]:
+			raise ValueError('performance_benchmarking_flag needs to be True or False')
+		return True
+
+	def check_old_implementation(self) -> bool:
+		if self.factors['old_implementation'] not in [True, False]:
+			raise ValueError('old_implementation needs to be True or False')
+		return True
 
 	def check_eta_1(self):
 		if self.factors["eta_1"] <= 0 :
@@ -359,6 +394,91 @@ class ASTROMoRF(Solver):
 		class_name = self.factors['polynomial basis'].strip()
 		module = importlib.import_module('simopt.solvers.active_subspaces.basis')
 		return getattr(module, class_name)
+	
+	# def sample_instantiation(self) :
+	# 	class_name = self.factors['sampling rule'].strip()
+	# 	module = importlib.import_module('simopt.solvers.TrustRegion.Sampling')
+	# 	sampling_instance = getattr(module, class_name)(self)
+	# 	return sampling_instance
+	
+
+	def construct_proxy_d(self, problem: Problem) -> int : 
+		"""
+			Constructs a proxy initial guess of the subspace dimension through the following steps:
+				1. Obtain alog(n) random solutions around the problem [x_1,x_2,...,x_{alog(n)}]
+				2. Estimate the gradient vectors of the problem at each random solution 
+				3. Construct the uncentred covariance matrix of functional derivatives C through a Monte Carlo estimate on the alog(n) gradient vectors
+				4. Factorise C through eigendecomposition and sort the eigenpairs into a list
+				5. Create a second list of tuples (i,j) where i is the index of the eigenpairs in the list from step 2, and j is the distance between the eigen pairs of 
+				|\lambda_{i-1}-\lambda_{i}|. 
+				6. pick d to be the i in the list of tuples that contains the smallest j in their tuple out of all j's in the list of tuples
+
+		Args:
+			problem (Problem): The simulation model 
+
+		Returns: 
+			int: The subspace dimension
+
+		NOTE: 
+			This method of finding a parameter for d will require an additional alog(n^{2n}) responses of the simulation model.
+		 #! Before implementing this proxy, we need to find a way of finding this covariance matrix without taking an exponential number of responses.
+			- Look at some form of sensitivity analysis to find the covariance matrix
+
+
+		"""
+		no_solns = ceil(10 * problem.dim * log(problem.dim)) #! This is the number of random solutions to generate
+		# Designate random number generator for random sampling
+		find_next_soln_rng = self.rng_list[1]
+
+		# Generate many dummy solutions without replication only to find a reasonable maximum radius
+		dummy_solns: list[Solution] = []
+		for _ in range(no_solns):
+			random_soln_tuple = problem.get_random_solution(find_next_soln_rng)
+			random_soln = self.create_new_solution(random_soln_tuple, problem)
+			dummy_solns.append(random_soln)
+
+		# Calculate the gradient of the problem at each dummy solution
+		gradients = []
+		for sol in dummy_solns:
+			grad = self.finite_difference(sol, problem) 
+			gradients.append(grad)
+
+		C = sum([np.outer(a,a) for a in gradients])/no_solns
+		#decompose C into eigenpairs and sort the eigenpairs by descendeing eigenvalue
+		# Compute eigenvalues and eigenvectors
+		eigenvalues, eigenvectors = np.linalg.eigh(C)
+		
+		# Create list of (eigenvalue, eigenvector) tuples
+		eigenpairs = [(eigenvalues[i], eigenvectors[:, i]) for i in range(len(eigenvalues))]
+		
+		# Sort by eigenvalue in descending order
+		eigenpairs.sort(key=lambda pair: pair[0], reverse=True)
+
+		eigenvalues = [pair[0] for pair in eigenpairs]
+		# gaps = [eigenvalues[i - 1] - eigenvalues[i] for i in range(1, len(eigenvalues))]
+		# d = gaps.index(min(gaps)) + 1
+
+		
+
+		# find r by finding the smallest d that keeps the explained variance above a certain threshold
+		numerator = [(i,sum(eigenvalues[:i])) for i in range(1, len(eigenvalues))]
+		explained_variance = [(i+1, numerator[i][1]/sum(eigenvalues)) for i in range(len(numerator))]
+		sig_lvl = 0.9
+		explained_variance_filter = [i for i in explained_variance[:-1] if i[1] >= sig_lvl] #! Remove the last one as it is always 1.0
+		#if no eigenvalues are above the threshold, other than the  then we need to reduce the sig_lvl
+		while len(explained_variance) == 0  :
+			sig_lvl -= 0.05
+			explained_variance_filter = [i for i in explained_variance[:-1] if i[1] >= sig_lvl]
+		
+		d = explained_variance_filter[0][0] 
+		self.U_init = np.column_stack([vec for _, vec in eigenpairs[:d]])
+
+		print(f'the final significance level is {sig_lvl} and the subspace dimension is {d}')
+
+		return d
+
+
+
 
 
 	def initialise_factors(self,problem: Problem) -> None :
@@ -388,7 +508,12 @@ class ASTROMoRF(Solver):
 		self.rhos = []
 		self.deltas = []
 		self.n = problem.dim
-		self.d = self.factors['subspace dimension']
+
+		if not self.factors['old_implementation'] :
+			self.d = self.construct_proxy_d(problem) 
+		else : 
+			self.d = self.factors['subspace dimension']
+
 		self.deg = self.factors['polynomial degree'] 
 		self.q = int(0.5*(self.d+1)*(self.d+2)) # comb(self.d + self.deg, self.deg) +  self.n * self.d
 		self.p = self.n+1
@@ -415,6 +540,16 @@ class ASTROMoRF(Solver):
 
 		self.model = PolynomialRidgeApproximation(self.deg, self.d, problem, self.reduced_basis, self.geometry_improvement)
 
+		if self.factors['performance_benchmarking_flag'] :
+			self.performance_benchmarking = True
+			self.runtimes = []
+			self.iterations = []
+			
+
+
+		# if (self.factors['sampling rule'] != 'Default') :
+		# 	self.sampling_instance = self.sample_instantiation()
+
 	def solve(self, problem):
 		#initialise factors: 
 		self.initialise_factors(problem)
@@ -423,7 +558,7 @@ class ASTROMoRF(Solver):
 
 		while self.expended_budget < problem.factors['budget'] : 
 			k += 1 
-			print(f'iteration {k} with budget {self.expended_budget}')
+			print(f'Iteration {k} with budget {self.expended_budget}')
 			if k == 1 :
 				self.current_solution = self.create_new_solution(self.current_solution.x, problem)
 				# current_solution = self.create_new_solution(current_solution.x, problem)
@@ -434,7 +569,7 @@ class ASTROMoRF(Solver):
 			
 				self.recommended_solns.append(self.current_solution)
 				self.intermediate_budgets.append(self.expended_budget)
-			elif self.factors['crn_across_solns'] and not self.factors['original sampling rule'] :
+			elif self.factors['crn_across_solns'] and not self.factors['original_sampling_rule'] :
 				# since incument was only evaluated with the sample size of previous incumbent, here we compute its adaptive sample size
 				# adaptive sampling
 				lambda_max = problem.factors['budget'] - self.expended_budget
@@ -464,9 +599,14 @@ class ASTROMoRF(Solver):
 			#evaluate model
 			self.current_solution, self.delta_k, self.recommended_solns, self.expended_budget, self.intermediate_budgets = self.evaluate_candidate_solution(problem, self.U, self.fval, fval_tilde, self.delta_k, interpolation_solns, self.current_solution, candidate_solution, self.recommended_solns, self.expended_budget, self.intermediate_budgets)	
 
+		#record the performance 
+		if self.factors['performance_benchmarking_flag'] :
+			self.record_performance_benchmarking(self.runtimes, self.iterations)
+
 		return self.recommended_solns, self.intermediate_budgets
 	
 
+	#! REFACTOR: Added in optionality for additional sampling methods
 	def evaluate_interpolation_points(self, k: int, problem: Problem, visited_index: int, X:np.ndarray, visited_pts: list[Solution]) -> tuple[np.ndarray, list[Solution], list[Solution]]:
 		"""
 			Run adaptive sampling on the model construction design points to obtain a sample 
@@ -480,6 +620,10 @@ class ASTROMoRF(Solver):
 		Returns:
 			tuple[np.ndarray, list[Solution], list[Solution]]: Consists of function values fX of shape (M,), the interpolation solutions and the visited points
 		"""	
+		# if self.factors['sampling rule'] == 'ASTROMoRFSampling' :
+		# 	adaptive_sampling = lambda x : self.adaptive_sampling(*x)
+		# else : 
+		# 	adaptive_sampling = lambda x : self.sampling_instance.sampling_rule(*x)
 		fX = []	 
 		interpolation_solutions = []
 		for idx,x in enumerate(X) : 
@@ -508,7 +652,7 @@ class ASTROMoRF(Solver):
 
 		return np.array(fX), interpolation_solutions, visited_pts
 
-
+	#! REFACTOR: Added in optionality for additional sampling methods
 	def simulate_candidate_soln(self, k: int, problem: Problem, candidate_solution: Solution, current_solution: Solution) -> tuple[Solution, float]:
 		"""
 			Run adaptive sampling on the candidate solution to obtain a sample average of the 
@@ -522,8 +666,12 @@ class ASTROMoRF(Solver):
 		Returns:
 			tuple[Solution, float]: Consists of the candidate solution and its evaluated solution
 		"""
+		# if self.factors['sampling rule'] == 'ASTROMoRFSampling' :
+		# 	adaptive_sampling = lambda x : self.adaptive_sampling(*x)
+		# else : 
+		# 	adaptive_sampling = lambda x : self.sampling_instance.sampling_rule(*x)
 
-		if self.factors['crn_across_solns'] and not self.factors['original sampling rule']:
+		if self.factors['crn_across_solns'] and not self.factors['original_sampling_rule']:
 			problem.simulate(candidate_solution, current_solution.n_reps) 
 			self.expended_budget += current_solution.n_reps 
 			fval_tilde = -1 * problem.minmax[0] * candidate_solution.objectives_mean
@@ -554,7 +702,7 @@ class ASTROMoRF(Solver):
 		
 		cons =  NonlinearConstraint(lambda x : norm(x), 0, self.delta_k)
 		
-		obj = lambda x: self.model_evaluate(x, U).item(0)
+		obj = lambda x: self.model_evaluate(x).item(0)
 		stepsize = minimize(obj, np.zeros(self.n), method='trust-constr', constraints=cons, options={'disp': False}).x
 		s_new = np.array(current_solution.x) + stepsize
 
@@ -589,8 +737,8 @@ class ASTROMoRF(Solver):
 			candidate_solution = interpolation_solns[fval.index(min(fval))]  # type: ignore
 
 		stepsize = np.subtract(np.array(candidate_solution.x), np.array(current_solution.x))
-		model_eval_old = self.model_evaluate(np.array(current_solution.x), U).item()
-		model_eval_new = self.model_evaluate(np.array(candidate_solution.x), U).item()
+		model_eval_old = self.model_evaluate(np.array(current_solution.x)).item()
+		model_eval_new = self.model_evaluate(np.array(candidate_solution.x)).item()
 
 		del_f =  self.f_old - fval_tilde #self.f_old - f_new 
 		del_m = model_eval_old - model_eval_new
@@ -673,9 +821,28 @@ class ASTROMoRF(Solver):
 	def calculate_pilot_run(self, k, problem, expended_budget) : 
 		lambda_min = self.factors['lambda_min']
 		lambda_max = problem.factors['budget'] - expended_budget
-		return ceil(max(lambda_min * log(10 + k, 10) ** 1.1, min(0.5 * problem.dim, lambda_max))-1)
+		pilot_run = ceil(max(lambda_min * log(10 + k, 10) ** 1.1, min(0.5 * problem.dim, lambda_max))-1)
+		
+		return pilot_run
 
 	def calculate_kappa(self, k, problem, expended_budget, current_solution, delta_k) :
+
+		# if self.factors['original_sampling_rule'] == True :
+		# 	print('RUNNING ORIGINAL SAMPLING RULE') 
+		# 	lambda_max = problem.factors['budget'] - expended_budget
+		# 	problem.simulate(current_solution,1)
+		# 	expended_budget += 1
+		# 	sample_size = 1
+			
+		# 	fn = current_solution.objectives_mean 
+		# 	sig2 = current_solution.objectives_var[0]
+		# 	self.kappa = fn/(delta_k ** 2)
+		# 	stopping = self.get_stopping_time(sig2, delta_k, k, problem, expended_budget)
+		# 	# print(f'stopping time when calculating kappa is {stopping}')
+		# 	if sample_size >= stopping or sample_size >= lambda_max or expended_budget >= problem.factors['budget'] :
+		# 		self.kappa = fn / (delta_k**2)
+		# 		return current_solution, expended_budget 
+		# else :
 		lambda_max = problem.factors['budget'] - expended_budget
 		pilot_run = self.calculate_pilot_run(k, problem, expended_budget)
 
@@ -683,39 +850,25 @@ class ASTROMoRF(Solver):
 		problem.simulate(current_solution, pilot_run)
 		expended_budget += pilot_run
 		sample_size = pilot_run
+		while True:
+			rhs_for_kappa = current_solution.objectives_mean
+			sig2 = current_solution.objectives_var[0]
 
-		if self.factors['original sampling rule'] : 
-			problem.simulate(current_solution,1)
+			self.kappa = rhs_for_kappa * np.sqrt(pilot_run) / (delta_k ** (self.delta_power / 2))
+			stopping = self.get_stopping_time(sig2, delta_k, k, problem, expended_budget)
+			# print(f'stopping time when calculating kappa is {stopping}')
+			
+			if (sample_size >= min(stopping, lambda_max) or expended_budget >= problem.factors['budget']):
+				# calculate kappa
+				self.kappa = (rhs_for_kappa * np.sqrt(pilot_run)/ (delta_k ** (self.delta_power / 2)))
+				return current_solution, expended_budget
+			
+			problem.simulate(current_solution, 1)
 			expended_budget += 1
 			sample_size += 1
-			
-			fn = current_solution.objectives_mean 
-			sig2 = current_solution.objectives_var[0]
-			self.kappa = fn/(delta_k ** 2)
-			
-			if sample_size >= self.get_stopping_time(sig2, delta_k, k, problem, expended_budget) or sample_size >= lambda_max or expended_budget >= problem.factors['budget'] :
-				self.kappa = fn / (delta_k**2)
-				return current_solution, expended_budget 
-		else :
-			while True:
-				rhs_for_kappa = current_solution.objectives_mean
-				sig2 = current_solution.objectives_var[0]
 
-				self.kappa = rhs_for_kappa * np.sqrt(pilot_run) / (delta_k ** (self.delta_power / 2))
-				stopping = self.get_stopping_time(sig2, delta_k, k, problem, expended_budget)
-				
-				if (sample_size >= min(stopping, lambda_max) or expended_budget >= problem.factors['budget']):
-					# calculate kappa
-					self.kappa = (rhs_for_kappa * np.sqrt(pilot_run)/ (delta_k ** (self.delta_power / 2)))
-					# print("kappa "+str(kappa))
-					return current_solution, expended_budget
-				
-				problem.simulate(current_solution, 1)
-				expended_budget += 1
-				sample_size += 1
-
-
-	def get_stopping_time(self, sig2: float, delta: float, k: int, problem: Problem, expended_budget: int) -> int:
+	
+	def get_stopping_time(self, sig2: float, delta: float, k:int, problem: Problem, expended_budget: int) -> int:
 		"""
 		Compute the sample size based on adaptive sampling stopping rule using the optimality gap
 		"""
@@ -723,73 +876,111 @@ class ASTROMoRF(Solver):
 		if self.kappa == 0:
 			self.kappa = 1
 
+		# compute sample size
+		#! This raw sample size is growing exponentially large due to lambda_max
+		raw_sample_size = pilot_run * max(1, sig2 / (self.kappa**2 * delta**self.delta_power))
+		# Convert out of ndarray if it is
+		if isinstance(raw_sample_size, np.ndarray):
+			raw_sample_size = raw_sample_size[0]
 		# round up to the nearest integer
-		if self.factors['original sampling rule'] : 
-			lambda_k = max(self.factors['lambda_min'], 2*log(problem.dim+0.5,10*max(log(k+0.1,10)**(1.01),1)))
-			sample_size: int = ceil(max(lambda_k, (lambda_k*sig2)/(self.kappa**2*delta**4)))
-		else :
-			# compute sample size
-			raw_sample_size = pilot_run * max(1, sig2 / (self.kappa**2 * delta**self.delta_power))
-			# Convert out of ndarray if it is
-			if isinstance(raw_sample_size, np.ndarray):
-				raw_sample_size = raw_sample_size[0]
-			sample_size: int = ceil(raw_sample_size)
+		sample_size: int = ceil(raw_sample_size)
 		return sample_size
 	
-	#this is sample_type = 'conditional after'
+	def samplesize(self, k,sig,delta) -> int:
+		alpha_k = 1
+		lambda_k: int = 1 if k==1 else floor(self.factors['lambda_min']*math.log(k)**1.5)
+		# S_k = math.floor(max(5,lambda_k,(lambda_k*sig)/((self.kappa^2)*delta**(2*(1+1/alpha_k)))))
+		S_k = ceil((lambda_k*sig**2)/(self.kappa**2*delta**4))
+		return S_k
+	
+	def original_sampling_rule(self, problem: Problem, k: int, new_solution: Solution, delta_k: float, used_budget: int) -> tuple[Solution, int]:
+		lambda_max = problem.factors['budget'] - used_budget
+		# print(f'RUNNING ORIGINAL SAMPLING RULE on {new_solution.x}')
+		lambda_k: int = 1 if k==1 else floor(self.factors['lambda_min']*math.log(k)**1.5)
+		sample_size = new_solution.n_reps
+		if new_solution.n_reps < 2 :
+				sim_no = 2-new_solution.n_reps
+				problem.simulate(new_solution,sim_no)
+				# used_budget += sim_no
+				sample_size += sim_no
+		
+		#Calculate smallest n in adaptive rule 
+		while True : 
+			problem.simulate(new_solution,1)
+			# used_budget += 1
+			sample_size += 1
+
+			sig2 = new_solution.objectives_var[0]
+			stopping = self.samplesize(k, sig2, delta_k) 
+			# print(f'stopping time during adaptive_sampling_1 is {stopping}')
+			if (sample_size >= stopping) : 
+				# print(f'sample_size is {sample_size}')
+				N_k: int = max(min(sample_size, lambda_max), lambda_k)
+				break 
+			
+		adapted_solution = self.create_new_solution(new_solution.x, problem)
+		problem.simulate(adapted_solution, N_k)
+		used_budget += N_k
+		return adapted_solution, used_budget
+	
+	def two_stage_sampling(self, problem: Problem, k: int, new_solution: Solution, delta_k: float, used_budget: int) -> tuple[Solution, int]:
+		pass 
+	
 	def adaptive_sampling_1(self, problem: Problem, k: int, new_solution: Solution, delta_k: float, used_budget: int) :
+		# adaptive sampling
 		lambda_max = problem.factors['budget'] - used_budget
 		pilot_run = self.calculate_pilot_run(k, problem, used_budget)
 
 		problem.simulate(new_solution, pilot_run)
 		used_budget += pilot_run
 		sample_size = pilot_run
+		sig_init = new_solution.objectives_var[0]
 
-		# adaptive sampling
-		if self.factors['original sampling rule'] : 
-			while True : 
-				problem.simulate(new_solution,1)
-				used_budget += 1
-				sample_size += 1
-				sig2 = new_solution.objectives_var[0]
-				stopping = self.get_stopping_time(sig2, delta_k, k, problem, used_budget) 
-				if sample_size >= stopping or sample_size >= lambda_max or used_budget >= problem.factors['budget'] : 
-					return new_solution, used_budget 
-		else :
-			while True:
-				sig2 = new_solution.objectives_var[0]
-				stopping = self.get_stopping_time(sig2, delta_k, k, problem, used_budget)
-				if ((sample_size >= min(stopping, lambda_max)) or used_budget >= problem.factors['budget']):
-					return new_solution, used_budget
-				problem.simulate(new_solution, 1)
-				used_budget += 1
-				sample_size += 1
+		#if the variance is too large, we switch to the original sampling rule as the two-stage will produce exponentially large sample sizes
+		# if sig_init > 1.0 : 
+		# 	new_solution, used_budget = self.original_sampling_rule(problem, k, new_solution, delta_k, used_budget)
+		# 	return new_solution, used_budget
+		# else :
+
+		while True:
+			sig2 = new_solution.objectives_var[0]
+			stopping = self.get_stopping_time(sig2, delta_k, k, problem, used_budget)
+			if ((sample_size >= min(stopping, lambda_max)) or used_budget >= problem.factors['budget']):
+				return new_solution, used_budget
+			problem.simulate(new_solution, 1)
+			
+			used_budget += 1
+			sample_size += 1
 
 		# return new_solution, used_budget
 	
 	#this is sample_type = 'conditional before'	
 	def adaptive_sampling_2(self, problem, k, new_solution, delta_k, used_budget) : 
+
 		lambda_max = problem.factors['budget'] - used_budget
+		if new_solution.n_reps < 2 :
+			sim_no = 2-new_solution.n_reps
+			problem.simulate(new_solution,sim_no)
+			used_budget += sim_no
+			sample_size = sim_no
+
 		sample_size = new_solution.n_reps 
 		sig2 = new_solution.objectives_var[0]
 
-		if self.factors['original sampling rule'] : 
-			while True : 
-				if sample_size >= self.get_stopping_time(sig2, delta_k, k, problem, used_budget) or sample_size >= lambda_max or used_budget >= problem.factors['budget'] : 
-					return new_solution, used_budget 
-				problem.simulate(new_solution,1)
-				used_budget += 1
-				sample_size += 1
-				sig2 = new_solution.objectives_var[0]
-		else :
-			while True:
-				stopping = self.get_stopping_time(sig2, delta_k, k, problem, used_budget)
-				if (sample_size >= min(stopping, lambda_max) or used_budget >= problem.factors['budget']):
-					return new_solution, used_budget
-				problem.simulate(new_solution, 1)
-				used_budget += 1
-				sample_size += 1
-				sig2 = new_solution.objectives_var[0]
+		# #if the variance is too large, we switch to the original sampling rule as the two-stage will produce exponentially large sample sizes
+		# if sig2 > 1.0 : 
+		# 	new_solution, used_budget = self.original_sampling_rule(problem, k, new_solution, delta_k, used_budget)
+		# 	return new_solution, used_budget
+		# else :
+		while True:
+			stopping = self.get_stopping_time(sig2, delta_k, k, problem, used_budget)
+			if (sample_size >= min(stopping, lambda_max) or used_budget >= problem.factors['budget']):
+				return new_solution, used_budget
+			problem.simulate(new_solution, 1)
+			
+			used_budget += 1
+			sample_size += 1
+			sig2 = new_solution.objectives_var[0]
 
 
 
@@ -803,11 +994,25 @@ class ASTROMoRF(Solver):
 	def construct_model(self, problem: Problem, current_solution: Solution, delta_k: float, k: int, expended_budget: int, visited_points_list: list[Solution]) : 
 		#construct initial active subspace 
 		# U0 = self.initialise_subspace_rand(current_solution, delta_k)
-		init_S_full = self.geometry_improvement.generate_set(self.d, np.array(current_solution.x), delta_k) #(d, n)
-		U, _ = np.linalg.qr(init_S_full.T)
+		if self.factors['performance_benchmarking_flag'] :
+			start_time = time.time()
+
+		if self.factors['old_implementation'] ==  True :
+			init_S_full = self.geometry_improvement.generate_set(self.d, np.array(current_solution.x), delta_k) #(d, n)
+			U, _ = np.linalg.qr(init_S_full.T)
+		else :
+			if k == 1:
+				init_S_full = self.geometry_improvement.generate_set(self.d, np.array(current_solution.x), delta_k) #(d, n)
+				U, _ = np.linalg.qr(init_S_full.T)
+			#* Using the last iteration's active subspace matrix for the initial estimate of U in the next iteration should provide a better guess. 
+			else : 
+				init_S_full = self.geometry_improvement.generate_set(self.d, np.array(current_solution.x), delta_k) #(d, n)
+				U = self.initialise_subspace_covar(init_S_full, problem)
+			# U = self.U_init
 
 		X, f_index = self.construct_interpolation_set(current_solution, problem, U, delta_k, k, visited_points_list)
 
+		
 		fX, interpolation_solutions, visited_points_list = self.evaluate_interpolation_points(k,problem, f_index, X, visited_points_list)
 		self.f_old = fX[0,0]
 
@@ -826,12 +1031,27 @@ class ASTROMoRF(Solver):
 		# self.coefficients = coefficients
 		self.coefficients = self.model.coef
 
+		if self.factors['performance_benchmarking_flag'] :
+			end_time = time.time()
+			runtime = end_time - start_time
+			print(f'Model construction took {runtime} seconds on iteration {k} with {self.model.iterations} iterations of the Gauss-Newton algorithm')
+			self.runtimes.append((k,runtime))
+			self.iterations.append((k, self.model.iterations))
+
 		return current_solution, delta_k, fval, expended_budget, interpolation_solutions, self.model._U, self.visited_points
 
-	def model_evaluate(self, X, U) : 
+	def model_evaluate(self, X) : 
+		if self.factors['old_implementation'] == False :
+			N = ceil(0.2/self.delta_k**2)
+		else : 
+			N =1 
 		if len(X.shape) == 1 :
 			X = X.reshape(-1,1)
-		val = self.model.eval(X)
+		val = 0
+		for _ in range(N) : 
+			val += self.model.eval(X)
+
+		val = val/N	
 		return val
 		
 
@@ -870,10 +1090,67 @@ class ASTROMoRF(Solver):
 
 		return U 
 	
+	def model_finite_diff(self, x: np.ndarray, problem: Problem) -> np.ndarray :
+		lower_bound = problem.lower_bounds
+		upper_bound = problem.upper_bounds
+		# grads = np.zeros((problem.dim,r)) #Take r gradient approximations
+		# problem.simulate(new_solution,1)
+		# fn = -1 * problem.minmax[0] * new_solution.objectives_mean
+		fn = self.model_evaluate(x).item()
+		#if BdsCheck isn't implemented then we assume central finite differencing 
+		alpha = 1e-8
+		
+		FnPlusMinus = np.zeros((problem.dim, 3))
+		grad = np.zeros(problem.dim)
+		for i in range(problem.dim):
+			# Initialization.
+			x1 = x.tolist()
+			x2 = x.tolist()
+			# Forward stepsize.
+			steph1 = alpha
+			# Backward stepsize.
+			steph2 = alpha
+
+			# Check variable bounds.
+			if x1[i] + steph1 > upper_bound[i]:
+				steph1 = np.abs(upper_bound[i] - x1[i])
+			if x2[i] - steph2 < lower_bound[i]:
+				steph2 = np.abs(x2[i] - lower_bound[i])
+
+			# Decide stepsize.
+			# Central diff.
+			FnPlusMinus[i, 2] = min(steph1, steph2)
+			x1[i] = x1[i] + FnPlusMinus[i, 2]
+			x2[i] = x2[i] - FnPlusMinus[i, 2]
+
+			fn1, fn2 = 0,0 
+			fn1  = self.model_evaluate(np.array(x1)).item()
+			# First column is f(x+h,y).
+			FnPlusMinus[i, 0] = fn1
+			# problem.simulate(x2_solution)
+			# fn2 = -1 * problem.minmax[0] * x2_solution.objectives_mean
+			fn2  = self.model_evaluate(np.array(x2)).item()
+			# Second column is f(x-h,y).
+			FnPlusMinus[i, 1] = fn2
+
+			# Calculate gradient.
+			grad[i] = (fn1 - fn2) / (2 * FnPlusMinus[i, 2])
+
+		return grad 
+
+	
 	#* This is a more accurate subspace to start with 
-	def initialise_subspace_covar(self, U0: np.ndarray, coeff: np.ndarray, S_full: np.ndarray) -> np.ndarray :
-		#construct covariance matrix
-		covar = self.construct_covar(S_full, self.delta_k, U0, coeff) # (n, n)
+	def initialise_subspace_covar(self, X: np.ndarray, problem: Problem) -> np.ndarray :
+		#get gradient approximations of each point in X 
+		grads = []
+		for x in X : 
+			# x = np.array(x)
+			# x = x.reshape(-1,1)
+			grad = self.model_finite_diff(x, problem)
+			# print(f'gradient of {x} is {grad}')
+			grads.append(grad)
+
+		covar = sum([np.outer(a,a) for a in grads])/len(X)
 		#perform eigenvalue decomposition   
 		eigvals, eigvecs = np.linalg.eigh(covar) 
 		#sort the eigenvalues in descending order
@@ -883,26 +1160,46 @@ class ASTROMoRF(Solver):
 		return eigvecs[:, sorted_indices[:self.d]]  # (n, d)
 
 
-	def finite_differencing(self,x_val: np.ndarray, model_coeff: list[float], U: np.ndarray, delta_k: float) : 
-		lower_bound = x_val - delta_k
-		upper_bound = x_val + delta_k
+	def finite_difference(self, new_solution: Solution, problem: Problem, alpha: float = 1.0e-8, BdsCheck: None | np.ndarray = None) -> np.ndarray :
+		"""Calculates a gradient approximation of the solution on the problem
 
+		:math:
+			`\nabla F(x_n) = \frac{F(x_n+\alpha)-F(x_n-\alpha)}{2\alpha}
+			\nabla F(x_n) = \frac{F(x_n+\alpha)-F(x_n)}{2\alpha}
+			\nabla F(x_n) = \frac{F(x_n)-F(x_n-\alpha)}{2\alpha}`
 
-		fn = self.model_evaluate(x_val, U, coeff=model_coeff)
+		where :math:`x_n` is new_solution and :math:`F` is the objective function of the problem 
 
+		Args:
+			new_solution (Solution): The value for where the gradient is 
+			problem (Problem): The simulation-optimisation problem being solved
+			alpha (float): The perturbation size. Defaults to 1.0e-8
+			BdsCheck (None | np.ndarray, optional): _description_. Defaults to None.
+
+		Returns:
+			np.ndarray: The output of the problem's gradient evaluated at new_solution
+		"""
+		lower_bound = problem.lower_bounds
+		upper_bound = problem.upper_bounds
+		# grads = np.zeros((problem.dim,r)) #Take r gradient approximations
+		problem.simulate(new_solution,1)
+		fn = -1 * problem.minmax[0] * new_solution.objectives_mean
+
+		#if BdsCheck isn't implemented then we assume central finite differencing 
+		if BdsCheck is None : 
+			BdsCheck =  np.zeros(problem.dim)
 		
-		BdsCheck =  np.zeros(self.n)
-		
-		FnPlusMinus = np.zeros((self.n, 3))
-		grad = np.zeros(self.n)
-		for i in range(self.n):
+		new_x = new_solution.x
+		FnPlusMinus = np.zeros((problem.dim, 3))
+		grad = np.zeros(problem.dim)
+		for i in range(problem.dim):
 			# Initialization.
-			x1 = deepcopy(x_val.tolist())
-			x2 = deepcopy(x_val.tolist())
+			x1 = list(new_x)
+			x2 = list(new_x)
 			# Forward stepsize.
-			steph1 = 1.0e-8
+			steph1 = alpha
 			# Backward stepsize.
-			steph2 = 1.0e-8
+			steph2 = alpha
 
 			# Check variable bounds.
 			if x1[i] + steph1 > upper_bound[i]:
@@ -926,14 +1223,16 @@ class ASTROMoRF(Solver):
 				x2[i] = x2[i] - FnPlusMinus[i, 2]
 
 			fn1, fn2 = 0,0 
-			x1 = np.array(x1)
+			x1_solution = self.create_new_solution(tuple(x1), problem)
 			if BdsCheck[i] != -1:
-				fn1 = self.model_evaluate(x1, U, coeff=model_coeff)
+				problem.simulate(x1_solution)
+				fn1 = -1 * problem.minmax[0] * x1_solution.objectives_mean
 				# First column is f(x+h,y).
 				FnPlusMinus[i, 0] = fn1
-			x2 = np.array(x2)
+			x2_solution = self.create_new_solution(tuple(x2), problem)
 			if BdsCheck[i] != 1:
-				fn2 = self.model_evaluate(x2, U, coeff=model_coeff)
+				problem.simulate(x2_solution)
+				fn2 = -1 * problem.minmax[0] * x2_solution.objectives_mean
 				# Second column is f(x-h,y).
 				FnPlusMinus[i, 1] = fn2
 
@@ -947,34 +1246,6 @@ class ASTROMoRF(Solver):
 
 
 		return grad 
-
-	def construct_covar(self, X: np.ndarray, delta_k: float, U0: np.ndarray, coeff: list[float]) -> np.ndarray : 
-		"""Calculate covariance matrix  
-
-		Args:
-			X (np.ndarray): (N,m) matrix of N x-vals to be evaluated
-			problem (Problem): 
-
-		Returns:
-			np.ndarray: (N,m) matrix of N gradients evaluated at each row of X
-		"""
-		rbf_kernel = lambda xi, xj : np.exp(-np.linalg.norm(xi - xj)**2 / (2 * 1.0**2))
-
-		M,n = X.shape
-		covar = np.zeros((M,M))
-
-		finite_diffs = []
-		for x_val in X : 
-			finite_diffs.append(self.finite_differencing(x_val, coeff, U0, delta_k))
-
-		for i in range(M):
-			for j in range(M):
-				base_cov = rbf_kernel(X[i], X[j])
-				diff_cov = np.dot(finite_diffs[i], finite_diffs[j]) if finite_diffs[i].shape == finite_diffs[j].shape else 0
-				covar[i, j] = base_cov * (1 + diff_cov)
-
-
-		return covar 
 
 	""" 
 		CONSTRUCTION OF INTERPOLATION SETS ALGORITHMS 
@@ -1050,7 +1321,6 @@ class ASTROMoRF(Solver):
 
 	# compute the interpolation points (2d+1) using the rotated coordinate basis (reuse one design point)
 	def get_rotated_basis_interpolation_points(self, problem: Problem, x_k: np.ndarray, delta: float, rotate_matrix: np.ndarray, reused_x: np.ndarray, U: np.ndarray) -> list[np.ndarray]:
-		# print(f'rotate matrix shape: {rotate_matrix.shape}') #should be (10,10)
 		Y = [x_k]
 		epsilon = 0.01
 		#! We have changed the range to be the rotation matrix 
@@ -1095,7 +1365,6 @@ class ASTROMoRF(Solver):
 	#! This is the only sample set construction method that gets called 
 	def construct_interpolation_set(self, current_solution: Solution, problem: Problem, U: np.ndarray, delta_k: float, k: int, visited_pts_list: list[Solution]) -> tuple[list[np.ndarray], int] : 
 		x_k = np.array(current_solution.x)
-		# print(f'visited points list when constructing the interpolation set: {visited_pts_list}')
 		Dist = []
 		for i in range(len(visited_pts_list)):
 			Dist.append(norm(np.array(visited_pts_list[i].x) - x_k)-delta_k)
@@ -1120,7 +1389,6 @@ class ASTROMoRF(Solver):
 
 			# if first_basis has some non-zero components, use rotated basis for those dimensions
 			rotate_list = np.nonzero(first_basis)[0]
-			# print(f'first basis: {first_basis}')
 			rotate_matrix = self.get_rotated_basis(first_basis, rotate_list, U)
 
 			# if first_basis has some zero components, use coordinate basis for those dimensions
@@ -1130,5 +1398,32 @@ class ASTROMoRF(Solver):
 
 			# construct the interpolation set
 			Y = self.get_rotated_basis_interpolation_points(problem, x_k, delta_k, rotate_matrix, visited_pts_list[f_index].x, U)
-
 		return np.vstack(Y), f_index
+	
+
+	def record_performance_benchmarking(self, runtimes: list[tuple[int,float]], iterations: list[tuple[int, int]]) -> None:
+		"""Record the performance benchmarking data to a CSV file.
+
+		Args:
+			runtimes (List[tuple[int, float]]): A list of tuples containing the iteration number and runtime.
+			iterations (List[tuple[int, int]]): A list of tuples containing the iteration number and number of iterations.
+		"""
+		runtimes_list = [i[1] for i in runtimes]
+		gn_iterations = [i[1] for i in iterations]
+		iterations = [i[0] for i in iterations]
+
+
+		rand_num = str(random.randint(0, 1000000))
+		directory = os.path.join(os.getcwd(), "experiments", "Progress_review_exp_2_data")
+		filename = 'performance_benchmarking_' + rand_num + '-' + self.name + '.csv'
+		path = os.path.join(directory, filename)
+
+		os.makedirs(os.path.dirname(path), exist_ok=True)
+
+		with open(path, 'w', newline='') as csvfile:
+			writer = csv.writer(csvfile)
+			writer.writerow(['Iteration', 'Runtime (s)', 'Gauss-Newton Iterations'])
+			for i in range(len(iterations)):
+				writer.writerow([iterations[i], runtimes_list[i], gn_iterations[i]])
+
+		print(f'saved performance benchmarking data to {filename}')
