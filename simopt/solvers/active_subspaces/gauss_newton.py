@@ -51,6 +51,7 @@ def linesearch_armijo(f, g, p, x0, bt_factor=0.5, ftol=1e-4, maxiter=40, traject
 	
 	dg = np.inner(g, p)
 	assert dg <= 0, 'Descent direction p is not a descent direction: p^T g = %g >= 0' % (dg, )
+	iterations = 0
 
 	alpha = 1
 
@@ -63,6 +64,7 @@ def linesearch_armijo(f, g, p, x0, bt_factor=0.5, ftol=1e-4, maxiter=40, traject
 	success = False
 	for it in range(maxiter):
 		try:
+			iterations += 1
 			x = trajectory(x0, p, alpha)
 			fx = f(x)
 			fx_norm = np.linalg.norm(fx)
@@ -79,7 +81,7 @@ def linesearch_armijo(f, g, p, x0, bt_factor=0.5, ftol=1e-4, maxiter=40, traject
 		alpha = 0
 		x = x0
 		fx = fx0
-	return x, alpha, fx
+	return x, alpha, fx, iterations
 
 
 def gauss_newton(f, F, x0, tol=1e-10, tol_normdx=1e-12, 
@@ -158,7 +160,7 @@ def gauss_newton(f, F, x0, tol=1e-10, tol_normdx=1e-12,
 	"""
 	n = len(x0)
 	if maxiter <= 0: return x0, 4
-
+	iterations = 0
 	if verbose >= 1:
 		print('Gauss-Newton Solver Iteration History')
 		print('  iter   |   ||f(x)||   |   ||dx||   | cond(F(x)) |   alpha    |  ||grad||  ')
@@ -202,8 +204,8 @@ def gauss_newton(f, F, x0, tol=1e-10, tol_normdx=1e-12,
 			dx = -grad
 		
 		# Back tracking line search
-		x_new, alpha, f_eval_new = linesearch(f, grad, dx, x, trajectory=trajectory)
-		
+		x_new, alpha, f_eval_new, iterations_linesearch = linesearch(f, grad, dx, x, trajectory=trajectory)
+		iterations += iterations_linesearch
 
 		normf = np.linalg.norm(f_eval_new)	
 		if np.linalg.norm(f_eval_new) >= np.linalg.norm(f_eval):
@@ -213,11 +215,9 @@ def gauss_newton(f, F, x0, tol=1e-10, tol_normdx=1e-12,
 			f_eval = f_eval_new
 			x = x_new
 
-		normdx = np.linalg.norm(dx)
-		F_eval = F(x)
-		grad = F_eval.T @ f_eval_new
-		
-
+			normdx = np.linalg.norm(dx)
+			F_eval = F(x)
+			grad = F_eval.T @ f_eval_new
 		#########################################################################
 		# Printing section 
 		if s[-1] == 0:
@@ -230,6 +230,7 @@ def gauss_newton(f, F, x0, tol=1e-10, tol_normdx=1e-12,
 			print(
 				'    %3d  |  %1.4e  |  %8.2e  |  %8.2e  |  %8.2e  |  %8.2e' % (
 				it, normf, normdx, cond, alpha, normgrad))
+		
 		# Termination conditions
 		if normgrad < tol:
 			if verbose: print("norm gradient %1.3e less than tolerance %1.3e" % 
@@ -263,5 +264,5 @@ def gauss_newton(f, F, x0, tol=1e-10, tol_normdx=1e-12,
 	else:
 		raise Exception('Stopping criteria not determined!')
 
-	return x, info
+	return x, info, iterations
 

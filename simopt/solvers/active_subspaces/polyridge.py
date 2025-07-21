@@ -1,5 +1,5 @@
 #This module is constructed out of the psdr library (https://github.com/jeffrey-hokanson/PSDR)
-
+#type: ignore
 """Ridge function approximation from function values"""
 # (c) 2017 Jeffrey M. Hokanson (jeffrey@hokanson.us)
 
@@ -318,6 +318,8 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		assert degree >= 0
 		self.degree = degree
 		self.problem = problem
+
+		self.iterations = 0
 			
 		assert isinstance(subspace_dimension, int)
 		assert subspace_dimension >= 1
@@ -443,22 +445,35 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		# Orthogonalize just to make sure the starting value satisfies constraints	
 		U0 = orth(U0)
 
-		#* undergo geometry improvement on X, by calculating coefficients and checking they meet criticality conditions
-		while True : 
-			self.coef = self._fit_coef(X, fX, U0)
-			Y = (U0.T @ X.T).T
-			if delta_k <= np.linalg.norm(self.profile.grad(Y))*1000 : 
-				self.delta_k = delta_k
-				self.interpolation_sols = interpolation_sols
-				break
-			else :
-				X, fX, interpolation_sols, visited_pts_list, delta_k = self.geometry_improvement.improve_geometry(x, f, delta_k, U0, visited_pts_list, X, fX)
+		prev_U = np.zeros(U0.shape)
+		U = np.copy(U0)
+		k = 0
 
-		# TODO Implement multiple initializations
-		if self.norm == 2 and self.bound == None:
-			return self._fit_varpro(X, fX, U0, **kwargs)
-		else:	
-			return self._fit_alternating(X, fX, U0, **kwargs)
+		#* undergo geometry improvement on X, by calculating coefficients and checking they meet criticality conditions
+		while np.linalg.norm(prev_U - U) > 1e-10:
+			print(f'iteration {k} of fitting the ridge function')
+			while True : 
+				self.coef = self._fit_coef(X, fX, U0)
+				Y = (U0.T @ X.T).T
+				if delta_k <= np.linalg.norm(self.profile.grad(Y))*1000 : 
+					self.delta_k = delta_k
+					self.interpolation_sols = interpolation_sols
+					break
+				else :
+					X, fX, interpolation_sols, visited_pts_list, delta_k = self.geometry_improvement.improve_geometry(x, f, delta_k, U0, visited_pts_list, X, fX)
+
+			# TODO Implement multiple initializations
+			if self.norm == 2 and self.bound == None:
+				self._fit_varpro(X, fX, U0, **kwargs)
+				prev_U = np.copy(U)
+				U = self._U
+				k += 1
+
+			else:	
+				self._fit_alternating(X, fX, U0, **kwargs)
+				prev_U = np.copy(U)
+				U = self._U
+				k += 1 
 
 	################################################################################	
 	# Specialized Affine fits
@@ -635,9 +650,10 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 			return self._varpro_residual(X, fX, U_flat)	
 
 		U0_flat = U0.flatten() 
-		U_flat, info = gauss_newton(residual, jacobian, U0_flat,
-			trajectory = self._grassmann_trajectory, gnsolver = gn_solver, **kwargs) #!Changed gnsolver argument from None to gn_solver
+		U_flat, info, iterations = gauss_newton(residual, jacobian, U0_flat,
+			trajectory = self._grassmann_trajectory, gnsolver = gn_solver, maxiter=10000, **kwargs) #!Changed gnsolver argument from None to gn_solver
 		
+		self.iterations = iterations
 		U = U_flat.reshape(-1, self.subspace_dimension)
 		
 		self._finish(X, fX, U)	
