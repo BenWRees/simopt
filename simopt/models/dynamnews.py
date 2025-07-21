@@ -80,7 +80,7 @@ class DynamNews(Model):
                 "default": [6 + j for j in range(NUM_PRODUCTS)],
             },
             "mu": {
-                "description": "mu for calculating Gumbel random variable",
+                "description": "mu for calculating Gumbel random variable - used in variance",
                 "datatype": float,
                 "default": 1.0,
             },
