@@ -38,6 +38,7 @@ from .Sampling import SamplingRule
 from .TrustRegion import * 
 from .Sampling import * 
 from .Geometry import *
+# from ..Equadratures.subspace import ActiveSubspace
 
 __all__ = ['TrustRegion', 'OMoRF']
 
@@ -279,6 +280,7 @@ class TrustRegion(TrustRegionBase) :
 	def __init__(self, name="TRUSTREGION", fixed_factors: dict | None = None) -> None :
 		super().__init__(name, fixed_factors)
 		self.rho = []
+		self.sampling_nos = []
 	
 	def construct_symmetric_matrix(self, column_vector) :
 		flat_vector = np.array(column_vector).flatten()
@@ -420,7 +422,7 @@ class TrustRegion(TrustRegionBase) :
 		sampling_instance = self.sample_instantiation()
 
 		geometry_instance = self.geometry_type_instantiation()(problem)
-		poly_basis_instance = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], None, problem.dim)
+		poly_basis_instance = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], problem, None, problem.dim)
 		model = self.model_instantiation()(geometry_instance, self, poly_basis_instance, problem, sampling_instance, model_construction_parameters)
 		
 
@@ -476,7 +478,7 @@ class TrustRegion(TrustRegionBase) :
 			candidate_solution, visited_pts_list = self.solve_subproblem(delta_k, model, problem, current_solution, visited_pts_list)
 			
 			candidate_solution, fval_tilde, expended_budget = self.sample_candidate_solution(sampling_instance, candidate_solution, current_solution, problem, k, delta_k, expended_budget)
-
+			self.sampling_nos.append(candidate_solution.n_reps)
 			#evaluate model
 			# model, problem, fval_tilde, delta_k, interpolation_solns, candidate_solution, recommended_solns
 			current_solution, delta_k, recommended_solns, expended_budget, intermediate_budgets = self.evaluate_candidate_solution(model, problem, fval_tilde, delta_k, interpolation_solns, current_solution,\
@@ -485,8 +487,24 @@ class TrustRegion(TrustRegionBase) :
 
 			# print('new solution: ', new_solution.x)
 
+		self.sampling_no_against_iteration(k)
+		plt.show()
+
 		return recommended_solns, intermediate_budgets
 	
+	def sampling_no_against_iteration(self, k:int) -> None:
+		"""
+		Plot the number of samples taken against the iteration number
+		"""
+		x = np.arange(1, k+1)
+		print(self.sampling_nos)
+		plt.plot(x,self.sampling_nos)
+		plt.xlabel('Iteration Number')
+		plt.ylabel('Number of Samples Taken')
+		plt.title('Number of Samples Taken vs Iteration Number')
+		plt.savefig('sampling_no_vs_iteration.png')
+		# plt.show()
+
 
 	def sample_candidate_solution(self, sampling_instance, candidate_solution, current_solution, problem, k, delta_k, expended_budget) : 
 			if self.factors['crn_across_solns'] :
@@ -691,7 +709,7 @@ class OMoRF(TrustRegionBase):
 		super().__init__(name, fixed_factors)
 
 	#! Do not use this. Will reset the function value if it is wrong
-	def _set_iterate(self, problem):
+	"""def _set_iterate(self, problem):
 		if problem.minmax[0] == -1 :
 			ind_min = np.argmin(self.f) #get the index of the smallest function value 
 			self.s_old = self.S[ind_min,:] #get the x-val that corresponds to the smallest function value 
@@ -699,7 +717,7 @@ class OMoRF(TrustRegionBase):
 		else : 
 			ind_min = np.argmax(self.f) #get the index of the largest function value 
 			self.s_old = self.S[ind_min,:] #get the x-val that corresponds to the largest function value 
-			self.f_old = self.f[ind_min] #get the largest function value 
+			self.f_old = self.f[ind_min] #get the largest function value""" 
 
 	
 	"""	
@@ -751,11 +769,13 @@ class OMoRF(TrustRegionBase):
 		self.S is array-like of all the x values 
 		self.f is a 1-d array of function values 
 		"""
+		#! This was removed as it was causing code to freeze at a certain budget 
 		# If S has 1 or more points in it and the point being evaluated is not unique. Just grab the existing fn. value
 		if self.S.size > 0 and np.unique(np.vstack((self.S, s)), axis=0).shape[0] == self.S.shape[0]:
 			s = s.reshape(1,-1)
 			ind_repeat = np.argmin(norm(self.S - s, ord=np.inf, axis=1))
 			f = self.f[ind_repeat]
+			self.expended_budget += 1
 		else :
 			new_solution = self.create_new_solution(tuple(s), problem) 
 			problem.simulate(new_solution, 1)
@@ -775,7 +795,14 @@ class OMoRF(TrustRegionBase):
 
 		return f[0]
 	
+	"""def calculate_subspace_var_pro(self, S, f, delta_k) -> np.ndarray : 
 
+		X = S
+		Y = f.reshape(-1,1)
+		mysubspace = ActiveSubspace(method='active-subspace', sample_points=X, sample_outputs=Y)
+		eigs = mysubspace.get_eigenvalues()
+		W = mysubspace.get_subspace()[:, :1]
+		e = mysubspace.get_eigenvalues()  """
 
 	def calculate_subspace(self, S, f, delta_k) -> np.ndarray:
 		""" Calculate the Active Subspace
@@ -1001,11 +1028,6 @@ class OMoRF(TrustRegionBase):
 		"""
 		grads = np.zeros(X.shape)
 
-		# #fill out each row 
-		# for idx,x_val in enumerate(X) : 
-		# 	x_solution = self.create_new_solution(x_val, problem)
-		# 	grads[idx, :] = self.finite_difference_gradient(x_solution, problem)
-
 		#Construct a local model over the space of subspace interpolation points
 		coeff = self.construct_model(X, f, self.poly_basis_subspace)
 
@@ -1080,8 +1102,8 @@ class OMoRF(TrustRegionBase):
 		index_set = IndexSet('total-order', orders=np.tile([2], self.q))
 		self.index_set = index_set.get_basis()[:,range(self.d-1, -1, -1)]
 		
-		self.poly_basis_model = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], dim=self.factors['subspace dimension'])
-		self.poly_basis_subspace = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], dim=self.n)
+		self.poly_basis_model = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], problem, dim=self.factors['subspace dimension'])
+		self.poly_basis_subspace = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], problem, dim=self.n)
 		self.geometry_instance = self.geometry_type_instantiation()(problem, self, self.index_set, **geo_factors)
 
 		self.s_old = np.array(current_x)
@@ -1148,7 +1170,7 @@ class OMoRF(TrustRegionBase):
 
 			self.k+=1
 
-		self.plot_deltas_against_budget()
+		# self.plot_deltas_against_budget()
 		return self.recommended_solns, self.intermediate_budgets
 
 	def plot_deltas_against_budget(self) :

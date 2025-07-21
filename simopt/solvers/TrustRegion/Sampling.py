@@ -2,12 +2,14 @@ from math import log, ceil
 import warnings
 warnings.filterwarnings("ignore")
 
+from math import floor, log
+
 import numpy as np
 from numpy.linalg import norm
 
-from simopt.base import Problem
+from simopt.base import Problem, Solution
 
-__all__ = ['SamplingRule','BasicSampling', 'AdaptiveSampling']
+__all__ = ['SamplingRule','BasicSampling', 'AdaptiveSampling', 'OriginalAdaptiveSampling', 'ASTROMoRFSampling']
 
 class SamplingRule :
 	def __init__(self, tr_instance, sampling_rule) :
@@ -36,6 +38,39 @@ class BasicSampling(SamplingRule) :
 		sample_number = 10
 		problem.simulate(current_solution,sample_number)
 		used_budget += sample_number
+		return current_solution, used_budget
+	
+
+#ASTRODF originial adaptive sampling rule
+class OriginalAdaptiveSampling(SamplingRule) :
+	def __init__(self, tr_instance) :
+		self.kappa = 1
+		self.tr_instance = tr_instance
+		super().__init__(tr_instance, self.sampling)		
+
+	def sample_size(self, k, sig, delta_k) :
+		alpha_k = 1
+		lambda_k = 10*log(k,10)**1.5
+		kappa = 10**2
+		S_k = floor(max(5,lambda_k,(lambda_k*sig)/((kappa^2)*delta_k**(2*(1+1/alpha_k)))))
+		#S_k = math.floor(max(lambda_k,(lambda_k*sig)/((kappa^2)*delta**(2*(1+1/alpha_k)))))
+		return S_k
+
+	def sampling(self, problem, k, current_solution, delta_k, used_budget, sample_after=True) :
+		# need to check there is existing result
+		problem.simulate(current_solution, 1)
+		expended_budget += 1
+		sample_size = 1
+		
+		# Adaptive sampling
+		while True:
+			problem.simulate(current_solution, 1)
+			used_budget += 1
+			sample_size += 1
+			sig = current_solution.objectives_var
+			if sample_size >= self.samplesize(k,sig,delta_k):
+				break
+
 		return current_solution, used_budget
 		
 
@@ -143,3 +178,17 @@ class AdaptiveSampling(SamplingRule) :
 			return self.adaptive_sampling_1(problem, k, new_solution, delta_k, used_budget)
 		
 		return self.adaptive_sampling_2(problem, k, new_solution, delta_k, used_budget)
+	
+
+
+class ASTROMoRFSampling(AdaptiveSampling) :
+	"""
+	ASTRO-MoRF sampling rule
+	"""
+	def __init__(self, tr_instance) :
+		self.kappa = 1
+		super().__init__(tr_instance)
+		self.delta_power = 2 if tr_instance.factors['crn_across_solns'] else 4
+		self.tr_instance = tr_instance
+
+	
