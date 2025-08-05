@@ -1,0 +1,17 @@
+import equadratures.distributions.template
+import equadratures.distributions.gaussian
+import equadratures.distributions.truncated_gaussian
+import equadratures.distributions.chebyshev
+import equadratures.distributions.cauchy
+import equadratures.distributions.chisquared
+import equadratures.distributions.beta
+import equadratures.distributions.gamma
+import equadratures.distributions.rayleigh
+import equadratures.distributions.uniform
+import equadratures.distributions.triangular
+import equadratures.distributions.weibull
+import equadratures.distributions.chi
+import equadratures.distributions.pareto
+import equadratures.distributions.gumbel
+import equadratures.distributions.studentst
+import equadratures.distributions.lognormal

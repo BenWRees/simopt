@@ -24,6 +24,9 @@ from simopt.base import (
 	Solver,
 	VariableType,
 )
+from simopt.linear_algebra_base import finite_difference_gradient
+from simopt.solvers.active_subspaces.index_set import IndexSet
+from simopt.utils import classproperty, override
 
 class OMoRF(Solver):
 	"""
@@ -54,24 +57,34 @@ class OMoRF(Solver):
 		functions to check each fixed factor is performing
 	"""
 
-	@property
-	def objective_type(self) -> ObjectiveType:
+	@classproperty
+	@override
+	def class_name(cls) -> str:
+		return "OMoRF"
+	
+	@classproperty
+	@override 
+	def objective_type(cls) -> ObjectiveType:
 		return ObjectiveType.SINGLE
 
-	@property
-	def constraint_type(self) -> ConstraintType:
+	@classproperty
+	@override 
+	def constraint_type(cls) -> ConstraintType:
 		return ConstraintType.BOX
 
-	@property
-	def variable_type(self) -> VariableType:
+	@classproperty
+	@override 
+	def variable_type(cls) -> VariableType:
 		return VariableType.CONTINUOUS
 
-	@property
-	def gradient_needed(self) -> bool:
+	@classproperty
+	@override 
+	def gradient_needed(cls) -> bool:
 		return False
 	
-	@property
-	def specifications(self) -> dict[str, dict] :
+	@classproperty
+	@override 
+	def specifications(cls) -> dict[str, dict] :
 		return {
 			"interpolation update tol":{
 				"description": "tolerance values to check for updating the interpolation model",
@@ -331,7 +344,7 @@ class OMoRF(Solver):
 		else:
 			return S
 	"""
-
+	
 	def _set_delta(self, val) : 
 		self.delta_k = val
 

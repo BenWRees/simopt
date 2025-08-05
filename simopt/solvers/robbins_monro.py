@@ -12,11 +12,12 @@ from __future__ import annotations
 from typing import Callable
 
 from simopt.base import (
-    ConstraintType,
-    ObjectiveType,
-    Solver,
-    VariableType,
+	ConstraintType,
+	ObjectiveType,
+	Solver,
+	VariableType,
 )
+from simopt.utils import classproperty, override
 
 class RobbinsMonro(Solver):
 	"""
@@ -47,24 +48,34 @@ class RobbinsMonro(Solver):
 		functions to check each fixed factor is performing
 	"""
 
-	@property
-	def objective_type(self) -> ObjectiveType: 
+	@classproperty
+	@override
+	def class_name(cls) -> str:
+		return "ROBBINSMONRO"
+
+	@classproperty
+	@override
+	def objective_type(cls) -> ObjectiveType: 
 		return ObjectiveType.SINGLE
 	
-	@property
-	def constraint_type(self) -> ConstraintType : 
+	@classproperty
+	@override
+	def constraint_type(cls) -> ConstraintType : 
 		return ConstraintType.UNCONSTRAINED
 	
-	@property
-	def variable_type(self) -> VariableType :
+	@classproperty
+	@override
+	def variable_type(cls) -> VariableType :
 		return VariableType.CONTINUOUS
 	
-	@property
-	def gradient_needed(self) -> bool:
+	@classproperty
+	@override
+	def gradient_needed(cls) -> bool:
 		return False 
 
-	@property 
-	def specifications(self) -> dict[str, dict] :
+	@classproperty
+	@override 
+	def specifications(cls) -> dict[str, dict] :
 		return {
 			"crn_across_solns": {
 					"description": "use CRN across solutions?",
@@ -74,7 +85,7 @@ class RobbinsMonro(Solver):
 				"stepsize function" : {
 					"description": "the gain function for each iteration",
 					"datatype": Callable, 
-					"default": self.stepsize_fn
+					"default": lambda n : 1/(3*n)
 				},
 				"alpha" : {
 					"description": "the value of the function at the root",

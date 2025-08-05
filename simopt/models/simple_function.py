@@ -6,6 +6,7 @@ import numpy as np
 from mrg32k3a.mrg32k3a import MRG32k3a
 
 from simopt.base import ConstraintType, Model, Problem, VariableType
+from simopt.utils import classproperty, override
 
 class SimpleFunctionModel(Model):
 	"""
@@ -36,20 +37,29 @@ class SimpleFunctionModel(Model):
 	base.Model
 	"""
 
-	@property
-	def name(self) -> str: 
+	@classproperty
+	@override 
+	def class_name_abbr(cls) -> str:
 		return "SIMPLEFUNC"
+
+	@classproperty
+	@override
+	def class_name(cls) -> str:
+		return "Deterministic Function + Noise"
 	
-	@property
-	def n_rngs(self) -> int:
+	@classproperty
+	@override
+	def n_rngs(cls) -> int:
 		return 1
 	
-	@property
-	def n_responses(self) -> int: 
+	@classproperty
+	@override
+	def n_responses(cls) -> int: 
 		return 1
 	
-	@property 
-	def specifications(self) -> dict[str, dict] : 
+	@classproperty
+	@override 
+	def specifications(cls) -> dict[str, dict] : 
 		return {
 			"x": {
 				"description": "point to evaluate",
@@ -60,7 +70,7 @@ class SimpleFunctionModel(Model):
 			"function" : {
 				"description": "deterministic function part",
 				"datatype": Callable,
-				"default": self.function_to_eval
+				"default": lambda x: x**2
 			}
 		}
 	
@@ -181,32 +191,49 @@ class SimpleFunctionProblem(Problem) :
 	--------
 	base.Problem
 	"""
-	@property
-	def n_objectives(self) -> int:
+	@classproperty
+	@override
+	def class_name_abbr(cls) -> str:
+		return "SIMPLEFUNC-1"
+	
+	@classproperty
+	@override
+	def class_name(cls) -> str:
+		return "Simple Function Problem"
+
+	@classproperty
+	@override
+	def n_objectives(cls) -> int:
 		return 1
 
-	@property
-	def n_stochastic_constraints(self) -> int:
+	@classproperty
+	@override
+	def n_stochastic_constraints(cls) -> int:
 		return 0
 
-	@property
-	def minmax(self) -> tuple[int]:
+	@classproperty
+	@override
+	def minmax(cls) -> tuple[int]:
 		return (-1,)
 
-	@property
-	def constraint_type(self) -> ConstraintType:
+	@classproperty
+	@override
+	def constraint_type(cls) -> ConstraintType:
 		return ConstraintType.UNCONSTRAINED
 
-	@property
-	def variable_type(self) -> VariableType:
+	@classproperty
+	@override
+	def variable_type(cls) -> VariableType:
 		return VariableType.CONTINUOUS
 
-	@property
-	def gradient_available(self) -> bool:
+	@classproperty
+	@override
+	def gradient_available(cls) -> bool:
 		return True
 
-	@property
-	def optimal_value(self) -> float | None:
+	@classproperty
+	@override
+	def optimal_value(cls) -> float | None:
 		# Change if f is changed
 		# TODO: figure out what f is
 		return 0.0
@@ -217,8 +244,9 @@ class SimpleFunctionProblem(Problem) :
 		# TODO: figure out what f is
 		return (0,) * self.dim
 
-	@property
-	def model_default_factors(self) -> dict:
+	@classproperty
+	@override
+	def model_default_factors(cls) -> dict:
 		return {}
 
 	@property
@@ -230,12 +258,14 @@ class SimpleFunctionProblem(Problem) :
 		# TODO: figure out if fixed factors should change
 		pass
 
-	@property
-	def model_decision_factors(self) -> set[str]:
+	@classproperty
+	@override
+	def model_decision_factors(cls) -> set[str]:
 		return {"x"}
 
-	@property
-	def specifications(self) -> dict[str, dict]:
+	@classproperty
+	@override
+	def specifications(cls) -> dict[str, dict]:
 		return {
 			"initial_solution": {
 				"description": "initial solution",

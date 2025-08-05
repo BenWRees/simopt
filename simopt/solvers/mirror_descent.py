@@ -4,11 +4,13 @@ from typing import Callable
 import numpy as np 
 from scipy.optimize import minimize
 from simopt.base import (
-    ConstraintType,
-    ObjectiveType,
-    Solver,
-    VariableType,
+	ConstraintType,
+	ObjectiveType,
+	Solver,
+	VariableType,
 )
+from simopt.linear_algebra_base import finite_difference_gradient
+from simopt.utils import classproperty, override
 
 
 
@@ -43,24 +45,34 @@ class Mirror_Descent(Solver):
 		functions to check each fixed factor is performing
 	"""
 	
-	@property
-	def objective_type(self) -> ObjectiveType: 
+	@classproperty
+	@override
+	def class_name(cls) -> str:
+		return "MIRRORDESCENT"
+
+	@classproperty
+	@override
+	def objective_type(cls) -> ObjectiveType: 
 		return ObjectiveType.SINGLE
 	
-	@property
-	def constraint_type(self) -> ConstraintType : 
+	@classproperty
+	@override
+	def constraint_type(cls) -> ConstraintType : 
 		return ConstraintType.BOX
 	
-	@property
-	def variable_type(self) -> VariableType :
+	@classproperty
+	@override
+	def variable_type(cls) -> VariableType :
 		return VariableType.CONTINUOUS
 	
-	@property
-	def gradient_needed(self) -> bool:
+	@classproperty
+	@override
+	def gradient_needed(cls) -> bool:
 		return False 
 	
-	@property 
-	def specifications(self) -> dict[str, dict] :
+	@classproperty
+	@override
+	def specifications(cls) -> dict[str, dict] :
 		return {
 			"crn_across_solns": {
 				"description": "use CRN across solutions?",
@@ -77,7 +89,7 @@ class Mirror_Descent(Solver):
 				"description": "a map that takes values from the dual space to the\
 				original vector space",
 				"datatype": Callable,
-				"default": self.mirror_map
+				"default": lambda x : 0.5 * np.linalg.norm(x, ord=2)**2
 			},
 
 			"alpha": {

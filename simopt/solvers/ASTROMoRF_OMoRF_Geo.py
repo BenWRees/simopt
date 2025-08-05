@@ -30,6 +30,7 @@ import inspect
 
 
 from simopt.linear_algebra_base import finite_difference_gradient
+from simopt.utils import classproperty, override
 
 
 from simopt.base import (
@@ -84,24 +85,35 @@ class ASTROMoRF_OMoRFGeo(Solver):
 	--------
 	base.Solver
 	"""
-	@property
-	def objective_type(self) -> ObjectiveType:
+
+	@classproperty
+	@override
+	def class_name(cls) -> str:
+		return "ASTROMoRF-GEO"
+
+	@classproperty
+	@override
+	def objective_type(cls) -> ObjectiveType:
 		return ObjectiveType.SINGLE
 
-	@property
-	def constraint_type(self) -> ConstraintType:
+	@classproperty
+	@override
+	def constraint_type(cls) -> ConstraintType:
 		return ConstraintType.BOX
 
-	@property
-	def variable_type(self) -> VariableType:
+	@classproperty
+	@override
+	def variable_type(cls) -> VariableType:
 		return VariableType.CONTINUOUS
 
-	@property
-	def gradient_needed(self) -> bool:
+	@classproperty
+	@override
+	def gradient_needed(cls) -> bool:
 		return False
 	
-	@property
-	def specifications(self) -> dict[str, dict] :
+	@classproperty
+	@override
+	def specifications(cls) -> dict[str, dict] :
 		return {
 			"crn_across_solns": {
 				"description": "CRN across solutions?",

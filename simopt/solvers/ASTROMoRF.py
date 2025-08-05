@@ -58,6 +58,7 @@ from simopt.solvers.active_subspaces.index_set import IndexSet
 from simopt.solvers.active_subspaces.polyridge import PolynomialRidgeApproximation
 from simopt.solvers.GeometryImprovement import GeometryImprovement
 from simopt.solvers.TrustRegion.Sampling import SamplingRule
+from simopt.utils import classproperty, override
 
 
 #TODO: Rewrite model construction with adaptive sampling 
@@ -96,24 +97,35 @@ class ASTROMoRF(Solver):
 	--------
 	base.Solver
 	"""
-	@property
-	def objective_type(self) -> ObjectiveType:
+
+	@classproperty
+	@override 
+	def class_name(cls) -> str:
+		return "ASTROMoRF"
+
+	@classproperty
+	@override 
+	def objective_type(cls) -> ObjectiveType:
 		return ObjectiveType.SINGLE
 
-	@property
-	def constraint_type(self) -> ConstraintType:
+	@classproperty
+	@override 
+	def constraint_type(cls) -> ConstraintType:
 		return ConstraintType.BOX
 
-	@property
-	def variable_type(self) -> VariableType:
+	@classproperty
+	@override 
+	def variable_type(cls) -> VariableType:
 		return VariableType.CONTINUOUS
 
-	@property
-	def gradient_needed(self) -> bool:
+	@classproperty
+	@override 
+	def gradient_needed(cls) -> bool:
 		return False
 	
-	@property
-	def specifications(self) -> dict[str, dict] :
+	@classproperty
+	@override 
+	def specifications(cls) -> dict[str, dict] :
 		return {
 			"crn_across_solns": {
 				"description": "CRN across solutions?",
@@ -550,6 +562,7 @@ class ASTROMoRF(Solver):
 		# if (self.factors['sampling rule'] != 'Default') :
 		# 	self.sampling_instance = self.sample_instantiation()
 
+	@override 
 	def solve(self, problem):
 		#initialise factors: 
 		self.initialise_factors(problem)

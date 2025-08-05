@@ -51,7 +51,7 @@ def main(solver_name, problem_name, solver_factors, problem_factors) -> None :
 	myexperiment = ProblemSolver(solver_name, problem_name, solver_fixed_factors=solver_factors, problem_fixed_factors=problem_factors)#, model_fixed_factors={'mu': 18.0})
 	# myexperiment = ProblemSolver(solver_name, problem_name)
 	# Run a fixed number of macroreplications of the solver on the problem.
-	myexperiment.run(n_macroreps=20)
+	myexperiment.run(n_macroreps=2)
 
 	print(f"Finished running solver {solver_name} on problem {problem_name}.")
 
@@ -94,6 +94,6 @@ def main(solver_name, problem_name, solver_factors, problem_factors) -> None :
 	# print("Finished. Plots can be found in experiments/plots folder.")
 
 if __name__ == "__main__":
-	main('ASTROMoRF', 'FACSIZE-1',{'crn_across_solns': False}, {'budget': 1000})
-	main('ASTRODF', 'FACSIZE-1',{'crn_across_solns': False}, {'budget': 1000})
-	main('OMoRF', 'FACSIZE-1',{'crn_across_solns': False}, {'budget': 1000})
+	main('ASTRODF', 'FACSIZE-1',{'crn_across_solns': False}, {'budget': 5000})
+	main('ASTROMoRF', 'FACSIZE-1',{'crn_across_solns': False}, {'budget': 5000})
+	main('OMoRF', 'FACSIZE-1',{'crn_across_solns': False}, {'budget': 5000})

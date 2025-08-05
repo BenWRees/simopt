@@ -2,13 +2,11 @@
 experiments/
 test/test_.*.py
 
+# mrg32k3a folder (only used during mrg32k3a co-development)
+mrg32k3a/
+
 # VS Code environment
 .vscode/
-
-#build files 
-build/
-dist/
-__main__.spec  
 
 # MacOS
 .DS_Store
@@ -88,6 +86,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/source/autoapi/
 
 # PyBuilder
 .pybuilder/

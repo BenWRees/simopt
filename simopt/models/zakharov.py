@@ -6,6 +6,7 @@ import numpy as np
 from mrg32k3a.mrg32k3a import MRG32k3a
 
 from simopt.base import ConstraintType, Model, Problem, VariableType
+from simopt.utils import classproperty, override
 
 DIM: int = 15
 class ZakharovFunction(Model):
@@ -37,20 +38,29 @@ class ZakharovFunction(Model):
 	base.Model
 	"""
 
-	@property
-	def name(self) -> str: 
+	@classproperty
+	@override
+	def class_name_abbr(cls) -> str:
 		return "ZAKHAROV"
 	
-	@property
-	def n_rngs(self) -> int:
+	@classproperty
+	@override
+	def class_name(cls) -> str:
+		return "Zakharov Function with Stochastic Noise"
+
+	@classproperty
+	@override
+	def n_rngs(cls) -> int:
 		return 1
 	
-	@property
-	def n_responses(self) -> int: 
+	@classproperty
+	@override
+	def n_responses(cls) -> int: 
 		return 1
 	
-	@property 
-	def specifications(self) -> dict[str, dict] : 
+	@classproperty
+	@override 
+	def specifications(cls) -> dict[str, dict] : 
 		return {
 			"x": {
 				"description": "point to evaluate",
@@ -61,7 +71,7 @@ class ZakharovFunction(Model):
 			"function" : {
 				"description": "deterministic function part",
 				"datatype": Callable,
-				"default": self.function_to_eval
+				"default": lambda x: np.sum(x ** 2) + np.sum(0.5 * np.arange(1, DIM + 1) * x)**2 + np.sum(0.5 * np.arange(1, DIM + 1) * x)**4
 			}, 
 			"variance": {
 				'description': 'variance of the noise',
@@ -200,32 +210,49 @@ class ZakharovFunctionProblem (Problem) :
 	--------
 	base.Problem
 	"""
-	@property
-	def n_objectives(self) -> int:
+	@classproperty
+	@override
+	def class_name_abbr(cls) -> str:
+		return "ZAKHAROV-1"
+	
+	@classproperty
+	@override
+	def class_name(cls) -> str:
+		return "Minimise the Zakharov Function with Stochastic Noise"
+
+	@classproperty
+	@override
+	def n_objectives(cls) -> int:
 		return 1
 
-	@property
-	def n_stochastic_constraints(self) -> int:
+	@classproperty
+	@override
+	def n_stochastic_constraints(cls) -> int:
 		return 0
 
-	@property
-	def minmax(self) -> tuple[int]:
+	@classproperty
+	@override
+	def minmax(cls) -> tuple[int]:
 		return (-1,)
 
-	@property
-	def constraint_type(self) -> ConstraintType:
+	@classproperty
+	@override
+	def constraint_type(cls) -> ConstraintType:
 		return ConstraintType.BOX
 
-	@property
-	def variable_type(self) -> VariableType:
+	@classproperty
+	@override
+	def variable_type(cls) -> VariableType:
 		return VariableType.CONTINUOUS
 
-	@property
-	def gradient_available(self) -> bool:
+	@classproperty
+	@override
+	def gradient_available(cls) -> bool:
 		return True
 
-	@property
-	def optimal_value(self) -> float | None:
+	@classproperty
+	@override
+	def optimal_value(cls) -> float | None:
 		# Change if f is changed
 		# TODO: figure out what f is
 		return 0.0
@@ -236,8 +263,9 @@ class ZakharovFunctionProblem (Problem) :
 		# TODO: figure out what f is
 		return (0,) * self.dim
 
-	@property
-	def model_default_factors(self) -> dict:
+	@classproperty
+	@override
+	def model_default_factors(cls) -> dict:
 		return {}
 
 	@property
@@ -249,12 +277,14 @@ class ZakharovFunctionProblem (Problem) :
 		# TODO: figure out if fixed factors should change
 		pass
 
-	@property
-	def model_decision_factors(self) -> set[str]:
+	@classproperty
+	@override
+	def model_decision_factors(cls) -> set[str]:
 		return {"x"}
 
-	@property
-	def specifications(self) -> dict[str, dict]:
+	@classproperty
+	@override
+	def specifications(cls) -> dict[str, dict]:
 		return {
 			"initial_solution": {
 				"description": "initial solution",

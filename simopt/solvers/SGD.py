@@ -18,7 +18,7 @@ from simopt.base import (
     Solver,
     VariableType,
 )
-
+from simopt.utils import classproperty, override
 
 class SGD(Solver):
 	"""
@@ -49,24 +49,34 @@ class SGD(Solver):
 		functions to check each fixed factor is performing
 	"""
 
-	@property
-	def objective_type(self) -> ObjectiveType: 
+	@classproperty
+	@override
+	def class_name(cls) -> str:
+		return "SGD"
+
+	@classproperty
+	@override
+	def objective_type(cls) -> ObjectiveType: 
 		return ObjectiveType.SINGLE
 	
-	@property
-	def constraint_type(self) -> ConstraintType : 
+	@classproperty
+	@override
+	def constraint_type(cls) -> ConstraintType : 
 		return ConstraintType.BOX
 	
-	@property
-	def variable_type(self) -> VariableType :
+	@classproperty
+	@override
+	def variable_type(cls) -> VariableType :
 		return VariableType.CONTINUOUS
 	
-	@property
-	def gradient_needed(self) -> bool:
+	@classproperty
+	@override
+	def gradient_needed(cls) -> bool:
 		return False 
 	
-	@property 
-	def specifications(self) -> dict[str, dict] :
+	@classproperty
+	@override 
+	def specifications(cls) -> dict[str, dict] :
 		return {
 			"crn_across_solns": {
 				"description": "use CRN across solutions?",

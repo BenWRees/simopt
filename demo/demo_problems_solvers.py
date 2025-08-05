@@ -1,51 +1,22 @@
-"""
+"""Demo for the ProblemsSolvers class.
+
 This script is intended to help with debugging problems and solvers.
 It create problem-solver groups (using the directory) and runs multiple
 macroreplications of each problem-solver pair.
 """
 
 import sys
-import os.path as o
+from pathlib import Path
 
-sys.path.append(
-    o.abspath(o.join(o.dirname(sys.modules[__name__].__file__), ".."))
-)  # type:ignore
+# Append the parent directory (simopt package) to the system path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 # Import the ProblemsSolvers class and other useful functions
-from simopt.experiment_base import ProblemsSolvers, plot_solvability_profiles, ProblemSolver
-from simopt.directory import problem_directory
+from simopt.experiment_base import PlotType, ProblemsSolvers, plot_solvability_profiles
 
-
-def build_problem_solvers(solver_names: list[str], problem_names: list[str]) -> list[list[ProblemSolver]] :
-    """Write out all the ProblemSolver pairs for the experiments 
-
-    Args:
-        solver_names (list[str]): names of the different solvers
-        problem_names (list[str]): names of the different problems to test
-
-    Returns:
-        list[list[ProblemSolver]]: A list of lists of Problem Solvers. Each list in the list of lists share a common solver 
-    """
-    problem_instances = [problem_directory[a]() for a in problem_names]
-
-    problem_solver_pairs = [] 
-
-    for solver in solver_names :
-        common_solvers = [] 
-        solver_factors = None
-        if solver == 'TRUSTREGION' : 
-            solver_factors = {'geometry instance': 'AstroDFGeometry', 'sampling rule': 'AdaptiveSampling', 'model type': 'RandomModelReuse', 'polynomial basis': 'AstroDFBasis'}
-       
-        for problem in problem_instances :
-            problem_solver = ProblemSolver(solver_name=solver, problem=problem, solver_fixed_factors=solver_factors)
-            common_solvers.append(problem_solver)
-        
-        problem_solver_pairs.append(common_solvers)
-
-    return problem_solver_pairs
-        
 
 def main() -> None:
+    """Main function to run the demo script."""
     # !! When testing a new solver/problem, first go to directory.py.
     # There you should add the import statement and an entry in the respective
     # dictionary (or dictionaries).
@@ -57,14 +28,10 @@ def main() -> None:
     solver_names = ["TRUSTREGION", "ASTRODF"]
     problem_names = ["SIMPLEFUNC-1", "EXAMPLE-1", "DYNAMNEWS-1", "NETWORK-1"] #? TRUSTREGION seems to not like NETWORK-1
 
-
-    problem_solver_pairs = build_problem_solvers(solver_names, problem_names)
-
-    mymetaexperiment = ProblemsSolvers(experiments=problem_solver_pairs)
-
     # Initialize an instance of the experiment class.
-    mymetaexperiment = ProblemsSolvers(experiments=problem_solver_pairs)
-    # mymetaexperiment = ProblemsSolvers(solver_names=solver_names, problem_names=problem_names, solver_factors=[{'geometry instance': 'AstroDFGeometry', 'sampling rule': 'AdaptiveSampling', 'model type': 'RandomModelReuse'},{}])
+    mymetaexperiment = ProblemsSolvers(
+        solver_names=solver_names, problem_names=problem_names
+    )
 
     # Write to log file.
     mymetaexperiment.log_group_experiment_results()
@@ -83,7 +50,7 @@ def main() -> None:
     print("Plotting results.")
     # Produce basic plots of the solvers on the problems.
     plot_solvability_profiles(
-        experiments=mymetaexperiment.experiments, plot_type="cdf_solvability", solve_tol=0.1
+        experiments=mymetaexperiment.experiments, plot_type=PlotType.CDF_SOLVABILITY
     )
 
     # Plots will be saved in the folder experiments/plots.

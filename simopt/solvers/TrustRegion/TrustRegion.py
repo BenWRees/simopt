@@ -32,6 +32,7 @@ from simopt.solvers.active_subspaces.basis import *
 # from simopt.solvers.active_subspaces.polyridge import *
 # from simopt.solvers.active_subspaces.subspace import ActiveSubspace
 from simopt.solvers.active_subspaces.index_set import IndexSet
+from simopt.utils import classproperty, override
 
 
 from .Sampling import SamplingRule
@@ -45,25 +46,35 @@ __all__ = ['TrustRegion', 'OMoRF']
 
 
 class TrustRegionBase(Solver) :
+
+	@classproperty
+	@override
+	def class_name(cls) -> str:
+		return "TrustRegionBase"
 	
-	@property
-	def objective_type(self) -> ObjectiveType:
+	@classproperty
+	@override
+	def objective_type(cls) -> ObjectiveType:
 		return ObjectiveType.SINGLE
 
-	@property
-	def constraint_type(self) -> ConstraintType:
+	@classproperty
+	@override
+	def constraint_type(cls) -> ConstraintType:
 		return ConstraintType.BOX
 
-	@property
-	def variable_type(self) -> VariableType:
+	@classproperty
+	@override
+	def variable_type(cls) -> VariableType:
 		return VariableType.CONTINUOUS
 
-	@property
-	def gradient_needed(self) -> bool:
+	@classproperty
+	@override
+	def gradient_needed(cls) -> bool:
 		return False
 	
-	@property
-	def specifications(self) -> dict[str, dict] :
+	@classproperty
+	@override
+	def specifications(cls) -> dict[str, dict] :
 		return {
 			"crn_across_solns": {
 				"description": "CRN across solutions?",
@@ -276,6 +287,11 @@ class TrustRegion(TrustRegionBase) :
 	# @property
 	# def specifications(self) -> dict[str, dict] :
 	# 	return {a:b for a,b in zip(list(super().specifications.keys()), list(super().specifications.values()))}
+
+	@classproperty
+	@override
+	def class_name(cls) -> str:
+		return "TrustRegion"
 	
 	def __init__(self, name="TRUSTREGION", fixed_factors: dict | None = None) -> None :
 		super().__init__(name, fixed_factors)
@@ -571,24 +587,34 @@ class OMoRF(TrustRegionBase):
 		functions to check each fixed factor is performing
 	"""
 
-	@property
-	def objective_type(self) -> ObjectiveType:
+	@classproperty
+	@override
+	def class_name(cls) -> str:
+		return "OMoRF_Solver"
+
+	@classproperty
+	@override
+	def objective_type(cls) -> ObjectiveType:
 		return ObjectiveType.SINGLE
 
-	@property
-	def constraint_type(self) -> ConstraintType:
+	@classproperty
+	@override
+	def constraint_type(cls) -> ConstraintType:
 		return ConstraintType.BOX
 
-	@property
-	def variable_type(self) -> VariableType:
+	@classproperty
+	@override
+	def variable_type(cls) -> VariableType:
 		return VariableType.CONTINUOUS
 
-	@property
-	def gradient_needed(self) -> bool:
+	@classproperty
+	@override
+	def gradient_needed(cls) -> bool:
 		return False
 	
-	@property
-	def specifications(self) -> dict[str, dict] :
+	@classproperty
+	@override
+	def specifications(cls) -> dict[str, dict] :
 		new_specifications = {
 			"interpolation update tol":{
 				"description": "tolerance values to check for updating the interpolation model",

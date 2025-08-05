@@ -1,4 +1,5 @@
-"""
+"""Demo for an Experiment with SAN, SSCONT, and IRONORECONT problems.
+
 This script is intended to help with a large experiment with
 5 solvers (two versions of random search, ASTRO-DF, STRONG, and Nelder-Mead)
 and 60 problems (20 unique instances of problems from
@@ -7,26 +8,27 @@ Produces plots appearing in the INFORMS Journal on Computing submission.
 """
 
 import sys
-import os.path as o
+from pathlib import Path
 
-sys.path.append(
-    o.abspath(o.join(o.dirname(sys.modules[__name__].__file__), ".."))
-)  # type:ignore
+# Append the parent directory (simopt package) to the system path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from simopt.experiment_base import (
+    PlotType,
     ProblemSolver,
     plot_area_scatterplots,
-    post_normalize,
     plot_progress_curves,
     plot_solvability_cdfs,
-    read_experiment_results,
     plot_solvability_profiles,
-    plot_terminal_scatterplots,
     plot_terminal_progress,
+    plot_terminal_scatterplots,
+    post_normalize,
+    read_experiment_results,
 )
 
 
 def main() -> None:
+    """Main function to run the demo script."""
     # Problems factors used in experiments
     # SAN
     all_random_costs = [
@@ -73,7 +75,6 @@ def main() -> None:
     # Two versions of random search with varying sample sizes.
     # rs_sample_sizes = [10, 50]
     # ASTRODF factors
-    delta_max = 200.0
 
     # First problem: SAN
     # Loop over problem instances.
@@ -97,8 +98,6 @@ def main() -> None:
             elif solver == "RNDSRCH_ss=50":
                 solver_name = "RNDSRCH"
                 solver_fixed_factors = {"sample_size": 50}
-            elif solver == "ASTRODF":
-                solver_fixed_factors = {"delta_max": delta_max}
 
             # Loop over solvers:
             new_experiment = ProblemSolver(
@@ -143,8 +142,6 @@ def main() -> None:
                 elif solver == "RNDSRCH_ss=50":
                     solver_name = "RNDSRCH"
                     solver_fixed_factors = {"sample_size": 50}
-                elif solver == "ASTRODF":
-                    solver_fixed_factors = {"delta_max": delta_max}
 
                 # Loop over solvers:
                 new_experiment = ProblemSolver(
@@ -181,7 +178,8 @@ def main() -> None:
                 problem_fixed_factors = {"budget": 1000}
                 problem_rename = f"IRONORECONT-1_sd={sd}_hc={hc}_inv={inv}"
 
-                # Temporarily store experiments on the same problem for post-normalization.
+                # Temporarily store experiments on the same problem for
+                # post-normalization.
                 experiments_same_problem = []
                 solver_fixed_factors = {}
                 for solver in solvers:
@@ -192,8 +190,6 @@ def main() -> None:
                     elif solver == "RNDSRCH_ss=50":
                         solver_name = "RNDSRCH"
                         solver_fixed_factors = {"sample_size": 50}
-                    elif solver == "ASTRODF":
-                        solver_fixed_factors = {"delta_max": delta_max}
 
                     # Loop over solvers:
                     new_experiment = ProblemSolver(
@@ -272,7 +268,10 @@ def main() -> None:
                             f"experiments/outputs/{file_name}.pickle"
                         )
                         # Rename problem to produce nicer plot labels.
-                        new_experiment.problem.name = rf"{problem}-1 with $\mu_D={round(dm)}$ and $\mu_L={round(lm)}$"
+                        new_experiment.problem.name = (
+                            f"{problem}-1 with "
+                            rf"$\mu_D={round(dm)}$ and $\mu_L={round(lm)}$"
+                        )
                         new_experiment.solver.name = solver_display
                         experiments_same_solver.append(new_experiment)
 
@@ -290,7 +289,10 @@ def main() -> None:
                                 f"experiments/outputs/{file_name}.pickle"
                             )
                             # Rename problem to produce nicer plot labels.
-                            new_experiment.problem.name = rf"{problem}-1 with $\sigma={sd}$ and hc={hc} and inv={inv}"
+                            new_experiment.problem.name = (
+                                f"{problem}-1 with "
+                                rf"$\sigma={sd}$ and hc={hc} and inv={inv}"
+                            )
                             new_experiment.solver.name = solver_display
                             experiments_same_solver.append(new_experiment)
 
@@ -306,7 +308,7 @@ def main() -> None:
 
     plot_solvability_profiles(
         experiments,
-        plot_type="cdf_solvability",
+        plot_type=PlotType.CDF_SOLVABILITY,
         solve_tol=alpha,
         all_in_one=True,
         plot_conf_ints=enable_confidence_intervals,
@@ -314,7 +316,7 @@ def main() -> None:
     )
     plot_solvability_profiles(
         experiments,
-        plot_type="quantile_solvability",
+        plot_type=PlotType.QUANTILE_SOLVABILITY,
         solve_tol=alpha,
         beta=0.5,
         all_in_one=True,
@@ -323,7 +325,7 @@ def main() -> None:
     )
     plot_solvability_profiles(
         experiments=experiments,
-        plot_type="diff_cdf_solvability",
+        plot_type=PlotType.DIFF_CDF_SOLVABILITY,
         solve_tol=alpha,
         ref_solver="ASTRO-DF",
         all_in_one=True,
@@ -332,7 +334,7 @@ def main() -> None:
     )
     plot_solvability_profiles(
         experiments=experiments,
-        plot_type="diff_quantile_solvability",
+        plot_type=PlotType.DIFF_QUANTILE_SOLVABILITY,
         solve_tol=alpha,
         beta=0.5,
         ref_solver="ASTRO-DF",
@@ -351,36 +353,42 @@ def main() -> None:
     for i in range(n_problems):
         plot_progress_curves(
             [experiments[solver_idx][i] for solver_idx in range(n_solvers)],
-            plot_type="mean",
+            plot_type=PlotType.MEAN,
             all_in_one=True,
             plot_conf_ints=enable_confidence_intervals,
             print_max_hw=True,
         )
         plot_terminal_progress(
             [experiments[solver_idx][i] for solver_idx in range(n_solvers)],
-            plot_type="violin",
+            plot_type=PlotType.VIOLIN,
             normalize=True,
             all_in_one=True,
         )
-        # plot_solvability_cdfs([experiments[solver_idx][i] for solver_idx in range(n_solvers)], solve_tol=0.2,  all_in_one=True, plot_CIs=True, print_max_hw=True)
+        # plot_solvability_cdfs(
+        #     [experiments[solver_idx][i] for solver_idx in range(n_solvers)],
+        #     solve_tol=0.2,
+        #     all_in_one=True,
+        #     plot_CIs=True,
+        #     print_max_hw=True,
+        # )
 
     # Plots for mu_D = 400 and mu_L = 6 (appreared in the paper)
     plot_progress_curves(
         [experiments[solver_idx][0] for solver_idx in range(n_solvers)],
-        plot_type="all",
+        plot_type=PlotType.ALL,
         all_in_one=True,
     )
 
     plot_progress_curves(
         [experiments[solver_idx][0] for solver_idx in range(3, 4)],
-        plot_type="all",
+        plot_type=PlotType.ALL,
         all_in_one=True,
         normalize=False,
     )
 
     plot_progress_curves(
         [experiments[solver_idx][0] for solver_idx in range(n_solvers)],
-        plot_type="mean",
+        plot_type=PlotType.ALL,
         all_in_one=True,
         plot_conf_ints=True,
         print_max_hw=False,
@@ -388,9 +396,7 @@ def main() -> None:
     )
 
     plot_solvability_cdfs(
-        experiments=[
-            experiments[solver_idx][0] for solver_idx in range(n_solvers)
-        ],
+        experiments=[experiments[solver_idx][0] for solver_idx in range(n_solvers)],
         solve_tol=0.2,
         all_in_one=True,
         plot_conf_ints=True,
@@ -399,7 +405,7 @@ def main() -> None:
 
     plot_terminal_progress(
         [experiments[solver_idx][0] for solver_idx in range(n_solvers)],
-        plot_type="violin",
+        plot_type=PlotType.VIOLIN,
         normalize=False,
         all_in_one=True,
     )
