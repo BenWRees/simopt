@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 # Import the ProblemsSolvers class and other useful functions
-from simopt.experiment_base import PlotType, ProblemsSolvers, plot_solvability_profiles
+from simopt.experiment_base import PlotType, ProblemsSolvers, plot_solvability_profiles, plot_progress_curves
 
 
 def main() -> None:
@@ -25,8 +25,8 @@ def main() -> None:
     # Specify the names of the solver and problem to test.
     # These names are strings and should match those input to directory.py.
     # Ex:
-    solver_names = ["TRUSTREGION", "ASTRODF"]
-    problem_names = ["SIMPLEFUNC-1", "EXAMPLE-1", "DYNAMNEWS-1", "NETWORK-1"] #? TRUSTREGION seems to not like NETWORK-1
+    solver_names = ["ASTROMoRF", "ASTRODF"]
+    problem_names = ["AIRLINE-1"] #? TRUSTREGION seems to not like NETWORK-1
 
     # Initialize an instance of the experiment class.
     mymetaexperiment = ProblemsSolvers(
@@ -36,22 +36,32 @@ def main() -> None:
     # Write to log file.
     mymetaexperiment.log_group_experiment_results()
 
-    [myexperiment.log_experiment_results() for myexperiments in mymetaexperiment.experiments for myexperiment in myexperiments]
+    # [myexperiment.log_experiment_results() for myexperiments in mymetaexperiment.experiments for myexperiment in myexperiments]
 
     # Run a fixed number of macroreplications of each solver on each problem.
-    mymetaexperiment.run(n_macroreps=5)
+    mymetaexperiment.run(n_macroreps=10)
 
     print("Post-processing results.")
     # Run a fixed number of postreplications at all recommended solutions.
-    mymetaexperiment.post_replicate(n_postreps=200)
+    mymetaexperiment.post_replicate(n_postreps=20)
     # Find an optimal solution x* for normalization.
-    mymetaexperiment.post_normalize(n_postreps_init_opt=200)
+    # mymetaexperiment.post_normalize(n_postreps_init_opt=20)
 
     print("Plotting results.")
     # Produce basic plots of the solvers on the problems.
     plot_solvability_profiles(
-        experiments=mymetaexperiment.experiments, plot_type=PlotType.CDF_SOLVABILITY
+        experiments=mymetaexperiment.experiments, plot_type=PlotType.CDF_SOLVABILITY, solve_tol=0.1
     )
+
+    # for exp in mymetaexperiment.experiments:
+    #     for e in exp:
+    #         print(f'Plotting {e.solver.name} on {e.problem.name}')
+    #         plot_progress_curves(
+    #             experiments=[e], plot_type=PlotType.ALL, normalize=False
+    #         )
+    #         plot_progress_curves(
+    #             experiments=[e], plot_type=PlotType.MEAN, normalize=True
+    #         )
 
     # Plots will be saved in the folder experiments/plots.
     print("Finished. Plots can be found in experiments/plots folder.")
