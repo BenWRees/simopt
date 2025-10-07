@@ -10,7 +10,7 @@ from mrg32k3a.mrg32k3a import MRG32k3a
 from simopt.base import ConstraintType, Model, Problem, VariableType
 from simopt.utils import classproperty, override
 
-NUM_PRODUCTS: Final[int] = 10
+# NUM_PRODUCTS: Final[int] = 10
 
 
 class DynamNews(Model):
@@ -36,6 +36,7 @@ class DynamNews(Model):
     def n_responses(cls) -> int:
         return 4
 
+    #* Need to change the default values if num_prod is changed.
     @classproperty
     @override
     def specifications(cls) -> dict[str, dict]:
@@ -43,7 +44,7 @@ class DynamNews(Model):
             "num_prod": {
                 "description": "number of products",
                 "datatype": int,
-                "default": NUM_PRODUCTS,
+                "default": 10,
             },
             "num_customer": {
                 "description": "number of customers",
@@ -53,7 +54,7 @@ class DynamNews(Model):
             "c_utility": {
                 "description": "constant of each product's utility",
                 "datatype": list,
-                "default": [6 + j for j in range(NUM_PRODUCTS)],
+                "default": [6 + j for j in range(10)],
             },
             "mu": {
                 "description": "mu for calculating Gumbel random variable - used in variance",
@@ -63,17 +64,17 @@ class DynamNews(Model):
             "init_level": {
                 "description": "initial inventory level",
                 "datatype": list,
-                "default": [3] * NUM_PRODUCTS,
+                "default": [3] * 10,
             },
             "price": {
                 "description": "sell price of products",
                 "datatype": list,
-                "default": [9] * NUM_PRODUCTS,
+                "default": [9] * 10,
             },
             "cost": {
                 "description": "cost of products",
                 "datatype": list,
-                "default": [5] * NUM_PRODUCTS,
+                "default": [5] * 10,
             },
         }
 
@@ -307,7 +308,7 @@ class DynamNewsMaxProfit(Problem):
             "initial_solution": {
                 "description": "initial solution",
                 "datatype": tuple,
-                "default": (3,) * NUM_PRODUCTS,
+                "default": (3,) * 10,
             },
             "budget": {
                 "description": "max # of replications for a solver to take",
