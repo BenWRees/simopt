@@ -104,14 +104,13 @@ class FacilitySize(Model):
         if any(mean <= 0 for mean in self.factors["mean_vec"]):
             raise ValueError("All elements in mean_vec must be greater than 0.")
 
-    def _check_cov(self) -> bool:
+    def _check_cov(self) -> None:
         try:
             np.linalg.cholesky(np.array(self.factors["cov"]))
-            return True
         except np.linalg.LinAlgError as err:
             if "Matrix is not positive definite" in str(err):
-                return False
-            raise
+                raise ValueError("Covariance matrix must be positive definite.")
+            
 
     def _check_capacity(self) -> None:
         if len(self.factors["capacity"]) != self.factors["n_fac"]:
