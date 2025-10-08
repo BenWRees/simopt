@@ -49,7 +49,7 @@ There are two ways to download a copy of the source code onto your machine:
 
 If you do not need the source code for SimOpt, you may install the library as a Python package instead. See the [Package](#package) and [Basic Example](#basic-example) sections for more details about this option.
 
-The `demo` folder contains a handful of useful scripts that can be easily modified, as directed in the comments:
+The `notebooks` folder contains a handful of useful scripts that can be easily modified, as directed in the comments:
 
 | File                                     | Description                                                                                                                                                                                                        |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
