@@ -172,7 +172,7 @@ class PolynomialTensorBasis(Basis):
 		except AttributeError:
 			raise NotImplementedError
 
-	def V(self, X = None):
+	def V(self, X = None, dim=None):
 		r""" Builds the Vandermonde matrix associated with this basis
 
 		Given points :math:`\mathbf x_i \in \mathbb{R}^n`, 
@@ -193,27 +193,32 @@ class PolynomialTensorBasis(Basis):
 		Returns
 		-------
 		V: np.array
-			Vandermonde matrix
+			Vandermonde matrix of shape (M, N) where M is the number of desired points and N is the number of Basis Elements
 		"""
+		if dim is None:
+			raise NotImplementedError
 		if X is None and self.X is not None:
 			X = self.X
 		elif X is None:
 			raise NotImplementedError
-		X = X.reshape(-1, self.dim)
+		
+		self.indices = index_set(self.degree, dim).astype(int)
+		X = X.reshape(-1, dim)
 		X = self.scale(np.array(X))
 		M = X.shape[0]
-		assert X.shape[1] == self.dim, "Expected %d dimensions, got %d" % (self.dim, X.shape[1])
-		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
+		# print(f'the number of rows in V is {M} and the number of columns is {len(self.indices)}')
+		assert X.shape[1] == dim, "Expected %d dimensions, got %d" % (dim, X.shape[1])
+		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(dim)]
 
 		
 		V = np.ones((M, len(self.indices)), dtype = X.dtype)
 		
 		for j, alpha in enumerate(self.indices):
-			for k in range(self.dim):
+			for k in range(dim):
 				V[:,j] *= V_coordinate[k][:,alpha[k]]
 		return V
 
-	def VC(self, X, c):
+	def VC(self, X, c, dim):
 		r""" Evaluate the product of the Vandermonde matrix and a vector
 
 		This evaluates the product :math:`\mathbf{V}\mathbf{c}`
@@ -238,10 +243,13 @@ class PolynomialTensorBasis(Basis):
 		----
 		This is an optimisation technique not currently implemented in the simopt library
 		"""
-		X = X.reshape(-1, self.dim)
+		if dim is None:
+			raise NotImplementedError
+		X = X.reshape(-1, dim)
 		X = self.scale(np.array(X))
 		M = X.shape[0]
 		c = np.array(c)
+		self.indices = index_set(self.degree, dim).astype(int)
 		assert len(self.indices) == c.shape[0]
 
 		if len(c.shape) == 2:
@@ -250,14 +258,14 @@ class PolynomialTensorBasis(Basis):
 			c = c.reshape(-1,1)
 			oneD = True
 
-		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
+		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(dim)]
 		out = np.zeros((M, c.shape[1]))	
 		for j, alpha in enumerate(self.indices):
 
 			# If we have a non-zero coefficient
 			if np.max(np.abs(c[j,:])) > 0.:
 				col = np.ones(M)
-				for ell in range(self.dim):
+				for ell in range(dim):
 					col *= V_coordinate[ell][:,alpha[ell]]
 
 				for k in range(c.shape[1]):
@@ -266,7 +274,7 @@ class PolynomialTensorBasis(Basis):
 			out = out.flatten()
 		return out
 
-	def DV(self, X):
+	def DV(self, X, dim):
 		r""" Column-wise derivative of the Vandermonde matrix
 
 		Given points :math:`\mathbf x_i \in \mathbb{R}^n`, 
@@ -291,15 +299,16 @@ class PolynomialTensorBasis(Basis):
 			Derivative of Vandermonde matrix where :code:`Vp[i,j,:]`
 			is the gradient of :code:`V[i,j]`. 
 		"""
+		self.indices = index_set(self.degree, dim).astype(int)
 		if len(X.shape) == 1:
 			X = X.reshape(1,-1)
 		# X = X.reshape(-1, self.dim)
 		X = self.scale(np.array(X))
 		M = X.shape[0]
-		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
+		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(dim)]
 		
 		N = len(self.indices)
-		DV = np.ones((M, N, self.dim), dtype = X.dtype)
+		DV = np.ones((M, N, dim), dtype = X.dtype)
 
 		try:
 			dscale = self._dscale()
@@ -307,9 +316,9 @@ class PolynomialTensorBasis(Basis):
 			dscale = np.ones(X.shape[1])	
 
 
-		for k in range(self.dim):
+		for k in range(dim):
 			for j, alpha in enumerate(self.indices):
-				for q in range(self.dim):
+				for q in range(dim):
 					if q == k:
 						DV[:,j,k] *= np.dot(V_coordinate[q][:,0:-1], self.Dmat[alpha[q],:])
 					else:
@@ -319,7 +328,7 @@ class PolynomialTensorBasis(Basis):
 
 		return DV
 	
-	def DDV(self, X):
+	def DDV(self, X, dim):
 		r""" Column-wise second derivative of the Vandermonde matrix
 
 		Given points :math:`\mathbf x_i \in \mathbb{R}^n`, 
@@ -344,15 +353,16 @@ class PolynomialTensorBasis(Basis):
 			Second derivative of Vandermonde matrix where :code:`Vpp[i,j,:,:]`
 			is the Hessian of :code:`V[i,j]`. 
 		"""
+		self.indices = index_set(self.degree, dim).astype(int)
 		if len(X.shape) == 1:
 			X = X.reshape(1,-1)
 		# X = X.reshape(-1, self.dim)
 		X = self.scale(np.array(X))
 		M = X.shape[0]
-		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(self.dim)]
+		V_coordinate = [self.vander(X[:,k], self.degree) for k in range(dim)]
 		
 		N = len(self.indices)
-		DDV = np.ones((M, N, self.dim, self.dim), dtype = X.dtype)
+		DDV = np.ones((M, N, dim, dim), dtype = X.dtype)
 
 		try:
 			dscale = self._dscale()
@@ -360,10 +370,10 @@ class PolynomialTensorBasis(Basis):
 			dscale = np.ones(X.shape[1])	
 
 
-		for k in range(self.dim):
-			for ell in range(k, self.dim):
+		for k in range(dim):
+			for ell in range(k, dim):
 				for j, alpha in enumerate(self.indices):
-					for q in range(self.dim):
+					for q in range(dim):
 						if q == k == ell:
 							# We need the second derivative
 							eq = np.zeros(self.degree+1)
@@ -380,8 +390,8 @@ class PolynomialTensorBasis(Basis):
 				DDV[:,:,ell, k] = DDV[:,:,k, ell]
 		return DDV
 
-	def roots(self, coef):
-		if self.dim > 1:
+	def roots(self, coef, dim):
+		if dim > 1:
 			raise NotImplementedError
 		r = self.polyroots(coef)
 		return r*(self._ub[0] - self._lb[0])/2.0 + (self._ub[0] + self._lb[0])/2.
@@ -471,8 +481,8 @@ class HermiteTensorBasis(PolynomialTensorBasis):
 		except AttributeError:
 			raise NotImplementedError
 
-	def roots(self, coef):
-		if self.dim > 1:
+	def roots(self, coef, dim):
+		if dim > 1:
 			raise NotImplementedError
 		r = hermroots(coef)
 		return r*self._std[0]*np.sqrt(2) + self._mean[0]
@@ -717,32 +727,34 @@ class PolynomialBasis(Basis) :
 			raise NotImplementedError
 
 	#Construct a matrix Row by Row
-	def V(self, X: np.ndarray) -> np.ndarray :
+	def V(self, X: np.ndarray, dim: int) -> np.ndarray :
+		self.indices = index_set(self.degree, dim).astype(int)
 		# print(f'dimension: {self.dim}')
 		# print(f'shape of X: {X.shape}')
-		X = X.reshape(-1, self.dim)
+		X = X.reshape(-1, dim)
 		self.X = X
 		X = self.scale(np.array(X))
 		M = X.shape[0]
-		assert X.shape[1] == self.dim, "Expected %d dimensions, got %d" % (self.dim, X.shape[1])
-		V_coordinate = [self.vander(X[:,k]) for k in range(self.dim)]
+		assert X.shape[1] == dim, "Expected %d dimensions, got %d" % (dim, X.shape[1])
+		V_coordinate = [self.vander(X[:,k]) for k in range(dim)]
 		
 		V = np.ones((M, len(self.indices)), dtype = X.dtype)
 		
 		for j, alpha in enumerate(self.indices):
-			for k in range(self.dim):
+			for k in range(dim):
 				V[:,j] *= V_coordinate[k][:,alpha[k]]
 
 		return V
 	
-	def DV(self, X):
-		X = X.reshape(-1, self.dim)
+	def DV(self, X, dim):
+		self.indices = index_set(self.degree, dim).astype(int)
+		X = X.reshape(-1, dim)
 		X = self.scale(np.array(X))
 		M = X.shape[0]
-		V_coordinate = [self.vander(X[:,k]) for k in range(self.dim)]
+		V_coordinate = [self.vander(X[:,k]) for k in range(dim)]
 		
 		N = len(self.indices)
-		DV = np.ones((M, N, self.dim), dtype = X.dtype)
+		DV = np.ones((M, N, dim), dtype = X.dtype)
 
 		try:
 			dscale = self._dscale()
@@ -750,9 +762,9 @@ class PolynomialBasis(Basis) :
 			dscale = np.ones(X.shape[1])	
 
 
-		for k in range(self.dim):
+		for k in range(dim):
 			for j, alpha in enumerate(self.indices):
-				for q in range(self.dim):
+				for q in range(dim):
 					if q == k:
 						DV[:,j,k] *= np.dot(V_coordinate[q][:,0:-1], self.Dmat[alpha[q],:])
 					else:
@@ -762,14 +774,15 @@ class PolynomialBasis(Basis) :
 
 		return DV
 	
-	def DDV(self, X):
-		X = X.reshape(-1, self.dim)
+	def DDV(self, X, dim):
+		self.indices = index_set(self.degree, dim).astype(int)
+		X = X.reshape(-1, dim)
 		X = self.scale(np.array(X))
 		M = X.shape[0]
-		V_coordinate = [self.vander(X[:,k]) for k in range(self.dim)]
+		V_coordinate = [self.vander(X[:,k]) for k in range(dim)]
 		
 		N = len(self.indices)
-		DDV = np.ones((M, N, self.dim, self.dim), dtype = X.dtype)
+		DDV = np.ones((M, N, dim, dim), dtype = X.dtype)
 
 		try:
 			dscale = self._dscale()
@@ -777,10 +790,10 @@ class PolynomialBasis(Basis) :
 			dscale = np.ones(X.shape[1])	
 
 
-		for k in range(self.dim):
-			for ell in range(k, self.dim):
+		for k in range(dim):
+			for ell in range(k, dim):
 				for j, alpha in enumerate(self.indices):
-					for q in range(self.dim):
+					for q in range(dim):
 						if q == k == ell:
 							# We need the second derivative
 							eq = np.zeros(self.degree+1)
@@ -797,8 +810,8 @@ class PolynomialBasis(Basis) :
 				DDV[:,:,ell, k] = DDV[:,:,k, ell]
 		return DDV
 
-	def roots(self, coef):
-		if self.dim > 1:
+	def roots(self, coef, dim):
+		if dim > 1:
 			raise NotImplementedError
 		r = self.polyroots(coef)
 		return r*(self._ub[0] - self._lb[0])/2.0 + (self._ub[0] + self._lb[0])/2.
@@ -1116,7 +1129,7 @@ class AstroDFBasis :
 	def assign_interpolation_set(self, X) : 
 		self.X = X 
 
-	def V(self, interpolation_set: np.ndarray) -> np.ndarray : 
+	def V(self, interpolation_set: np.ndarray, dim: int) -> np.ndarray : 
 		X_shape = (len(interpolation_set),self.degree*len(interpolation_set[0])+1)
 		#calculate the whole row,
 		X = np.zeros(X_shape)
