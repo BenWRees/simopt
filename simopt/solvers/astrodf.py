@@ -78,7 +78,7 @@ class ASTRODF(Solver):
             "crn_across_solns": {
                 "description": "use CRN across solutions",
                 "datatype": bool,
-                "default": True,
+                "default": False,
             },
             "eta_1": {
                 "description": "threshhold for a successful iteration",
