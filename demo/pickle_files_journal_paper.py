@@ -19,6 +19,8 @@ sys.path.append(
 # Import the ProblemSolver class and other useful functions
 from simopt.experiment_base import (
 	ProblemSolver,
+	instantiate_solver,
+	instantiate_problem
 )
 
 from simopt.base import (
@@ -101,34 +103,24 @@ def find_optimal_d(self, problem_name: str) -> int :
 
 	# print(f'the final significance level is {sig_lvl} and the subspace dimension is {d}')
 
-	return d
+	return d 
 
 
-def main(filename: str) -> None :
-	
-	lines = read_lines_experiment_data(filename)
-	processes = []
-	for line in lines:
-		solver_name = line[0]
-		problem_name = line[1]
-		dim_size = line[2]
-		solver_factors = line[3]
-		budget = line[4]
-
+def main(solver_name: str, problem_name: str, dim_size: int, solver_factors: dict, budget: int) -> None :
 		macroreplication_no = 100  # Number of macroreplications for each experiment					
 
-
+		processes = []
 		if solver_name == 'ASTROMoRF' or solver_name == 'OMoRF':
-			solver_factors['subspace_dim'] = find_optimal_d(problem_name)
+			solver_factors['initial subspace dimension'] = find_optimal_d(problem_name)
 
-			p = Process(target=run_experiment, args=(solver_name, problem_name, dim_size, macroreplication_no, solver_factors, budget))
-			p.start()
-			processes.append(p)
+		p = Process(target=run_experiment, args=(solver_name, problem_name, dim_size, macroreplication_no, solver_factors, budget))
+		p.start()
+		processes.append(p)	
 
-		else:
-			p = Process(target=run_experiment, args=(solver_name, problem_name, dim_size, macroreplication_no, solver_factors, budget))
-			p.start()
-			processes.append(p)	
+		for process in processes:
+			process.join()
+
+
 
 
 
@@ -148,8 +140,11 @@ def run_experiment(solver_name, problem_name, dim_size, macroreplication_no, sol
 	file_name_path = (
 		"experiments/outputs/" + solver_name + "_on_" + problem_name + ".pickle"
 	)
+	solver = instantiate_solver(solver_name, solver_factors)
+	problem = instantiate_problem(problem_name, update_problem_factor_dimensions(problem_name, dim_size, budget), update_model_factors_dimensions(problem_name, dim_size))
+
 	# print(f"Results will be stored as {file_name_path}.")
-	myexperiment = ProblemSolver(solver_name, problem_name, solver_fixed_factors=solver_factors, problem_fixed_factors=update_problem_factor_dimensions(problem_name, dim_size,budget), model_fixed_factors=update_model_factors_dimensions(problem_name, dim_size), file_name_path=file_name_path)
+	myexperiment = ProblemSolver(problem=problem, solver=solver, file_name_path=file_name_path)
 	
 	myexperiment.run(n_macroreps=macroreplication_no)
 
@@ -265,34 +260,14 @@ def update_problem_factor_dimensions(problem_name: str, new_dim: int, budget: in
 			'budget': budget,
 		}
 
-
-def read_lines_experiment_data(file_name_path: str) -> list[list]:
-	"""
-		Read each line in a .csv file turning it into a list and append it to a list
-		the line read should be of types: str, str, int, dict, int
-
-	Args:
-		file_name_path (str): Path to the .csv file
-
-	Returns:
-		list[list]: List of lines read from the file
-	"""
-	lines_data = []
-	with open(file_name_path, 'r') as f:
-		lines = f.readlines()
-		for line in lines[1:]:
-			line = line.strip()
-			if line == "":
-				continue
-			line_split = line.split(',')
-			solver_name = line_split[0]
-			problem_name = line_split[1]
-			dim_size = int(line_split[2])
-			solver_factors = eval(line_split[3])
-			budget = int(line_split[4])
-			lines_data.append([solver_name, problem_name, dim_size, solver_factors, budget])
-	return lines_data
-
 if __name__ == "__main__":
-	filename = argv[1]
-	main(filename)
+	solver_name = argv[1]
+	problem_name = argv[2]
+	dim_size = int(argv[3])
+	solver_factors = eval(argv[4])
+	budget = int(argv[5])
+
+	if solver_name == 'ASTROMoRF' : 
+		solver_factors['polynomial basis']= 'ChebyshevTensorBasis'
+
+	main(solver_name, problem_name, dim_size, solver_factors, budget)
