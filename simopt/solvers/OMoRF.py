@@ -111,7 +111,7 @@ class OMoRF(Solver):
 				"datatype": float,
 				"default": 0.5
 			}, 
-			"subspace dimension": {
+			"initial subspace dimension": {
 				"description": "dimension size of the active subspace",
 				"datatype": int, 
 				"default": 1
@@ -201,7 +201,7 @@ class OMoRF(Solver):
 			"gamma_3": self.check_gamma_3,
 			"gamma_shrinking": self.check_gamma_shrinking,
 			"omega_shrinking": self.check_omega_shrinking,
-			"subspace dimension": self.check_dimension_reduction,
+			"initial subspace dimension": self.check_dimension_reduction,
 			"random directions": self.check_random_directions,
 			"alpha_1": self.check_alpha_1,
 			"alpha_2": self.check_alpha_2,
@@ -226,7 +226,7 @@ class OMoRF(Solver):
 		return self.factors['omega_shrinking'] > 0
 	
 	def check_dimension_reduction(self) -> bool:
-		return self.factors['subspace dimension'] >= 1
+		return self.factors['initial subspace dimension'] >= 1
 	
 	def check_random_directions(self) -> bool : 
 		return isinstance(self.factors['random directions'], bool)
@@ -644,7 +644,7 @@ class OMoRF(Solver):
 		self.S = np.array([])
 		self.f = np.array([])
 		self.g = np.array([])
-		self.d = self.factors['subspace dimension']
+		self.d = self.factors['initial subspace dimension']
 
 		self.expended_budget = 0
 		# self.delta_k = self.factors['delta']
@@ -700,7 +700,7 @@ class OMoRF(Solver):
 		index_set = IndexSet('total-order', orders=np.tile([2], self.q))
 		self.index_set = index_set.get_basis()[:,range(self.d-1, -1, -1)]
 		
-		self.poly_basis_model = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], problem, dim=self.factors['subspace dimension'])
+		self.poly_basis_model = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], problem, dim=self.factors['initial subspace dimension'])
 		self.poly_basis_subspace = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], problem, dim=self.n)
 		self.geometry_instance = self.geometry_type_instantiation()(problem, self, self.index_set, **geo_factors)
 
