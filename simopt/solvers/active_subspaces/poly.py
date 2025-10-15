@@ -404,22 +404,22 @@ class PolynomialFunction(BaseFunction):
 		return self.basis.roots(self.coef)	
 		
 
-	def V(self, X):	
-		return self.basis.V(X)
+	def V(self, X, dim):	
+		return self.basis.V(X, dim)
 
-	def DV(self, X):
-		return self.basis.DV(X)
+	def DV(self, X, dim):
+		return self.basis.DV(X, dim)
 
-	def DDV(self, X):
+	def DDV(self, X, dim):
 		return self.basis.DDV(X)
 
-	def eval(self, X):
+	def eval(self, X, dim):
 		if len(X.shape) == 1:
-			return self.V(X.reshape(1,-1)).dot(self.coef).reshape(1)
+			return self.V(X.reshape(1,-1), dim).dot(self.coef).reshape(1)
 		else:
-			return self.V(X).dot(self.coef)
+			return self.V(X, dim).dot(self.coef)
 
-	def grad(self, X, coef=None):
+	def grad(self, X, dim, coef=None):
 		if coef is None : 
 			coef = self.coef
 		if len(X.shape) == 1:
@@ -428,7 +428,7 @@ class PolynomialFunction(BaseFunction):
 		else:
 			one_d = False	
 		
-		DV = self.DV(X)
+		DV = self.DV(X, dim)
 		# Compute gradient on projected space
 		Df = np.tensordot(DV, coef, axes = (1,0))
 		# Inflate back to whole space
@@ -437,14 +437,14 @@ class PolynomialFunction(BaseFunction):
 		else:
 			return Df
 
-	def hessian(self, X):
+	def hessian(self, X, dim):
 		if len(X.shape) == 1:
 			one_d = True
 			X = X.reshape(1,-1)	
 		else:
 			one_d = False
 	
-		DDV = self.DDV(X)
+		DDV = self.DDV(X, dim)
 		DDf = np.tensordot(DDV, self.coef, axes = (1,0))
 		if one_d:
 			return DDf.reshape(X.shape[1], X.shape[1])
