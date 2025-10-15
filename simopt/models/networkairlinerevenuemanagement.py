@@ -531,7 +531,7 @@ class AirlineRevenueBookingLimitProblem(Problem):
             'budget': {
                 'description': 'total capacity available',
                 'datatype': int,
-                'default': 10,
+                'default': 5000,
             },
         }
     
