@@ -44,7 +44,7 @@ class GeometryImprovement :
 		self.rho_min = tr_instance.factors['rho_min']
 		self.alpha_1 = tr_instance.factors['alpha_1']
 		self.alpha_2 = tr_instance.factors['alpha_2']
-		self.d = tr_instance.factors['subspace dimension']
+		self.d = tr_instance.factors['initial subspace dimension']
 		self.q = int(0.5*(self.d+1)*(self.d+2)) # comb(self.d + self.deg, self.deg) +  self.n * self.d
 		self.p = self.n+1
 		index_set = IndexSet('total-order', orders=np.tile([2], self.q))
