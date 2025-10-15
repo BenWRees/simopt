@@ -12,6 +12,8 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pkgutil, inspect, psutil
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -77,7 +79,7 @@ def instantiate_solver(solver_name: str, fixed_factors: dict | None = None) -> S
 		print(f"Module {module_path} not found.")
 	
 	
-def instantiate_problem(problem_name: str, fixed_factors: dict | None = None) -> Problem:
+def instantiate_problem(problem_name: str, fixed_factors: dict | None = None, model_fixed_factors: dict | None = None) -> Problem:
 	"""
 		Instantiate a problem class based on class_name_abbr, scanning all submodules of a string module path.
 	"""
@@ -94,7 +96,7 @@ def instantiate_problem(problem_name: str, fixed_factors: dict | None = None) ->
 			for _, cls in inspect.getmembers(submodule, inspect.isclass):
 				if cls.__module__ == name and hasattr(cls, 'class_name_abbr'):
 					if getattr(cls, 'class_name_abbr') == problem_name:
-						return cls(fixed_factors)
+						return cls(fixed_factors, model_fixed_factors)
 
 		raise ValueError(f"No class with class_name_abbr == '{problem_name}' found in submodules of '{module_path}'.")
 	
