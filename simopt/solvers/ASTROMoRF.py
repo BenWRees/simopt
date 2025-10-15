@@ -7,7 +7,7 @@ interpolation on a reduced subspace constructed through Active Subspace dimensio
 The use of Active Subspace reduction allows for a reduced number of interpolation points to be evaluated in the model construction.
 
 """
-
+#TODO: change subspace dimension to being dynamic
 #TODO: 1. WANT TO ENSURE 2d+1 interpolation points every time - problem with basis.DV in grads 
 #TODO: 2. HAVE A PROBLEM WITH THE NUMERATOR BEING NEGATIVE AND THE DENOMINATOR BEING POSITIVE - CHECK THE RATIO
 	#! THIS IS BECAUSE THE MODEL IS NOT ACCURATE ENOUGH - CHECK THE MODEL EVALUATION
@@ -130,7 +130,7 @@ class ASTROMoRF(Solver):
 			"crn_across_solns": {
 				"description": "CRN across solutions?",
 				"datatype": bool,
-				"default": True
+				"default": False
 			},
 			"original_sampling_rule" : {
 				"description": "Flag to enable original sampling rule",
@@ -175,7 +175,7 @@ class ASTROMoRF(Solver):
 			"polynomial basis": {
 				"description": "Polynomial basis to use in model construction",
 				"datatype": str, 
-				"default": "LegendreTensorBasis"
+				"default": "MonomialPolynomialBasis"
 			}, 
 			"polynomial degree": {
 				"description": "degree of the polynomial",
@@ -212,10 +212,10 @@ class ASTROMoRF(Solver):
 				"datatype": float,
 				"default": 0.5
 			}, 
-			"subspace dimension": {
+			'initial subspace dimension': {
 				"description": "dimension size of the active subspace",
 				"datatype": int, 
-				"default": 6
+				"default": 3
 			}, 
 			"random directions": {
 				"description": "Determine to take random directions in set construction",
@@ -278,7 +278,7 @@ class ASTROMoRF(Solver):
 			"gamma_3": self.check_gamma_3,
 			"gamma_shrinking": self.check_gamma_shrinking,
 			"omega_shrinking": self.check_omega_shrinking,
-			"subspace dimension": self.check_dimension_reduction,
+			'initial subspace dimension': self.check_dimension_reduction,
 			"random directions": self.check_random_directions,
 			"alpha_1": self.check_alpha_1,
 			"alpha_2": self.check_alpha_2,
@@ -309,7 +309,7 @@ class ASTROMoRF(Solver):
 		return self.factors['omega_shrinking'] > 0
 	
 	def check_dimension_reduction(self) -> bool:
-		return self.factors['subspace dimension'] >= 1
+		return self.factors['initial subspace dimension'] >= 1
 	
 	def check_random_directions(self) -> bool : 
 		return isinstance(self.factors['random directions'], bool)
@@ -387,6 +387,25 @@ class ASTROMoRF(Solver):
 		
 	def check_rho_min(self) -> bool : 
 		return self.factors['rho_min'] > 0
+	
+
+	def dynamic_subspace_dimension(self, k: int) -> int : 
+		"""
+		   Determine the subspace dimension at iteration k. The subspace dimension increases 
+		   Logarithmically with the iteration number k.
+
+		Args:
+			iteration_no (int): the iteration number k
+
+		Returns:
+			int: the subspace dimension at iteration k
+		"""
+		initial_d = self.factors['initial subspace dimension']
+		if k < 2 :
+			return initial_d
+		else :
+			return min(floor(initial_d * 1+log(k,10)), self.n)
+
 
 	def __init__(self, name="ASTROMoRF", fixed_factors: dict | None = None) -> None:
 		"""
@@ -490,7 +509,18 @@ class ASTROMoRF(Solver):
 		return d
 
 
+	def q_setter(self, d: int) -> int :
+		"""
+			Calculate the number of basis functions in a d-dimensional polynomial of degree p through combinatorial formula
 
+		Args:
+			d (int): the dimension of the subspace
+			p (int): the degree of the polynomial
+
+		Returns:
+			int: the number of basis functions in a d-dimensional polynomial of degree p
+		"""
+		return int(0.5*(d+1)*(d+2)) # comb(d + self.deg, self.deg) +  self.n * d
 
 
 	def initialise_factors(self,problem: Problem) -> None :
@@ -511,7 +541,10 @@ class ASTROMoRF(Solver):
 		self.S = np.array([])
 		self.f = np.array([])
 		self.g = np.array([])
-		self.d = self.factors['subspace dimension']
+		self.d = self.factors['initial subspace dimension']
+
+		self.collection_of_subspaces = dict()
+		self.collection_of_subspaces[0] = self.d
 
 		self.delta_max = self.calculate_max_radius(problem)
 
@@ -521,13 +554,13 @@ class ASTROMoRF(Solver):
 		self.deltas = []
 		self.n = problem.dim
 
-		if not self.factors['old_implementation'] :
-			self.d = self.construct_proxy_d(problem) 
-		else : 
-			self.d = self.factors['subspace dimension']
+		# if not self.factors['old_implementation'] :
+		# 	self.d = self.construct_proxy_d(problem) 
+		# else : 
+		# 	self.d = self.factors['initial subspace dimension']
 
 		self.deg = self.factors['polynomial degree'] 
-		self.q = int(0.5*(self.d+1)*(self.d+2)) # comb(self.d + self.deg, self.deg) +  self.n * self.d
+		self.q = self.q_setter(self.d) # comb(self.d + self.deg, self.deg) +  self.n * self.d
 		self.p = self.n+1
 		self.epsilon_1, self.epsilon_2 = self.factors['interpolation update tol'] #epsilon is the tolerance in the interpolation set update 
 		self.random_initial = self.factors['random directions']
@@ -567,11 +600,19 @@ class ASTROMoRF(Solver):
 		#initialise factors: 
 		self.initialise_factors(problem)
 
+
 		k = 0
 
 		while self.expended_budget < problem.factors['budget'] : 
+			#set the new subspace dimension and number of samples 
+			self.d = self.dynamic_subspace_dimension(k)
+			self.q = self.q_setter(self.d) 
+			self.collection_of_subspaces[k] = self.d
+			#update dimension in the basis 
+			
+			
 			k += 1 
-			print(f'Iteration {k} with budget {self.expended_budget}')
+			print(f'Iteration {k} with budget {self.expended_budget} and subspace dimension {self.d}')
 			if k == 1 :
 				self.current_solution = self.create_new_solution(self.current_solution.x, problem)
 				# current_solution = self.create_new_solution(current_solution.x, problem)
@@ -611,11 +652,12 @@ class ASTROMoRF(Solver):
 
 			#evaluate model
 			self.current_solution, self.delta_k, self.recommended_solns, self.expended_budget, self.intermediate_budgets = self.evaluate_candidate_solution(problem, self.U, self.fval, fval_tilde, self.delta_k, interpolation_solns, self.current_solution, candidate_solution, self.recommended_solns, self.expended_budget, self.intermediate_budgets)	
-
+		
 		#record the performance 
-		if self.factors['performance_benchmarking_flag'] :
-			self.record_performance_benchmarking(self.runtimes, self.iterations)
+		# if self.factors['performance_benchmarking_flag'] :
+		# 	self.record_performance_benchmarking(self.runtimes, self.iterations)
 
+		[print(f'At iteration {i}, the subspace dimension was {self.collection_of_subspaces[i]}') for i in self.collection_of_subspaces.keys()]
 		return self.recommended_solns, self.intermediate_budgets
 	
 
@@ -662,6 +704,8 @@ class ASTROMoRF(Solver):
 				solution, self.expended_budget = self.adaptive_sampling(problem, k, solution, self.delta_k, self.expended_budget)
 				fX.append(-1 * problem.minmax[0] * solution.objectives_mean)
 				interpolation_solutions.append(solution)
+
+		print(f'shape of fX is {np.array(fX).shape} and the number of interpolation solutions is {len(interpolation_solutions)}')
 
 		return np.array(fX), interpolation_solutions, visited_pts
 
@@ -1033,7 +1077,7 @@ class ASTROMoRF(Solver):
 		fval = fX.flatten().tolist()
 
 
-		self.model.fit(X, fX, np.array(current_solution.x), self.f_old, delta_k, interpolation_solutions, visited_points_list, U)
+		self.model.fit(X, fX, np.array(current_solution.x), self.f_old, delta_k, interpolation_solutions, self.d, visited_points_list, U)
 
 		#set delta_k and rho_k after model fitting 
 		self.delta_k = self.model.delta_k 
@@ -1062,7 +1106,7 @@ class ASTROMoRF(Solver):
 			X = X.reshape(-1,1)
 		val = 0
 		for _ in range(N) : 
-			val += self.model.eval(X)
+			val += self.model.eval(X, self.d)
 
 		val = val/N	
 		return val
