@@ -705,7 +705,7 @@ class ASTROMoRF(Solver):
 				fX.append(-1 * problem.minmax[0] * solution.objectives_mean)
 				interpolation_solutions.append(solution)
 
-		print(f'shape of fX is {np.array(fX).shape} and the number of interpolation solutions is {len(interpolation_solutions)}')
+		# print(f'shape of fX is {np.array(fX).shape} and the number of interpolation solutions is {len(interpolation_solutions)}')
 
 		return np.array(fX), interpolation_solutions, visited_pts
 
