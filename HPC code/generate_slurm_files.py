@@ -7,9 +7,12 @@ import os
 import shutil
 import json 
 import subprocess
-from sys import argv
+import sys
 from typing import Dict, List
 from pathlib import Path
+
+# Take the current directory, find the parent, and add it to the system path
+sys.path.append(str(Path.cwd().parent))
 
 def load_config_from_json(json_path: str) -> tuple[list[str], list[str], list[int], dict, list[int]] :
     """
@@ -49,26 +52,25 @@ def generate_csv(json_path: str, csv_file_path: str) -> str :
 
 
     # === NAMES ===
-    solver_names, problem_names, dim_sizes, fixed_factors, budgets = load_config_from_json("config.json")
+    solver_names, problem_names, dim_sizes, fixed_factors, budgets = load_config_from_json(json_path)
 
     # === CREATE CSV FILE ===
     with open(csv_file, mode='w', newline='') as file:
         writer = csv.writer(file)
         # Write header
-        writer.writerow(['solver_name', 'problem_name', 'dim_size', 'solver_factors', 'budget'])
+        writer.writerow(['problem_name', 'dim_size', 'solver_factors', 'budget'])
         
         # Generate combinations and write to CSV
         for problem in problem_names:
-            for solver in solver_names:
-                for dim in dim_sizes:
-                    for budget in budgets:
-                        writer.writerow([solver, problem, dim, str(fixed_factors), budget])
+            for dim in dim_sizes:
+                for budget in budgets:
+                    writer.writerow([problem, dim, str(fixed_factors), budget])
             writer.writerow([])  # Blank line between different problems
 
     print(f"✅ Generated CSV file '{csv_file}' with experiment setups.")
     return csv_file
 
-def create_slurm_files(csv_file_name: str) -> list[str] : 
+def create_slurm_files(json_path: str, csv_file_name: str) -> list[str] : 
     """
         Create SLURM job files based on a CSV file and a base SLURM template.
 
@@ -97,10 +99,10 @@ def create_slurm_files(csv_file_name: str) -> list[str] :
         for i, row in enumerate(reader, start=1):
             if row == []:
                 continue  # skip blank lines
-            args = " ".join(str(x) for x in row)
-            problem_name = row[1]
-            solver_name = row[0]
-            job_name = f"journal_setup_experiment_{solver_name}_on_{problem_name}"
+
+            args = json_path + " " + " ".join('"'+str(x)+'"' for x in row)
+            problem_name = row[0]
+            job_name = f"journal_setup_experiment_on_{problem_name}"
             new_filename = os.path.join(output_dir, f"{job_name}.slurm")
 
             # Copy the base SLURM template
@@ -152,10 +154,10 @@ def main() :
     """
         Main function to generate experiment CSV, create SLURM files, and submit them.
     """
-    json_config_name = argv[1]
-    csv_output_path = argv[2]
+    json_config_name = sys.argv[1]
+    csv_output_path = sys.argv[2]
     csv_file = generate_csv(json_config_name, csv_output_path)
-    generated_files = create_slurm_files(csv_file)
+    generated_files = create_slurm_files(json_config_name, csv_file)
     run_slurm_files(generated_files)
 
 if __name__ == "__main__":
