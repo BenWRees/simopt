@@ -416,7 +416,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		X = np.array(X)
 		fX = np.array(fX).flatten()	
 
-		print(f'shape of X is {X.shape}, shape of fX is {fX.shape}, subspace dimension is {subspace_dimension}, degree is {self.degree}')
+		# print(f'shape of X is {X.shape}, shape of fX is {fX.shape}, subspace dimension is {subspace_dimension}, degree is {self.degree}')
 
 		self.delta_k = delta_k
 
@@ -522,10 +522,10 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 		r""" Returns the linear coefficients
 		"""
 		Y = (U.T @ X.T).T
-		print(f'shape of Y is {Y.shape}')
+		# print(f'shape of Y is {Y.shape}')
 		# self.basis = self.Basis(self.degree, X = Y) 
 		V = self.Basis.V(Y, dim)
-		print(f'V has shape {V.shape}, fX has shape {fX.shape}')
+		# print(f'V has shape {V.shape}, fX has shape {fX.shape}')
 		c = np.zeros(fX.shape)
 		if self.bound is None:
 			if self.norm == 1:
