@@ -694,15 +694,25 @@ class Problem(ABC):
         """
         if not isinstance(other, Problem):
             return False
+
         if type(self) is type(other) and self.factors == other.factors:
             # Check if non-decision-variable factors of models are the same.
             non_decision_factors = (
                 set(self.model.factors.keys()) - self.model_decision_factors
             )
             for factor in non_decision_factors:
-                if self.model.factors[factor] != other.model.factors[factor]:
-                    return False
+                val1 = self.model.factors[factor]
+                val2 = other.model.factors[factor]
+
+                # Handle NumPy arrays or other sequence-like values
+                if isinstance(val1, np.ndarray) or isinstance(val2, np.ndarray):
+                    if not np.array_equal(val1, val2):
+                        return False
+                else:
+                    if val1 != val2:
+                        return False
             return True
+
         return False
 
     def __hash__(self) -> int:
