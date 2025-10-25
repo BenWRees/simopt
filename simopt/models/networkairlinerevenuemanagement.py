@@ -12,13 +12,12 @@ from typing import Callable, Optional, Final
 import numpy as np
 from scipy.stats import beta
 from scipy.special import gamma
+import math 
 
 from mrg32k3a.mrg32k3a import MRG32k3a
 from simopt.base import ConstraintType, Model, Problem, VariableType
 from simopt.utils import classproperty, override
 
-NUM_FARE_CLASSES: Final[int] = 3  # Number of fare classes
-NUM_ODF: Final[int] = 4  # Number of origin-destination fare classes
 
 class AirlineRevenueModel(Model) :
     """A model for airline revenue management with multiple fare classes and stochastic demand."""
@@ -36,12 +35,12 @@ class AirlineRevenueModel(Model) :
     @classproperty
     @override
     def n_rngs(cls) -> int:
-        return 1
+        return 2
     
     @classproperty
     @override
     def n_responses(cls) -> int:
-        return 1
+        return 2
     
     @classproperty
     @override
@@ -60,7 +59,7 @@ class AirlineRevenueModel(Model) :
             "prices": {
                 "description": "prices for each origin-destination fare class",
                 "datatype": tuple,
-                "default": (300, 100, 150, 50, 100, 25),
+                "default": (300.0, 100.0, 150.0, 50.0, 100.0, 25.0),
             },
             "capacity": {
                 "description": "total capacity for the flight",
@@ -102,6 +101,11 @@ class AirlineRevenueModel(Model) :
                 'datatype': tuple,
                 'default': (1,),
             },
+            'deterministic flag' : {
+                'description':  'flag to test Phillips Airline Revenue Management Problem',
+                'datatype': bool, 
+                'default': True
+            }
         }
     
     @property
@@ -119,6 +123,7 @@ class AirlineRevenueModel(Model) :
             'gamma_scale': self.check_gamma_scale,
             'time steps': self.check_time_steps,
             'tau': self.check_tau,
+            'deterministic flag': self.check_deterministic_flag,
         }
     
     def check_num_classes(self) -> None:
@@ -135,40 +140,44 @@ class AirlineRevenueModel(Model) :
             raise ValueError("Each leg must serve at least one fare class.")
     
     def check_prices(self) -> None:
-        odf,legs = np.array(self.factors['ODF_leg_matrix']).shape
+        odf,_= np.array(self.factors['ODF_leg_matrix']).shape
         prices = list(self.factors['prices'])
-        if len(prices) != odf and np.any(prices <= 0):
+        if len(prices) != odf and np.any(np.array(prices) <= 0):
             raise ValueError("Length of prices must equal number of origin-destination fare classes, and all values must be positive.")
     
     def check_capacity(self) -> None:
-        odf,legs = np.array(self.factors['ODF_leg_matrix']).shape
+        _,legs = np.array(self.factors['ODF_leg_matrix']).shape
         if (len(self.factors['capacity']) != legs) and np.any(np.array(self.factors['capacity']) <= 0):
             raise ValueError("Length of capacity must equal number of legs, and all values must be positive.")
 
     def check_booking_limits(self) -> None:
-        odf,legs = np.array(self.factors['ODF_leg_matrix']).shape
-        booking_limits = list(self.factors['booking limits'])
-        if len(booking_limits) != (odf) and np.all(np.subtract(booking_limits.sum(axis=1),np.array(self.factors['capacity']))>0):
-            raise ValueError("The shape of the booking limits must have columns equal to the number of fare classes and rows equal to the number of flights. " \
-            "The booking limits for all fare classes across a flight must not exceed the capacity of that flight ")
+        odf_matrix = np.array(self.factors['ODF_leg_matrix'])
+        odf,_ = odf_matrix.shape
+        booking_limits = np.array(self.factors['booking limits']).reshape(-1,1)
+        booking_limit_per_fare =(booking_limits.T @ odf_matrix).flatten()
+
+        if len(booking_limits) != odf :
+            raise ValueError("The length of the booking limits should be equal to the number of odf classes.")
+        if np.all(np.subtract(booking_limit_per_fare,np.array(self.factors['capacity']))>0):
+            raise ValueError("The booking limits for all fare classes across a flight must not exceed the capacity of that flight ")
     
     def check_alpha(self) -> None:
-        odf,legs = np.array(self.factors['ODF_leg_matrix']).shape
+        odf,_ = np.array(self.factors['ODF_leg_matrix']).shape
         if (len(self.factors['alpha']) != odf) and np.any(np.array(self.factors['alpha']) <= 0):
             raise ValueError("Length of alpha must equal number of fare classes times number of flights, and all values must be positive.")
         
     def check_beta(self) -> None:
-        odf,legs = np.array(self.factors['ODF_leg_matrix']).shape
+        odf,_ = np.array(self.factors['ODF_leg_matrix']).shape
         if (len(self.factors['beta']) != odf) and np.any(np.array(self.factors['beta']) <= 0):
             raise ValueError("Length of beta must equal number of fare classes times number of flights, and all values must be positive.")
         
     def check_gamma_shape(self) -> None:
-        odf,legs = np.array(self.factors['ODF_leg_matrix']).shape
+        odf,_ = np.array(self.factors['ODF_leg_matrix']).shape
         if (len(self.factors['gamma_shape']) != odf) and np.any(np.array(self.factors['gamma_shape']) <= 0):
             raise ValueError("Length of gamma_shape must equal number of fare classes times number of flights, and all values must be positive.")
         
     def check_gamma_scale(self) -> None:
-        odf,legs = np.array(self.factors['ODF_leg_matrix']).shape
+        odf,_ = np.array(self.factors['ODF_leg_matrix']).shape
         if (len(self.factors['gamma_scale']) != odf) and np.any(np.array(self.factors['gamma_scale']) <= 0):
             raise ValueError("Length of gamma_scale must equal number of fare classes times number of flights, and all values must be positive.")
         
@@ -181,11 +190,30 @@ class AirlineRevenueModel(Model) :
             raise ValueError("Length of tau must equal number of time steps, and all values must be positive.")
 
 
+    def check_deterministic_flag(self) -> None : 
+        if type(self.factors['deterministic flag']) != bool :
+            raise ValueError('The type of the deterministic flag should be boolean')
+
 
     def __init__(self, fixed_factors: dict | None = None) -> None:
         super().__init__(fixed_factors)
     
 
+    def compute_leg_number(self, odf_class: int) -> list[int] :
+        """Compute the legs involved for the given odf class.
+
+        Args:
+            odf_class (int): Origin-destination fare class.
+        Returns:
+            list[int]: List of leg numbers that the odf class travels on.
+        """
+        adjacency_matrix = np.array(self.factors['ODF_leg_matrix'])
+        odf_vector = np.zeros((1,adjacency_matrix.shape[0]))
+        odf_vector[:,odf_class] = 1
+        leg_numbers = odf_vector @ adjacency_matrix
+        leg_number_filtered = np.nonzero(leg_numbers)[1].tolist()
+        return leg_number_filtered
+    
     def beta_distribution(self, t: int, tau: int, alpha: float, beta: float) -> float:
         """Compute the cumulative distribution function (CDF) of the Beta distribution.
 
@@ -265,13 +293,13 @@ class AirlineRevenueModel(Model) :
             return x * scale  
          
     
-    def compute_arrivals(self, rand: MRG32k3a, t: int, remaining_capacity: np.ndarray) -> list[int] :
+    def compute_arrivals(self, rand: MRG32k3a, t: int) -> list[int] :
         """Compute the number of arrivals for a given fare class at time t.
 
         Args:
             rand (MRG32k3a): Random number generator.
             t (int): Current time step.
-            remaining_capacity (np.ndarray): Remaining capacity for each leg of the network. This is a 1-d array of number of rows in booking_limits    
+            remaining_capacity (list[int]): Remaining capacity for each leg of the network.  
         Returns:
             list[int]: Number of arrivals for each odf class at time t.
         """
@@ -284,14 +312,15 @@ class AirlineRevenueModel(Model) :
         beta = list(self.factors['beta'])
         shape = list(self.factors['gamma_shape'])
         scale = list(self.factors['gamma_scale'])
+
        
-        for x in range(odf_classes) : 
-                
+        for x in range(odf_classes) :       
             # Compute the expected demand using the Gamma distribution
             if t==0:
                 # For the first time step, we sample from the gamma distribution to get the expected demand
                 expected_demand = self.gamma_variate(rand, shape[x], scale[x])
-            else : #TODO: Work out parameters for gamma variable as they depend on number of booking requests up to time t-1
+            #TODO: Work out parameters for gamma variable as they depend on number of booking requests up to time t-1
+            else : 
                 # For subsequent time steps, we use the gamma distribution with values from the number of booking requests up to time t-1
                 expected_demand = self.gamma_variate()
             
@@ -302,87 +331,111 @@ class AirlineRevenueModel(Model) :
             arrivals[x] = np.random.poisson(expected_demand * prob_arrival)
         
         return arrivals
-    
-    #TODO: Finish the function 
-    def compute_leg_number(self, odf_class: int) -> list[int] :
-        """Compute the legs involved for the given odf class.
-
-        Args:
-            odf_class (int): Origin-destination fare class.
-        Returns:
-            list[int]: List of leg numbers that the odf class travels on.
-        """
-        adjacency_matrix = np.array(self.factors['ODF_leg_matrix'])
-        odf_vector = np.zeros((1,adjacency_matrix.shape[0]))
-        odf_vector[:,odf_class] = 1
-        leg_numbers = odf_vector @ adjacency_matrix
-        leg_number_filtered = np.nonzero(leg_numbers)[1].tolist()
-        return leg_number_filtered
 
 
-    def sell_seats(self, arrivals: list[int], remaining_capacity: np.ndarray) -> tuple[list[int], list[int]]:
-        """
-            For a single time step, sell as many seats as possible given the arrivals, booking limits, and remaining capacity. 
-            Args:
-                arrivals (list[int]): Number of arrivals for each odf class at time t. This is a 1-d array of number of rows in booking_limits
-                timestep (int): Current time step.
-                remaining_capacity (np.ndarray): Remaining capacity for each leg of the network. This is a 1-d array of number of rows in booking_limits 
-            Returns:
-                tuple[list[int], list[int]]: A tuple containing:
-                    - seats_sold (list[int]): Number of seats sold for each odf class at time t.
-                    - remaining_capacity (list[int]): Updated remaining capacity for each leg of the network after selling seats.
-        """
+    #! This is still not keeping it below capacity 
+    def sell_seats(self, selling_rng: MRG32k3a, arrivals: list[int], seats_sold: list[int], remaining_capacity: list[int]) -> tuple[list[int], list[int]]:
+
         booking_limits = list(self.factors['booking limits'])
+        arrivals_left = list(arrivals)
         odf_classes = len(booking_limits)
-        seats_sold = [0] * odf_classes
 
-        # for each odf class, compute the leg number it travels on the network
+        #Randomly generate an odf class to arrive, check if they have any more arrivals 
+        while any(a > 0 for a in arrivals_left) : 
+            # Get indices of OD classes that still have arrivals left
+            available_odfs = [i for i, a in enumerate(arrivals_left) if a > 0]
 
-        for odf in range(odf_classes) :
-            arrival_no = arrivals[odf]
-            # get the legs this odf class flies in the network
-            leg_nos = self.compute_leg_number(odf)
-            # get the remaining capacity for each leg this odf class flies on
-            remaing_capacity_legs = [remaining_capacity[a] for a in leg_nos]
-            for _ in range(arrival_no) : 
-                # check if there is available space on one of the legs the odf flies on => go to next odf  
-                if np.all(remaing_capacity_legs==0) :
-                    break 
-                # check if the booking limit for this odf has been reached => go to the next odf
-                elif booking_limits[odf] <= seats_sold[odf] : 
-                    break
-                else :
-                    # add one seat to the seats sold for this odf class and
-                    seats_sold[odf] += 1
-                    # update the remaining capacity for each leg the odf flies on 
-                    for leg_no in leg_nos :
-                        remaining_capacity[leg_no] -= 1 
+            # Pick one uniformly at random
+            odf_to_arrive = int(selling_rng.uniform(0, len(available_odfs)))
+            odf_to_arrive = available_odfs[odf_to_arrive]
+            
+            #else assume that this arrival has occurred 
+            arrivals_left[odf_to_arrive] -= 1 
+            leg_nos = self.compute_leg_number(odf_to_arrive)
 
+            # check the remaining capacity for the legs being flown
+            current_caps = [remaining_capacity[leg_no] for leg_no in leg_nos]
+
+            # if any leg that the odf class flies on is at capacity then skip selling
+            if any(cap <= 0 for cap in current_caps) :
+                print(f'The capacity for the odf {odf_to_arrive} is full')
+                continue 
+            # if booking limit is reached for this capacity then skip selling
+            elif seats_sold[odf_to_arrive] >= booking_limits[odf_to_arrive]:
+                print(f'The booking limit for the odf {odf_to_arrive} has been reached with seats_sold \n {seats_sold}')
+                arrivals_left[odf_to_arrive] = 0
+                continue 
+            else :
+                #Sell a seat for the odf class and reduce capacity across legs the odf class flies on
+                seats_sold[odf_to_arrive] += 1
+                for leg_no in leg_nos:
+                    remaining_capacity[leg_no] =  remaining_capacity[leg_no] - 1
+
+        print(f'The remaining capacity after a round of selling seats is {remaining_capacity}')
+        print(f'The seats that were sold are: {seats_sold}')
         return seats_sold, remaining_capacity
+
+
+
+    # #! THIS IS THE MAIN PROBLEM - NEEDS FIXING
+    # #TODO: It's not satisfying the capacity requirement 
+    # def sell_seats(self, selling_rng: MRG32k3a, arrivals: list[int], seats_sold: list[int], remaining_capacity: list[int]) -> tuple[list[int], list[int]]:
+    #     """
+    #     For a single time step, sell as many seats as possible given the arrivals, 
+    #     booking limits, and remaining capacity. 
+    #     """
+    #     booking_limits = list(self.factors['booking limits'])
+    #     odf_classes = len(booking_limits)
+
+    #     print(f'arrivals: {arrivals}')
+
+    #     for odf in range(odf_classes):
+    #         arrival_no = arrivals[odf]
+    #         leg_nos = self.compute_leg_number(odf)
+
+    #         for _ in range(arrival_no):
+    #             # check the remaining capacity for the legs being flown
+    #             current_caps = [remaining_capacity[leg_no] for leg_no in leg_nos]
+
+    #             # if any leg is full, can't sell this itinerary or if booking limit is reached, stop selling this ODF
+    #             if all(cap > 0 for cap in current_caps) and seats_sold[odf] < booking_limits[odf]:
+    #                 # sell one seat
+    #                 seats_sold[odf] += 1
+
+    #                 # reduce capacity across all legs this ODF flies on
+    #                 for leg_no in leg_nos:
+    #                     remaining_capacity[leg_no] =  remaining_capacity[leg_no] - 1
+
+    #     print(f'The remaining capacity after a round of selling seats is {remaining_capacity}')
+    #     print(f'The seats that were sold are: {seats_sold}')
+
+    #     return seats_sold, remaining_capacity
     
 
-    def compute_revenue(self, seats_sold: np.ndarray) -> list[float]:
+    def compute_revenue(self, seats_sold: list[list[int]]) -> list[float]:
         """Compute the total revenue for all the seats_sold across fare classes for a single time step
 
         Args:
-            seats_sold (np.ndarray): Number of seats sold for each odf class at each time step. 
-                                     This is a 2-d array of shape (time_steps, number of rows in booking_limits)
+            seats_sold (list[list[int]]): Number of seats sold for each odf class at each time step. 
+                                     
             
         Returns:
             list[float]: Revenue generated from each odf class indexed at each time step.
         """
         # total_revenue = 0.0
-        timesteps, odfs = seats_sold.shape 
+        odfs = len(seats_sold[0]) 
         prices = list(self.factors['prices'])
-        revenue_over_time_steps = []
+        revenue_over_time_steps = [0] * odfs
 
-        for t in range(timesteps) : 
-            seats_sold_per_time_step = seats_sold[t].tolist() 
-            revenue_each_odf = sum([seats_sold_per_time_step[i] * prices[i] for i in range(odfs)]) 
-            revenue_over_time_steps.append(revenue_each_odf)
+        for seat_sold_per_time_step in seats_sold : 
+            #First calculate the revenue made for this time step
+            revenue_per_time_step = [p*x for x,p in zip(seat_sold_per_time_step,prices)]
+            #then add on the revenue made in this time step to the total revenue made in the previous time steps 
+            revenue_over_time_steps = [total_rev + new_rev for new_rev, total_rev  in zip(revenue_per_time_step, revenue_over_time_steps)]
 
         return revenue_over_time_steps
 
+    #TODO: Calculating Booking Limits
     def replicate(self, rng_list: list[MRG32k3a]) -> tuple[dict, dict]:
         """Simulate a single replication of the airline revenue management model.
 
@@ -399,37 +452,50 @@ class AirlineRevenueModel(Model) :
         """ 
 
         #! Extract model parameters
-        odf_legs_matrix = np.array(self.factors['ODF_leg_matrix'])
-        odf_no, legs = odf_legs_matrix.shape
         capacity = self.factors['capacity']
         booking_limits = list(self.factors['booking limits'])
         odf = len(booking_limits)  # number of origin-destination fare classes
         time_steps = self.factors['time steps']
         total_revenue = 0
 
-        remaining_capacity = np.array(capacity)  # Remaining capacity for each leg
         seats_remaining_from_booking_limit = np.array(booking_limits)  # Remaining booking limits for
 
+
+        if self.factors['deterministic flag'] : 
+            remaining_capacity = [100,120]
+        else :
+            remaining_capacity = list(capacity)  # Remaining capacity for each leg
+        
         #! Designate sources of randomness 
         arrival_rng = rng_list[0]  
+        selling_rng = rng_list[1]
         """ 
             For each time step, we compute the number of arrivals for each odf class and then compute how many 
             seats can be sold on the networrk based on the booking limits and remaining capacity.
             We then update the remaining capacity and booking limits accordingly.
         """
-        seats_sold_all_time_steps = np.zeros((time_steps, odf), dtype=int)
-        for time_step in range(time_steps):
-            """ 
-                Compute arrivals at the current time step and then sell seats based on
-                the booking limits and remaining capacity.
-            """
-            arrivals = self.compute_arrivals(arrival_rng, time_step, remaining_capacity)
-
-            seats_sold_one_time_step, remaining_capacity = self.sell_seats(arrivals, remaining_capacity)
+        seats_sold_all_time_steps = []
         
-            seats_sold_all_time_steps[time_step, :] = seats_sold_one_time_step
+
+        for time_step in range(time_steps):
+            seats_sold = [0] * odf
+            if self.factors['deterministic flag'] : 
+
+                arrivals = [30,60,20,80,30,40]
+                self.factors['prices'] = [150,100,120,80,250,170]
+                self.factors['ODF_leg_matrix'] = np.array([[1,0],[1,0],[0,1],[0,1],[1,1],[1,1]])
+                seats_sold, remaining_capacity = self.sell_seats(selling_rng, arrivals, seats_sold, remaining_capacity)
+                seats_sold_all_time_steps.append(seats_sold)
+
+            else :
+                arrivals = self.compute_arrivals(arrival_rng, time_step)
+
+                seats_sold, remaining_capacity = self.sell_seats(selling_rng, arrivals, seats_sold, remaining_capacity)
+            
+                seats_sold_all_time_steps.append(seats_sold)
 
         # Compute total revenue
+
         list_revenues_each_odf = self.compute_revenue(seats_sold_all_time_steps)
 
         #get the total revenues 
@@ -437,6 +503,7 @@ class AirlineRevenueModel(Model) :
 
         responses = {
             'revenue': total_revenue,
+            'revenue per odf': list_revenues_each_odf 
         }
         gradients = {
             response_key: dict.fromkeys(self.specifications, np.nan)
@@ -482,7 +549,7 @@ class AirlineRevenueBookingLimitProblem(Problem):
     @classproperty
     @override
     def variable_type(cls) -> VariableType:
-        return VariableType.CONTINUOUS
+        return VariableType.DISCRETE
     
     @classproperty
     @override
@@ -494,25 +561,15 @@ class AirlineRevenueBookingLimitProblem(Problem):
     def optimal_value(cls) -> float | None:
         return None  # Unknown optimal value
     
-    @property
+    @classproperty
     @override
-    def optimal_solution(self) -> tuple:
+    def optimal_solution(cls) -> tuple:
         return None  # Unknown optimal solution
     
-    @property
+    @classproperty
     @override
-    def model_default_factors(self) -> dict:
+    def model_default_factors(cls) -> dict:
         return {}
-    
-    @property
-    @override
-    def model_fixed_factors(self) -> dict:
-        return {}
-    
-    @model_fixed_factors.setter
-    def model_fixed_factors(self, value: dict | None) -> None:
-         # TODO: figure out if fixed factors should change
-        pass 
 
     @classproperty
     @override
@@ -526,7 +583,7 @@ class AirlineRevenueBookingLimitProblem(Problem):
             'initial_solution': {
                 'description': 'initial booking limits for each fare class',
                 'datatype': tuple,
-                'default': (3, 3, 3, 3, 3, 3),
+                'default': (10, 10, 10, 10, 10, 10),
             },
             'budget': {
                 'description': 'total capacity available',
@@ -560,14 +617,28 @@ class AirlineRevenueBookingLimitProblem(Problem):
         #Booking limits cannot exceed the capacity of the flight
         return (np.inf,) * self.dim
     
-    def __init__(self, name: str = 'AIRLINE-1', fixed_factors: dict | None = None, model_fixed_factors: dict | None = None) -> None:
+    def __init__(
+        self,
+        name: str = "AIRLINE-1",
+        fixed_factors: dict | None = None,
+        model_fixed_factors: dict | None = None,
+    ) -> None:
+        """Initialize the FacilitySizingTotalCost problem.
+
+        Args:
+            name (str): User-specified name for the problem.
+            fixed_factors (dict | None): User-specified problem factors.
+                If None, default values are used.
+            model_fixed_factors (dict | None): Subset of user-specified
+                non-decision factors to pass through to the model.
+        """
+        # Let the base class handle default arguments.
         super().__init__(
-            name=name, 
-            fixed_factors=fixed_factors, 
+            name=name,
+            fixed_factors=fixed_factors,
             model_fixed_factors=model_fixed_factors,
-            model=AirlineRevenueModel
+            model=AirlineRevenueModel,
         )
-        
     @override
     def vector_to_factor_dict(self, vector: tuple) -> dict:
         return {'booking limits': vector[:]}
@@ -655,25 +726,15 @@ class AirlineRevenueBidPriceProblem(Problem):
     def optimal_value(cls) -> float | None:
         return None  # Unknown optimal value
     
-    @property
+    @classproperty
     @override
-    def optimal_solution(self) -> tuple:
+    def optimal_solution(cls) -> tuple:
         return None  # Unknown optimal solution
     
-    @property
+    @classproperty
     @override
-    def model_default_factors(self) -> dict:
+    def model_default_factors(cls) -> dict:
         return {}
-    
-    @property
-    @override
-    def model_fixed_factors(self) -> dict:
-        return {}
-    
-    @model_fixed_factors.setter
-    def model_fixed_factors(self, value: dict | None) -> None:
-         # TODO: figure out if fixed factors should change
-        pass 
 
     @classproperty
     @override
@@ -721,12 +782,27 @@ class AirlineRevenueBidPriceProblem(Problem):
         #Booking limits cannot exceed the capacity of the flight
         return (np.inf,) * self.dim
     
-    def __init__(self, name: str = 'AIRLINE-2', fixed_factors: dict | None = None, model_fixed_factors: dict | None = None) -> None:
+    def __init__(
+        self,
+        name: str = "AIRLINE-2",
+        fixed_factors: dict | None = None,
+        model_fixed_factors: dict | None = None,
+    ) -> None:
+        """Initialize the FacilitySizingTotalCost problem.
+
+        Args:
+            name (str): User-specified name for the problem.
+            fixed_factors (dict | None): User-specified problem factors.
+                If None, default values are used.
+            model_fixed_factors (dict | None): Subset of user-specified
+                non-decision factors to pass through to the model.
+        """
+        # Let the base class handle default arguments.
         super().__init__(
-            name=name, 
-            fixed_factors=fixed_factors, 
+            name=name,
+            fixed_factors=fixed_factors,
             model_fixed_factors=model_fixed_factors,
-            model=AirlineRevenueModel
+            model=AirlineRevenueModel,
         )
         
     @override
