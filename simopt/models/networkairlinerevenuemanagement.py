@@ -69,7 +69,7 @@ class AirlineRevenueModel(Model) :
             "booking limits": {
                 "description": "booking limits for each fare class and each origin-destination pair",
                 "datatype": tuple,
-                "default": (3,3,3,3,3,3),
+                "default": (10,10,10,10,10,10),
             },
             'alpha': {
                 'description': 'parameters for the Polya process governing booking requests for each odf ',
@@ -333,7 +333,6 @@ class AirlineRevenueModel(Model) :
         return arrivals
 
 
-    #! This is still not keeping it below capacity 
     def sell_seats(self, selling_rng: MRG32k3a, arrivals: list[int], seats_sold: list[int], remaining_capacity: list[int]) -> tuple[list[int], list[int]]:
 
         booking_limits = list(self.factors['booking limits'])
@@ -377,8 +376,6 @@ class AirlineRevenueModel(Model) :
 
 
 
-    # #! THIS IS THE MAIN PROBLEM - NEEDS FIXING
-    # #TODO: It's not satisfying the capacity requirement 
     # def sell_seats(self, selling_rng: MRG32k3a, arrivals: list[int], seats_sold: list[int], remaining_capacity: list[int]) -> tuple[list[int], list[int]]:
     #     """
     #     For a single time step, sell as many seats as possible given the arrivals, 
@@ -462,9 +459,9 @@ class AirlineRevenueModel(Model) :
 
 
         if self.factors['deterministic flag'] : 
-            remaining_capacity = [100,120]
-        else :
-            remaining_capacity = list(capacity)  # Remaining capacity for each leg
+            self.factors['capacity'] = (100,120)
+
+        remaining_capacity = list(capacity)  # Remaining capacity for each leg
         
         #! Designate sources of randomness 
         arrival_rng = rng_list[0]  
@@ -481,9 +478,9 @@ class AirlineRevenueModel(Model) :
             seats_sold = [0] * odf
             if self.factors['deterministic flag'] : 
 
-                arrivals = [30,60,20,80,30,40]
-                self.factors['prices'] = [150,100,120,80,250,170]
-                self.factors['ODF_leg_matrix'] = np.array([[1,0],[1,0],[0,1],[0,1],[1,1],[1,1]])
+                arrivals = (30,60,20,80,30,40)
+                self.factors['prices'] = (150,100,120,80,250,170)
+                self.factors['ODF_leg_matrix'] = [[1,0],[1,0],[0,1],[0,1],[1,1],[1,1]]
                 seats_sold, remaining_capacity = self.sell_seats(selling_rng, arrivals, seats_sold, remaining_capacity)
                 seats_sold_all_time_steps.append(seats_sold)
 
@@ -611,11 +608,34 @@ class AirlineRevenueBookingLimitProblem(Problem):
     def lower_bounds(self) -> tuple:
         return (0,) * self.dim
     
+    #! This needs fixing 
+    """
+        Take the odf flown by each leg, and take the 
+    """
     @property
-    @override
-    def upper_bounds(self) -> tuple:
-        #Booking limits cannot exceed the capacity of the flight
-        return (np.inf,) * self.dim
+    @override  
+    def upper_bounds(self) -> tuple : 
+        odf_matrix = np.array(self.model.factors['ODF_leg_matrix'])
+        capacity = list(self.model.factors['capacity'])
+        odfs, legs = odf_matrix.shape
+        x = []
+        for odf in range(odfs) : 
+            #Find the legs the odf flies on
+            odf_vector = np.zeros((1,odf_matrix.shape[0]))
+            odf_vector[:,odf] = 1
+            leg_numbers = odf_vector @ odf_matrix
+            leg_numbers_for_odf = np.nonzero(leg_numbers)[1].tolist()
+
+            #find the capacity
+            capacities_leg_flies_on = [capacity[a] for a in leg_numbers_for_odf]
+            x.append(np.min(capacities_leg_flies_on))
+
+        return tuple(x)
+
+
+
+
+
     
     def __init__(
         self,
