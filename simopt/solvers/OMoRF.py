@@ -185,7 +185,7 @@ class OMoRF(Solver):
 	
 	@property
 	def check_factor_list(self) -> dict[str, Callable] : 
-		new_check_list = {
+		return {
 			"crn_across_solns": self.check_crn_across_solns,
 			"eta_1": self.check_eta_1,
 			"eta_2": self.check_eta_2,
@@ -207,11 +207,11 @@ class OMoRF(Solver):
 			"alpha_2": self.check_alpha_2,
 			"rho_min": self.check_rho_min,
 			}
-		return {**super().check_factor_list, **new_check_list}
 
 	
-	def check_tolerance(self) -> bool:
-		return self.factors['interpolation update tol'] >(0,0) and self.factors['interpolation update tol'] <= (1,1)
+	def check_tolerance(self) -> None:
+		if self.factors['interpolation update tol'] <= (0,0) or self.factors['interpolation update tol'] > (1,1) : 
+			raise ValueError("The tolerance needs to be in the interval (0,1]x(0,1]")
 	
 	def check_initial_radius(self) -> bool:
 		return self.factors['delta'] > 0
@@ -373,12 +373,12 @@ class OMoRF(Solver):
 			s = s.reshape(1,-1)
 			ind_repeat = np.argmin(norm(self.S - s, ord=np.inf, axis=1))
 			f = self.f[ind_repeat]
-			self.expended_budget += 1
+			self.budget.request(1)
 		else :
 			new_solution = self.create_new_solution(tuple(s), problem) 
 			problem.simulate(new_solution, 1)
 			f = -1 * problem.minmax[0] * new_solution.objectives_mean
-			self.expended_budget += 1
+			self.budget.request(1)
 			
 			s = s.reshape(1,-1)
 
@@ -545,7 +545,7 @@ class OMoRF(Solver):
 		# BdsCheck: 1 stands for forward, -1 stands for backward, 0 means central diff.
 		BdsCheck = np.subtract(forward, backward)
 
-		self.expended_budget += (2*problem.dim) + 1
+		self.budget.request((2*problem.dim) + 1)
 		return finite_difference_gradient(new_solution, problem, BdsCheck=BdsCheck)
 
 	def finite_differencing(self,x_val: np.ndarray, model_coeff: list[float], delta_k: float) : 
@@ -638,147 +638,146 @@ class OMoRF(Solver):
 
 	def solve(self, problem):
 		#initialise factors: 
-		self.recommended_solns = []
-		self.intermediate_budgets = []
-		
-		self.S = np.array([])
-		self.f = np.array([])
-		self.g = np.array([])
-		self.d = self.factors['initial subspace dimension']
-
-		self.expended_budget = 0
-		# self.delta_k = self.factors['delta']
-		self._set_delta(self.factors['delta'])
-		# self.rho_k = self.delta_k
-		self._set_rho_k(self.delta_k) 
-		self._set_counter(0)
-		self.rhos = []
-		self.budgets = [0]
-		self.deltas = [self.delta_k]
-		self.n = problem.dim
-		self.deg = self.factors['polynomial degree'] 
-		self.q = comb(self.d + self.deg, self.deg) +  self.n * self.d #int(0.5*(self.d+1)*(self.d+2))
-		self.p = self.n+1
-		self.epsilon_1, self.epsilon_2 = self.factors['interpolation update tol'] #epsilon is the tolerance in the interpolation set update 
-		self.random_initial = self.factors['random directions']
-		self.alpha_1 = self.factors['alpha_1'] #shrink the trust region radius in set improvement 
-		self.alpha_2 = self.factors['alpha_2'] #shrink the stepsize reduction  
-		self.rho_min = self.factors['rho_min']
-
-
-		#set up initial Solution
-		current_x = problem.factors["initial_solution"]
-		# print(f'initial solution: {current_x}')
-		self.current_solution = self.create_new_solution(current_x, problem)
-		self.recommended_solns.append(self.current_solution)
-		self.intermediate_budgets.append(self.expended_budget)
-
-		
-		""" 
-		self.s_old = self._apply_scaling(s_old) #shifts the old solution into the unit ball
-		"""
-
-		self.k = 0
-		self._set_counter(0)
-
-		geo_factors = {
-			'random_directions': self.random_initial,
-			'epsilon_1': self.epsilon_1,
-			'epsilon_2': self.epsilon_2,
-			'rho_min': self.rho_min,
-			'alpha_1': self.alpha_1,
-			'alpha_2': self.alpha_2,
-			'n': self.n,
-			'd': self.d,
-			'q': self.q,
-			'p': self.p
+		try :
+			self.recommended_solns = []
+			self.intermediate_budgets = []
 			
-		}
+			self.S = np.array([])
+			self.f = np.array([])
+			self.g = np.array([])
+			self.d = self.factors['initial subspace dimension']
+
+			# self.delta_k = self.factors['delta']
+			self._set_delta(self.factors['delta'])
+			# self.rho_k = self.delta_k
+			self._set_rho_k(self.delta_k) 
+			self._set_counter(0)
+			self.rhos = []
+			self.n = problem.dim
+			self.deg = self.factors['polynomial degree'] 
+			self.q = comb(self.d + self.deg, self.deg) +  self.n * self.d #int(0.5*(self.d+1)*(self.d+2))
+			self.p = self.n+1
+			self.epsilon_1, self.epsilon_2 = self.factors['interpolation update tol'] #epsilon is the tolerance in the interpolation set update 
+			self.random_initial = self.factors['random directions']
+			self.alpha_1 = self.factors['alpha_1'] #shrink the trust region radius in set improvement 
+			self.alpha_2 = self.factors['alpha_2'] #shrink the stepsize reduction  
+			self.rho_min = self.factors['rho_min']
 
 
-		#basis construction
-		index_set = IndexSet('total-order', orders=np.tile([2], self.q))
-		self.index_set = index_set.get_basis()[:,range(self.d-1, -1, -1)]
-		
-		self.poly_basis_model = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], problem, dim=self.factors['initial subspace dimension'])
-		self.poly_basis_subspace = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], problem, dim=self.n)
-		self.geometry_instance = self.geometry_type_instantiation()(problem, self, self.index_set, **geo_factors)
-
-		self.s_old = np.array(current_x)
-		self.f_old = self.blackbox_evaluation(self.s_old,problem)
-
-		# Construct the sample set for the subspace 
-		S_full = self.geometry_instance.generate_set(self.n + 1, self.s_old, self.delta_k)
-		f_full = np.zeros((self.n + 1, 1))
-		f_full[0, :] = self.f_old #first row gets the old function values 
-
-
-		# get the rest of the function evaluations - write as a function
-		for i in range(1, self.n+1):
-			#simulate the problem at each component of f_
-			new_solution = self.create_new_solution(S_full[i, :], problem)
-			problem.simulate(new_solution, 1)
-			self.expended_budget += 1
-			f_full[i, :] = -1 * problem.minmax[0] * new_solution.objectives_mean
-			# self.expended_budget = reset_budget 
-			#case where we use up our whole budget getting the function values 
-			if self.expended_budget > problem.factors['budget'] :
-				return self.recommended_solns, self.intermediate_budget
-
-
-		
-		#This is needed to ensure that model construction in the subspace works
-		self.U = np.eye(self.n, self.n)
-
-		#initial subspace calculation - requires gradients of f_full 
-		self.calculate_subspace(S_full, f_full, self.delta_k)
-
-		#This constructs the sample set for the model construction
-		S_red, f_red = self.geometry_instance.sample_set('new', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U, full_space=False)
-		
-		while self.expended_budget < problem.factors['budget'] :
-			print(f'\niteration: {self.k} \t expended budget {self.expended_budget} \t current objective function value: {self.f_old}')
-			#if rho has been decreased too much we end the algorithm  
-			if self.rho_k <= self.rho_min:
-				break
+			#set up initial Solution
+			current_x = problem.factors["initial_solution"]
+			# print(f'initial solution: {current_x}')
+			self.current_solution = self.create_new_solution(current_x, problem)
+			self.recommended_solns.append(self.current_solution)
+			self.intermediate_budgets.append(self.budget.used)
 			
-			#BUILD MODEL
-			try: 
-				self.coefficients = self.construct_model(S_red, f_red, self.poly_basis_model) #this should be the model instance construct model
-			except : #thrown if the sample set is not defined properly 
-				print(traceback.format_exc())
-				S_red, f_red = self.geometry_instance.sample_set('improve', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U, S_red, f_red, full_space=False)
-				self.intermediate_budgets.append(self.expended_budget)
-				continue 
+			""" 
+			self.s_old = self._apply_scaling(s_old) #shifts the old solution into the unit ball
+			"""
 
-			#SOLVE THE SUBPROBLEM
-			candidate_solution, S_full, S_red, f_full, f_red, reset_flag = self.solve_subproblem(problem, S_full, S_red, f_full, f_red)
-			candidate_fval = self.blackbox_evaluation(np.array(candidate_solution.x),problem)
+			self.iteration_count = 0
+			self._set_counter(0)
 
-			if reset_flag :
-				self.recommended_solns.append(self.current_solution)
-				self.intermediate_budgets.append(self.expended_budget) 
-				self.k +=1
-				break 
+			geo_factors = {
+				'random_directions': self.random_initial,
+				'epsilon_1': self.epsilon_1,
+				'epsilon_2': self.epsilon_2,
+				'rho_min': self.rho_min,
+				'alpha_1': self.alpha_1,
+				'alpha_2': self.alpha_2,
+				'n': self.n,
+				'd': self.d,
+				'q': self.q,
+				'p': self.p
+				
+			}
+
+			self.iterations = [self.iteration_count]
+			self.budget_history = [self.budget.used]
+			self.fn_estimates = []
+
+
+
+			#basis construction
+			index_set = IndexSet('total-order', orders=np.tile([2], self.q))
+			self.index_set = index_set.get_basis()[:,range(self.d-1, -1, -1)]
 			
-			#EVALUATE THE CANDIDATE SOLUTION
-			S_red, S_full, f_red, f_full = self.evaluate_candidate_solution(problem, candidate_fval, candidate_solution, S_red, S_full, f_red, f_full)
+			self.poly_basis_model = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], problem, dim=self.factors['initial subspace dimension'])
+			self.poly_basis_subspace = self.polynomial_basis_instantiation()(self.factors['polynomial degree'], problem, dim=self.n)
+			self.geometry_instance = self.geometry_type_instantiation()(problem, self, self.index_set, **geo_factors)
 
-			# print(f'EXPENDED BUDGET: {self.expended_budget}')
+			self.s_old = np.array(current_x)
+			self.f_old = self.blackbox_evaluation(self.s_old,problem)
+			self.fn_estimates.append(self.f_old)
 
-			self.k+=1
+			# Construct the sample set for the subspace 
+			S_full = self.geometry_instance.generate_set(self.n + 1, self.s_old, self.delta_k)
+			f_full = np.zeros((self.n + 1, 1))
+			f_full[0, :] = self.f_old #first row gets the old function values 
 
-		# self.plot_deltas_against_budget()
-		return self.recommended_solns, self.intermediate_budgets
 
-	def plot_deltas_against_budget(self) :
-		plt.plot(self.budgets, self.deltas)
-		plt.title('trust region radius against expended budget')
-		plt.show()
+			# get the rest of the function evaluations - write as a function
+			for i in range(1, self.n+1):
+				#simulate the problem at each component of f_
+				new_solution = self.create_new_solution(S_full[i, :], problem)
+				problem.simulate(new_solution, 1)
+				self.budget.request(1)
+				f_full[i, :] = -1 * problem.minmax[0] * new_solution.objectives_mean
+				# self.expended_budget = reset_budget 
+				#case where we use up our whole budget getting the function values 
+				if self.budget.remaining <= 0 :
+					return self.recommended_solns, self.intermediate_budget
 
-		plt.scatter(self.budgets[1:], self.rhos,marker='x')
-		plt.title('ratios against expended budget')
-		plt.show()
+
+			
+			#This is needed to ensure that model construction in the subspace works
+			self.U = np.eye(self.n, self.n)
+
+			#initial subspace calculation - requires gradients of f_full 
+			self.calculate_subspace(S_full, f_full, self.delta_k)
+
+			#This constructs the sample set for the model construction
+			S_red, f_red = self.geometry_instance.sample_set('new', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U, full_space=False)
+			
+			while self.budget.remaining > 0 :
+				if self.iteration_count > 0 : 
+					self.iterations.append(self.iteration_count)
+					self.budget_history.append(self.budget.used)
+					self.fn_estimates.append(self.f_old)
+				
+				print(f'\niteration: {self.iteration_count} \t expended budget {self.budget.used} \t current objective function value: {self.f_old}')
+				#if rho has been decreased too much we end the algorithm  
+				if self.rho_k <= self.rho_min:
+					break
+				
+				#BUILD MODEL
+				try: 
+					self.coefficients = self.construct_model(S_red, f_red, self.poly_basis_model) #this should be the model instance construct model
+				except : #thrown if the sample set is not defined properly 
+					print(traceback.format_exc())
+					S_red, f_red = self.geometry_instance.sample_set('improve', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U, S_red, f_red, full_space=False)
+					self.intermediate_budgets.append(self.budget.used)
+					continue 
+
+				#SOLVE THE SUBPROBLEM
+				candidate_solution, S_full, S_red, f_full, f_red, reset_flag = self.solve_subproblem(problem, S_full, S_red, f_full, f_red)
+				candidate_fval = self.blackbox_evaluation(np.array(candidate_solution.x),problem)
+
+				if reset_flag :
+					self.recommended_solns.append(self.current_solution)
+					self.intermediate_budgets.append(self.budget.used) 
+					self.iteration_count +=1
+					break 
+				
+				#EVALUATE THE CANDIDATE SOLUTION
+				S_red, S_full, f_red, f_full = self.evaluate_candidate_solution(problem, candidate_fval, candidate_solution, S_red, S_full, f_red, f_full)
+
+				# print(f'EXPENDED BUDGET: {self.expended_budget}')
+
+				self.iteration_count +=1
+		finally : 
+			print('finished OMoRF solver')
+
 
 	def solve_subproblem(self, problem: Problem, S_full:np.ndarray, S_red: np.ndarray, f_full: float, f_red: float) :
 		"""
@@ -889,7 +888,7 @@ class OMoRF(Solver):
 			self._set_delta(max(gamma_1*self.delta_k, gamma_3*step_dist))
 			self.current_solution = candidate_solution
 			self.recommended_solns.append(self.current_solution) 
-			self.intermediate_budgets.append(self.expended_budget)
+			self.intermediate_budgets.append(self.budget.used)
 			self.f_old = fval_tilde
 			self.s_old = s_new
 			
@@ -903,7 +902,7 @@ class OMoRF(Solver):
 			self.current_solution = candidate_solution
 			self.f_old = fval_tilde
 			self.recommended_solns.append(self.current_solution) 
-			self.intermediate_budgets.append(self.expended_budget)
+			self.intermediate_budgets.append(self.budget.used)
 			self.s_old = s_new
 
 		else:
@@ -916,7 +915,5 @@ class OMoRF(Solver):
 			self._set_delta(delta_k)
 			self._set_rho_k(rho_k)
 
-		self.deltas.append(self.delta_k)
-		self.budgets.append(self.expended_budget)
 		return S_red, S_full, f_red, f_full
 	
