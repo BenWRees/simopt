@@ -5,7 +5,7 @@ from __future__ import annotations
 import bisect
 import itertools
 from collections.abc import Sequence
-from typing import Callable
+from typing import Callable, Final
 
 import numpy as np
 
@@ -13,6 +13,7 @@ from mrg32k3a.mrg32k3a import MRG32k3a
 from simopt.base import ConstraintType, Model, Problem, VariableType
 from simopt.utils import classproperty, override
 
+NUM_CAPACITIES: Final[int] = 4
 
 class TableAllocation(Model):
     """Table Allocation Model.
@@ -49,7 +50,7 @@ class TableAllocation(Model):
             "capacity": {
                 "description": "maximum capacity of restaurant",
                 "datatype": int,
-                "default": 80,
+                "default": 80, 
             },
             "table_cap": {
                 "description": "seating capacity of each type of table",
@@ -64,17 +65,17 @@ class TableAllocation(Model):
             "service_time_means": {
                 "description": "mean service time (in minutes)",
                 "datatype": list,
-                "default": [20, 25, 30, 35, 40, 45, 50, 60],
+                "default": [20, 25, 30, 35, 40, 45, 50, 60], 
             },
             "table_revenue": {
                 "description": "revenue earned for each group size",
                 "datatype": list,
-                "default": [15, 30, 45, 60, 75, 90, 105, 120],
+                "default": [15, 30, 45, 60, 75, 90, 105, 120], 
             },
             "num_tables": {
                 "description": "number of tables of each capacity",
                 "datatype": list,
-                "default": [10, 5, 4, 2],
+                "default": [10, 5, 4, 2], 
             },
         }
 

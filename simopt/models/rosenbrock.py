@@ -67,12 +67,6 @@ class RosenbrockFunction(Model):
 				"datatype": tuple,
 				"default": (2.0,) * DIM
 			},
-			
-			"function" : {
-				"description": "deterministic function part",
-				"datatype": Callable,
-				"default": lambda x: np.sum(100 * (x[1:] - x[:-1]**2)**2 + (1 - x[:-1])**2)
-			}, 
 			"variance": {
 				'description': 'variance of the noise',
 				'datatype': float,
@@ -84,7 +78,6 @@ class RosenbrockFunction(Model):
 	def check_factor_list(self) -> dict[str, Callable] : 
 		return {
 			"x": self.check_x,
-			'function': self.check_function_to_eval,
 			"variance": self.check_variance
 		}
 	
@@ -95,12 +88,8 @@ class RosenbrockFunction(Model):
 	def __init__(self, fixed_factors: dict | None = None) -> None:
 		# Set factors of the simulation model.
 		super().__init__(fixed_factors)
-
-	def check_function_to_eval(self) -> bool : 
-		return True
 	
-	def function_to_eval(self, x: np.ndarray) -> float :
-		
+	def rosenbrock_function(self, x: np.ndarray) -> float :
 		return np.sum(100 * (x[1:] - x[:-1]**2)**2 + (1 - x[:-1])**2)
 		
 	def check_x(self) -> bool:
@@ -129,7 +118,7 @@ class RosenbrockFunction(Model):
 		noise_rng = rng_list[0]
 		x = np.array(self.factors["x"])
 		# fn_eval_at_x =  1/(1+ np.exp(-x))-0.5 + noise_rng.normalvariate()
-		fn_eval_at_x = self.factors['function'](x) + noise_rng.normalvariate(sigma=self.factors['variance'])
+		fn_eval_at_x = self.rosenbrock_function(x) + noise_rng.normalvariate(sigma=self.factors['variance'])
 
 
 		# Compose responses and gradients.
@@ -257,25 +246,17 @@ class RosenbrockFunctionProblem (Problem) :
 		# TODO: figure out what f is
 		return 0.0
 
-	@property
-	def optimal_solution(self) -> tuple:
+	@classproperty
+	@override
+	def optimal_solution(cls) -> tuple:
 		# Change if f is changed
 		# TODO: figure out what f is
-		return (1,) * self.dim
+		return (1,) * cls.dim
 
 	@classproperty
 	@override
 	def model_default_factors(cls) -> dict:
 		return {}
-
-	@property
-	def model_fixed_factors(self) -> dict:
-		return {}
-
-	@model_fixed_factors.setter
-	def model_fixed_factors(self, value: dict | None) -> None:
-		# TODO: figure out if fixed factors should change
-		pass
 
 	@classproperty
 	@override
@@ -416,28 +397,6 @@ class RosenbrockFunctionProblem (Problem) :
 		det_objectives_gradients = ((0,) * self.dim,)
 		return det_objectives, det_objectives_gradients
 
-	def deterministic_stochastic_constraints_and_gradients(self, x: tuple) -> tuple[tuple, tuple]:
-		"""
-		Compute deterministic components of stochastic constraints
-		for a solution `x`.
-
-		Arguments
-		---------
-		x : tuple
-			vector of decision variables
-
-		Returns
-		-------
-		det_stoch_constraints : tuple
-			vector of deterministic components of stochastic constraints
-		det_stoch_constraints_gradients : tuple
-			vector of gradients of deterministic components of
-			stochastic constraints
-		"""
-		det_stoch_constraints = ()
-		det_stoch_constraints_gradients = ()
-		return det_stoch_constraints, det_stoch_constraints_gradients
-
 	def check_deterministic_constraints(self, x: tuple) -> bool :
 		"""
 		Check if a solution `x` satisfies the problem's deterministic
@@ -472,8 +431,13 @@ class RosenbrockFunctionProblem (Problem) :
 			vector of decision variables
 		"""
 		# x = tuple([rand_sol_rng.uniform(-2, 2) for _ in range(self.dim)])
-		x = tuple(rand_sol_rng.mvnormalvariate(mean_vec=np.zeros(self.dim), cov=np.eye(self.dim), factorized=False))
-		return x
+		return tuple(
+			rand_sol_rng.mvnormalvariate(
+				mean_vec=np.zeros(self.dim), 
+				cov=np.eye(self.dim), 
+				factorized=False
+				)
+				)
 
 
 

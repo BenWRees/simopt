@@ -10,7 +10,7 @@ from mrg32k3a.mrg32k3a import MRG32k3a
 from simopt.base import ConstraintType, Model, Problem, VariableType
 from simopt.utils import classproperty, override
 
-NUM_STAGES: Final[int] = 5
+NUM_STAGES: Final[int] = 10
 
 
 class Contamination(Model):
@@ -530,7 +530,7 @@ class ContaminationTotalCostCont(Problem):
             "budget": {
                 "description": "max # of replications for a solver to take",
                 "datatype": int,
-                "default": 10000,
+                "default": 1000,
                 "isDatafarmable": False,
             },
             "prev_cost": {

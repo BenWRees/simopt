@@ -67,12 +67,6 @@ class ZakharovFunction(Model):
 				"datatype": tuple,
 				"default": (2.0,) * DIM
 			},
-			
-			"function" : {
-				"description": "deterministic function part",
-				"datatype": Callable,
-				"default": lambda x: np.sum(x ** 2) + np.sum(0.5 * np.arange(1, DIM + 1) * x)**2 + np.sum(0.5 * np.arange(1, DIM + 1) * x)**4
-			}, 
 			"variance": {
 				'description': 'variance of the noise',
 				'datatype': float,
@@ -84,7 +78,6 @@ class ZakharovFunction(Model):
 	def check_factor_list(self) -> dict[str, Callable] : 
 		return {
 			"x": self.check_x,
-			'function': self.check_function_to_eval,
 			"variance": self.check_variance
 		}
 	
@@ -96,12 +89,11 @@ class ZakharovFunction(Model):
 		# Set factors of the simulation model.
 		super().__init__(fixed_factors)
 
-	def check_function_to_eval(self) -> bool : 
-		return True
-	
-	def function_to_eval(self, x: np.ndarray) -> float :
+
+	def zakharov_function(self, x: np.ndarray) -> float :
 		term1 = np.sum(x ** 2)
-		term2 = np.sum(0.5 * np.arange(1, DIM + 1) * x)
+		term_2_list = [0.5* (a+1) * x for a,x in enumerate(x.flatten().tolist())]
+		term2 = np.sum(term_2_list)
 		
 		return term1 + term2**2 + term2**4
 		
@@ -131,7 +123,7 @@ class ZakharovFunction(Model):
 		noise_rng = rng_list[0]
 		x = np.array(self.factors["x"])
 		# fn_eval_at_x =  1/(1+ np.exp(-x))-0.5 + noise_rng.normalvariate()
-		fn_eval_at_x = self.factors['function'](x) + noise_rng.normalvariate(sigma=self.factors['variance'])
+		fn_eval_at_x = self.zakharov_function(x) + noise_rng.normalvariate(sigma=self.factors['variance'])
 
 		# Compose responses and gradients.
 		responses = {"est_f(x)": fn_eval_at_x}
@@ -416,28 +408,6 @@ class ZakharovFunctionProblem (Problem) :
 		det_objectives_gradients = ((0,) * self.dim,)
 		return det_objectives, det_objectives_gradients
 
-	def deterministic_stochastic_constraints_and_gradients(self, x: tuple) -> tuple[tuple, tuple]:
-		"""
-		Compute deterministic components of stochastic constraints
-		for a solution `x`.
-
-		Arguments
-		---------
-		x : tuple
-			vector of decision variables
-
-		Returns
-		-------
-		det_stoch_constraints : tuple
-			vector of deterministic components of stochastic constraints
-		det_stoch_constraints_gradients : tuple
-			vector of gradients of deterministic components of
-			stochastic constraints
-		"""
-		det_stoch_constraints = ()
-		det_stoch_constraints_gradients = ()
-		return det_stoch_constraints, det_stoch_constraints_gradients
-
 	def check_deterministic_constraints(self, x: tuple) -> bool :
 		"""
 		Check if a solution `x` satisfies the problem's deterministic
@@ -471,9 +441,13 @@ class ZakharovFunctionProblem (Problem) :
 		x : tuple
 			vector of decision variables
 		"""
-		# x = tuple([rand_sol_rng.uniform(-2, 2) for _ in range(self.dim)])
-		x = tuple(rand_sol_rng.mvnormalvariate(mean_vec=np.zeros(self.dim), cov=np.eye(self.dim), factorized=False))
-		return x
+		return tuple(
+			rand_sol_rng.mvnormalvariate(
+				mean_vec=np.zeros(self.dim), 
+				cov=np.eye(self.dim), 
+				factorized=False
+			)
+		)
 
 
 

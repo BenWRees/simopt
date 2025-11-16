@@ -257,7 +257,7 @@ class FixedSANLongestPath(Problem):
             "budget": {
                 "description": "max # of replications for a solver to take",
                 "datatype": int,
-                "default": 10000,
+                "default": 1000,
                 "isDatafarmable": False,
             },
             "arc_costs": {

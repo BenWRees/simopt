@@ -245,6 +245,7 @@ class Network(Model):
         arrival_times = [
             arrival_rng.expovariate(arrival_rate) for _ in range(total_arrivals)
         ]
+
         network_routes = network_rng.choices(
             range(n_networks),
             weights=process_prob,

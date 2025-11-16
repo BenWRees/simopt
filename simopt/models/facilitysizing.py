@@ -44,10 +44,8 @@ class FacilitySize(Model):
     @override
     def specifications(cls) -> dict[str, dict]:
         return {
-            "mean_vec": {
-                "description": (
-                    "location parameters of the multivariate normal distribution"
-                ),
+            'mean_vec': {
+                "description": "location parameters of the multivariate normal distribution",
                 "datatype": list,
                 "default": [100] * NUM_FACILITIES,
             },
@@ -323,6 +321,12 @@ class FacilitySizingTotalCost(Problem):
             raise ValueError(
                 "All elements in installation_costs must be greater than or equal to 0."
             )
+        
+    # def _check_installation_costs(self) -> bool:
+    #     return not (
+    #         len(self.factors["installation_costs"]) != self.model.factors["n_fac"]
+    #         or any(elem < 0 for elem in self.factors["installation_costs"])
+    #     )
 
     def _check_epsilon(self) -> None:
         if self.factors["epsilon"] < 0 or self.factors["epsilon"] > 1:
@@ -474,7 +478,7 @@ class FacilitySizingMaxService(Problem):
             "budget": {
                 "description": "Max # of replications for a solver to take.",
                 "datatype": int,
-                "default": 10000,
+                "default": 1000,
             },
             "installation_costs": {
                 "description": "Cost to install a unit of capacity at each facility.",

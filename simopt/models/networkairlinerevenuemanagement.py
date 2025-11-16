@@ -632,10 +632,6 @@ class AirlineRevenueBookingLimitProblem(Problem):
 
         return tuple(x)
 
-
-
-
-
     
     def __init__(
         self,
@@ -847,9 +843,9 @@ class AirlineRevenueBidPriceProblem(Problem):
     def check_deterministic_constraints(self, x: tuple) -> bool:
         return all(x[j] > 0 for j in range(self.dim))
 
-    @override
-    def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:
-        return tuple([rand_sol_rng.uniform(0, 10) for _ in range(self.dim)])
+    # @override
+    # def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:
+    #     return tuple([rand_sol_rng.uniform(0, 10) for _ in range(self.dim)])
 
     @override
     def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:
