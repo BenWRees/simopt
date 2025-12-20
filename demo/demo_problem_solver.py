@@ -20,7 +20,7 @@ from simopt.experiment_base import (
 )
 
 
-def main(solver_name, problem_name, dim_size, macroreplication_no, solver_factors, budget) -> None :
+def main(solver_name, problem_name, macroreplication_no, solver_factors, budget) -> None :
 	print(f"Testing solver {solver_name} on problem {problem_name}.")
 
 	# Specify file path name for storing experiment outputs in .pickle file.
@@ -42,5 +42,5 @@ def main(solver_name, problem_name, dim_size, macroreplication_no, solver_factor
 
 if __name__ == "__main__":
 	# main('ASTRODF', 'FACSIZE-1', 2, {'crn_across_solns': False}, {'budget': 5000})
-	main('ASTROMoRF', 'AIRLINE-1', 10, 1, {'crn_across_solns': False}, 5000)
+	main('ASTROMORF', 'DYNAMNEWS-1', 1, {'crn_across_solns': False}, 5000)
 	# main('OMoRF', 'FACSIZE-1', 2, {'crn_across_solns': False}, {'budget': 5000})

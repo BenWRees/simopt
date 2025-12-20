@@ -41,10 +41,10 @@ sys.path.append(str(Path.cwd().parent))
 
 # %%
 # Specify the names of the solver(s) and problem(s) to test.
-solver_abbr_names = ["RNDSRCH", "ASTRODF", "NELDMD"]
-problem_abbr_names = ["CNTNEWS-1", "SAN-1"]
+solver_abbr_names = ["ASTROMoRF", "ASTRODF"]
+problem_abbr_names = ["AIRLINE-1"]
 
-num_macroreps = 3
+num_macroreps = 2
 num_postreps = 50
 num_postreps_init_opt = 50
 
@@ -77,7 +77,7 @@ mymetaexperiment.post_normalize(n_postreps_init_opt=num_postreps_init_opt)
 # %%
 # Produce basic plots.
 
-from simopt.experiment_base import PlotType, plot_solvability_profiles
+from simopt.experiment_base import PlotType, plot_solvability_profiles, plot_progress_curves
 
 print("Plotting results...")
 
@@ -91,5 +91,15 @@ _print_path(
         experiments=mymetaexperiment.experiments, plot_type=PlotType.CDF_SOLVABILITY
     )
 )
+
+for myexperiments in mymetaexperiment.experiments : 
+    for exp in myexperiments : 
+        _print_path(
+            plot_progress_curves(
+                experiments=[exp],
+                plot_type=PlotType.MEAN, 
+                normalize=False
+            )
+        )
 
 print("Plotting complete!")

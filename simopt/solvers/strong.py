@@ -233,7 +233,9 @@ class STRONG(Solver):
         neg_minmax = -problem.minmax[0]
         dim_sq = problem.dim**2
 
+        t = 0 
         while True:
+            t += 1
             new_x = np.array(new_solution.x)
             # Check variable bounds.
             forward = np.isclose(
@@ -495,8 +497,31 @@ class STRONG(Solver):
                         self.recommended_solns.append(new_solution)
                         self.intermediate_budgets.append(self.budget.used)
                 n_r = int(np.ceil(self.factors["lambda_2"] * n_r))
+
         # Loop through each budget and convert any numpy int32s to Python ints.
         self.intermediate_budgets = [int(i) for i in self.intermediate_budgets]
+
+
+
+    def check_bounds_soln(self, solution: Solution, problem: Problem) -> Solution :
+        """
+            Checks the bounds of the new solution and modifies the bounds if it is close to the constrained boundaries.
+        """
+        new_x = list(solution.x)
+
+        upper_bound = problem.upper_bounds
+        lower_bound = problem.lower_bounds
+        tol = self.factors['sensitivity']
+
+        for i in range(len(new_x)) :
+            # Check variable bounds.
+            if new_x[i]  > upper_bound[i]:
+                new_x[i] = upper_bound[i] - tol
+            if new_x[i]  < lower_bound[i]:
+                new_x[i] = lower_bound[i] + tol
+
+        new_solution = self.create_new_solution(tuple(new_x),problem)
+        return new_solution
 
     def cauchy_point(
         self,
@@ -615,6 +640,7 @@ class STRONG(Solver):
         x1 = np.tile(new_x, (problem.dim, 1))
         x2 = np.tile(new_x, (problem.dim, 1))
 
+
         # Compute masks for numpy vectorization
         bounds_neg = bounds_check == -1
         bounds_zero = bounds_check == 0
@@ -623,14 +649,27 @@ class STRONG(Solver):
         bounds_non_zero = bounds_neg | bounds_pos
         bounds_non_pos = bounds_zero | bounds_neg
 
+
+
+
+
+
         steps = np.minimum(ub_steps, lb_steps)
         # Apply step modifications per bounds_check conditions
         steps = np.where(bounds_neg, lb_steps, steps)
         steps = np.where(bounds_pos, ub_steps, steps)
 
+
+
         # Modify x1 and x2 based on step sizes
-        x1[np.arange(problem.dim), bounds_non_neg] += steps[bounds_non_neg]
-        x2[np.arange(problem.dim), bounds_non_pos] -= steps[bounds_non_pos]
+        # x1[np.arange(problem.dim), bounds_non_neg] += steps[bounds_non_neg]
+        # x2[np.arange(problem.dim), bounds_non_pos] -= steps[bounds_non_pos]
+
+        idx_non_neg = np.where(bounds_non_neg)[0]
+        idx_non_pos = np.where(bounds_non_pos)[0]
+
+        x1[idx_non_neg, idx_non_neg] += steps[idx_non_neg]
+        x2[idx_non_pos, idx_non_pos] -= steps[idx_non_pos]
 
         # Compute function values
         non_neg_indices = np.where(bounds_non_neg)[0]

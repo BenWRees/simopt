@@ -15,7 +15,7 @@ from math import comb
 # from simopt.solvers.active_subspaces.polyridge import * 
 # from simopt.solvers.active_subspaces.subspace import *
 from simopt.solvers.active_subspaces.index_set import IndexSet
-from simopt.solvers import ASTROMoRF
+from simopt.solvers import ASTROMoRF_old
 
 
 from simopt.base import (
@@ -33,7 +33,7 @@ __all__ = ['GeometryImprovement']
 	Class that represents the geometry of the solution space. It is able to construct an interpolation set and handle geometric behaviours of the space
 """
 class GeometryImprovement :
-	def __init__(self, problem: Problem, tr_instance: ASTROMoRF):
+	def __init__(self, problem: Problem, tr_instance: ASTROMoRF_old):
 
 		# print(kwargs)
 		self.tr_instance = tr_instance

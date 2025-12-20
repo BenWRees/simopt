@@ -17,6 +17,7 @@ from simopt.base import (
     ObjectiveType,
     Solver,
     VariableType,
+	Problem
 )
 from simopt.utils import classproperty, override
 
@@ -111,6 +112,7 @@ class SGD(Solver):
 		}
 	
 	@property 
+	@override
 	def check_factor_list(self) -> dict[str, Callable] : 
 		return {
 			"crn_across_solns": self.check_crn_across_solns,
@@ -150,7 +152,8 @@ class SGD(Solver):
 	def check_spsa_gradient(self) :
 		return True
 
-	def solve(self, problem):
+	@override
+	def solve(self, problem: Problem) -> None :
 		"""
 		Run a single macroreplication of a solver on a problem.
 		
@@ -171,8 +174,6 @@ class SGD(Solver):
 		crn_across_solns : bool
 			indicates if CRN are used when simulating different solutions
 		"""
-		recommended_solns = []
-		intermediate_budgets = []
 		expended_budget = 0
 
 		# Default values.
@@ -188,8 +189,8 @@ class SGD(Solver):
 
 		# Start with the initial solution.
 		new_solution = self.create_new_solution(problem.factors["initial_solution"], problem)
-		recommended_solns.append(new_solution)
-		intermediate_budgets.append(expended_budget)
+		self.recommended_solns.append(new_solution)
+		self.intermediate_budgets.append(expended_budget)
 
 		# Initialize the timestep.
 		t = 1
@@ -223,11 +224,18 @@ class SGD(Solver):
 				# Update new_x and adjust it for box constraints.
 				new_x[i] = new_solution.x[i] - alpha*grad[i]
 
+			for i in range(len(new_x)) :
+				# Check variable bounds.
+				if new_x[i]  > upper_bound[i]:
+					new_x[i] = upper_bound[i] - 10**(-7)
+				if new_x[i]  < lower_bound[i]:
+					new_x[i] = lower_bound[i] + 10**(-7)
+
+			print(f'The new iterate solution at iteration {t} is: \n {new_x}')
 			# Create new solution based on new x
 			new_solution = self.create_new_solution(tuple(new_x), problem)
-			recommended_solns.append(new_solution)
-			intermediate_budgets.append(expended_budget)
-		return recommended_solns, intermediate_budgets
+			self.recommended_solns.append(new_solution)
+			self.intermediate_budgets.append(expended_budget)
 
 
 	#gradient approximation of 

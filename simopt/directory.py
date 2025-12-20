@@ -61,7 +61,6 @@ def generate_unabbreviated_mapping(
     mapping = {}
     for cls in class_dict.values():
         if include_compatibility:
-            # print(f'Adding {cls.class_name}')
             mapping[f"{cls.class_name} ({cls.compatibility})"] = cls
         else:
             mapping[cls.class_name] = cls

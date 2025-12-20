@@ -1,0 +1,682 @@
+==== Starting ASTROMoRF Solver on problem: DYNAMNEWS-1 ====
+Timestamp: 2025-11-15_23-20-57
+Initial budget: 925
+
+
+======================================================================
+MODEL QUALITY DIAGNOSTICS
+======================================================================
+
+📊 MODEL FIT QUALITY:
+  R² (goodness of fit):     1.0000  ✓ Good
+  RMSE:                     7.8095e-14
+  Max absolute error:       9.9476e-14
+
+🎯 ACTIVE SUBSPACE QUALITY:
+  Variance captured:        1.0000  ✓ Good
+  Orthonormality error:     6.6613e-16  ✓ Good
+  Subspace dimension:       7/10
+
+📐 DESIGN SET GEOMETRY:
+  Condition number:         2.4781e+02  ⚠️ Poor
+  Number of points:         15
+  Min point distance:       1.0071e+00
+  Max point distance:       2.0143e+00
+  Mean point distance:      1.4080e+00
+
+🔍 OPTIMIZATION INFO:
+  Gradient norm:            1.5811e+01
+  Trust-region radius:      1.2589e+00
+
+💡 ASSESSMENT:
+  ✓ All metrics look reasonable
+======================================================================
+
+
+======================================================================
+CANDIDATE SOLUTION DIAGNOSTICS
+======================================================================
+Distance to nearest design point:  0.2518
+Mean distance to design points:     1.5416
+Full-space step size:               1.2589
+Trust region radius:                1.2589
+Step to radius ratio:               100.0%
+
+Prediction Quality:
+  Model prediction:                 -139.905352
+  Actual value:                     -139.905352
+  Prediction error:                 0.000000 (0.0%)
+
+Improvement:
+  Current objective:                -120.000000
+  Predicted improvement:            19.905352
+  Actual improvement:               19.905352
+======================================================================
+
+
+======================================================================
+MODEL QUALITY DIAGNOSTICS
+======================================================================
+
+📊 MODEL FIT QUALITY:
+  R² (goodness of fit):     0.9624  ✓ Good  → (Δ=-0.038)
+  RMSE:                     1.7961e+00
+  Max absolute error:       3.8993e+00
+
+🎯 ACTIVE SUBSPACE QUALITY:
+  Variance captured:        0.8561  ✓ Good
+  Orthonormality error:     7.7716e-16  ✓ Good
+  Subspace dimension:       7/10
+
+📐 DESIGN SET GEOMETRY:
+  Condition number:         2.6926e+03  ⚠️ ILL-CONDITIONED
+  Number of points:         15
+  Min point distance:       1.2589e+00
+  Max point distance:       3.0214e+00
+  Mean point distance:      2.0878e+00
+
+🔍 OPTIMIZATION INFO:
+  Gradient norm:            1.6009e+03
+  Trust-region radius:      1.8884e+00
+
+💡 ASSESSMENT:
+  ✓ All metrics look reasonable
+======================================================================
+
+
+======================================================================
+CANDIDATE SOLUTION DIAGNOSTICS
+======================================================================
+Distance to nearest design point:  1.8884
+Mean distance to design points:     2.3730
+Full-space step size:               1.8884
+Trust region radius:                1.8884
+Step to radius ratio:               100.0%
+
+Prediction Quality:
+  Model prediction:                 -3159.478289
+  Actual value:                     -140.204618
+  Prediction error:                 3019.273671 (2153.5%)
+
+Improvement:
+  Current objective:                -139.905352
+  Predicted improvement:            3019.572937
+  Actual improvement:               0.299266
+
+⚠️  WARNING: High prediction error detected!
+  → Candidate is far from design points (interpolation issue)
+  → Step at trust region boundary (extrapolation issue)
+======================================================================
+
+
+======================================================================
+MODEL QUALITY DIAGNOSTICS
+======================================================================
+
+📊 MODEL FIT QUALITY:
+  R² (goodness of fit):     0.8890  ⚠️ Moderate  📉 (Δ=-0.073)
+  RMSE:                     2.1290e+00
+  Max absolute error:       2.2612e+00
+
+🎯 ACTIVE SUBSPACE QUALITY:
+  Variance captured:        0.7359  ⚠️ Moderate
+  Orthonormality error:     6.6613e-16  ✓ Good
+  Subspace dimension:       7/10
+
+📐 DESIGN SET GEOMETRY:
+  Condition number:         2.1585e+02  ⚠️ Poor
+  Number of points:         15
+  Min point distance:       8.7621e-01
+  Max point distance:       2.7757e+00
+  Mean point distance:      1.3856e+00
+
+🔍 OPTIMIZATION INFO:
+  Gradient norm:            1.7710e+01
+  Trust-region radius:      1.0953e+00
+
+💡 ASSESSMENT:
+  ✓ All metrics look reasonable
+======================================================================
+
+
+======================================================================
+CANDIDATE SOLUTION DIAGNOSTICS
+======================================================================
+Distance to nearest design point:  0.3347
+Mean distance to design points:     1.4103
+Full-space step size:               1.0953
+Trust region radius:                1.0953
+Step to radius ratio:               100.0%
+
+Prediction Quality:
+  Model prediction:                 -157.363266
+  Actual value:                     -136.371281
+  Prediction error:                 20.991984 (15.4%)
+
+Improvement:
+  Current objective:                -140.204618
+  Predicted improvement:            17.158648
+  Actual improvement:               -3.833336
+
+⚠️  WARNING: High prediction error detected!
+  → Step at trust region boundary (extrapolation issue)
+======================================================================
+
+
+======================================================================
+MODEL QUALITY DIAGNOSTICS
+======================================================================
+
+📊 MODEL FIT QUALITY:
+  R² (goodness of fit):     0.4812  ⚠️ POOR  📉 (Δ=-0.408)
+    ⚠️  R² dropped significantly! Previous: 0.8890
+  RMSE:                     1.9900e+00
+  Max absolute error:       3.3000e+00
+
+🎯 ACTIVE SUBSPACE QUALITY:
+  Variance captured:        0.8572  ✓ Good
+  Orthonormality error:     6.6613e-16  ✓ Good
+  Subspace dimension:       7/10
+
+📐 DESIGN SET GEOMETRY:
+  Condition number:         2.2996e+03  ⚠️ ILL-CONDITIONED
+  Number of points:         15
+  Min point distance:       4.3811e-01
+  Max point distance:       8.7621e-01
+  Mean point distance:      6.1249e-01
+
+🔍 OPTIMIZATION INFO:
+  Gradient norm:            5.0347e+02
+  Trust-region radius:      5.4763e-01
+
+💡 ASSESSMENT:
+  ⚠️  Low R² - model doesn't fit training data well
+======================================================================
+
+
+======================================================================
+CANDIDATE SOLUTION DIAGNOSTICS
+======================================================================
+Distance to nearest design point:  0.5476
+Mean distance to design points:     0.6911
+Full-space step size:               0.5476
+Trust region radius:                0.5476
+Step to radius ratio:               100.0%
+
+Prediction Quality:
+  Model prediction:                 -414.722198
+  Actual value:                     -138.424187
+  Prediction error:                 276.298012 (199.6%)
+
+Improvement:
+  Current objective:                -140.204618
+  Predicted improvement:            274.517581
+  Actual improvement:               -1.780431
+
+⚠️  WARNING: High prediction error detected!
+  → Candidate is far from design points (interpolation issue)
+  → Step at trust region boundary (extrapolation issue)
+======================================================================
+
+
+======================================================================
+MODEL QUALITY DIAGNOSTICS
+======================================================================
+
+📊 MODEL FIT QUALITY:
+  R² (goodness of fit):     0.5969  ⚠️ POOR  📈 (Δ=+0.116)
+  RMSE:                     4.5900e-01
+  Max absolute error:       1.6870e+00
+
+🎯 ACTIVE SUBSPACE QUALITY:
+  Variance captured:        0.3573  ⚠️ POOR
+  Orthonormality error:     6.6613e-16  ✓ Good
+  Subspace dimension:       7/10
+
+📐 DESIGN SET GEOMETRY:
+  Condition number:         1.9729e+03  ⚠️ ILL-CONDITIONED
+  Number of points:         15
+  Min point distance:       1.0953e-01
+  Max point distance:       5.6103e-01
+  Mean point distance:      2.0668e-01
+
+🔍 OPTIMIZATION INFO:
+  Gradient norm:            1.4256e+01
+  Trust-region radius:      1.3691e-01
+
+💡 ASSESSMENT:
+  ⚠️  Low R² - model doesn't fit training data well
+  ⚠️  Low variance captured - active subspace may be missing important directions
+======================================================================
+
+
+======================================================================
+CANDIDATE SOLUTION DIAGNOSTICS
+======================================================================
+Distance to nearest design point:  0.0441
+Mean distance to design points:     0.1960
+Full-space step size:               0.1369
+Trust region radius:                0.1369
+Step to radius ratio:               100.0%
+
+Prediction Quality:
+  Model prediction:                 -142.011202
+  Actual value:                     -142.276826
+  Prediction error:                 0.265624 (0.2%)
+
+Improvement:
+  Current objective:                -140.204618
+  Predicted improvement:            1.806585
+  Actual improvement:               2.072209
+======================================================================
+
+
+======================================================================
+MODEL QUALITY DIAGNOSTICS
+======================================================================
+
+📊 MODEL FIT QUALITY:
+  R² (goodness of fit):     0.9337  ✓ Good  📈 (Δ=+0.337)
+  RMSE:                     1.1165e+00
+  Max absolute error:       4.1623e+00
+
+🎯 ACTIVE SUBSPACE QUALITY:
+  Variance captured:        0.8582  ✓ Good
+  Orthonormality error:     1.1102e-15  ✓ Good
+  Subspace dimension:       7/10
+
+📐 DESIGN SET GEOMETRY:
+  Condition number:         2.4322e+07  ⚠️ ILL-CONDITIONED
+  Number of points:         15
+  Min point distance:       1.3691e-01
+  Max point distance:       3.0667e-01
+  Mean point distance:      2.1277e-01
+
+🔍 OPTIMIZATION INFO:
+  Gradient norm:            9.4270e+06
+  Trust-region radius:      1.9167e-01
+
+💡 ASSESSMENT:
+  ✓ All metrics look reasonable
+======================================================================
+
+
+======================================================================
+CANDIDATE SOLUTION DIAGNOSTICS
+======================================================================
+Distance to nearest design point:  0.1917
+Mean distance to design points:     0.2412
+Full-space step size:               0.1917
+Trust region radius:                0.1917
+Step to radius ratio:               100.0%
+
+Prediction Quality:
+  Model prediction:                 -1807033.303771
+  Actual value:                     -133.932671
+  Prediction error:                 1806899.371100 (1349110.2%)
+
+Improvement:
+  Current objective:                -142.276826
+  Predicted improvement:            1806891.026945
+  Actual improvement:               -8.344156
+
+⚠️  WARNING: High prediction error detected!
+  → Candidate is far from design points (interpolation issue)
+  → Step at trust region boundary (extrapolation issue)
+======================================================================
+
+
+======================================================================
+MODEL QUALITY DIAGNOSTICS
+======================================================================
+
+📊 MODEL FIT QUALITY:
+  R² (goodness of fit):     0.4636  ⚠️ POOR  📉 (Δ=-0.470)
+    ⚠️  R² dropped significantly! Previous: 0.9337
+  RMSE:                     2.4309e+00
+  Max absolute error:       7.1054e+00
+
+🎯 ACTIVE SUBSPACE QUALITY:
+  Variance captured:        0.7071  ⚠️ Moderate
+  Orthonormality error:     4.4763e-16  ✓ Good
+  Subspace dimension:       7/10
+
+📐 DESIGN SET GEOMETRY:
+  Condition number:         2.4274e+03  ⚠️ ILL-CONDITIONED
+  Number of points:         15
+  Min point distance:       7.9996e-02
+  Max point distance:       2.0770e-01
+  Mean point distance:      1.2416e-01
+
+🔍 OPTIMIZATION INFO:
+  Gradient norm:            1.0402e+02
+  Trust-region radius:      9.9995e-02
+
+💡 ASSESSMENT:
+  ⚠️  Low R² - model doesn't fit training data well
+======================================================================
+
+
+======================================================================
+CANDIDATE SOLUTION DIAGNOSTICS
+======================================================================
+Distance to nearest design point:  0.1000
+Mean distance to design points:     0.1349
+Full-space step size:               0.1000
+Trust region radius:                0.1000
+Step to radius ratio:               100.0%
+
+Prediction Quality:
+  Model prediction:                 -151.439376
+  Actual value:                     -141.547037
+  Prediction error:                 9.892339 (7.0%)
+
+Improvement:
+  Current objective:                -142.276826
+  Predicted improvement:            9.162550
+  Actual improvement:               -0.729789
+======================================================================
+
+
+======================================================================
+MODEL QUALITY DIAGNOSTICS
+======================================================================
+
+📊 MODEL FIT QUALITY:
+  R² (goodness of fit):     0.9967  ✓ Good  📈 (Δ=+0.533)
+  RMSE:                     1.2304e-01
+  Max absolute error:       3.8859e-01
+
+🎯 ACTIVE SUBSPACE QUALITY:
+  Variance captured:        0.8354  ✓ Good
+  Orthonormality error:     6.6613e-16  ✓ Good
+  Subspace dimension:       7/10
+
+📐 DESIGN SET GEOMETRY:
+  Condition number:         9.9377e+09  ⚠️ ILL-CONDITIONED
+  Number of points:         15
+  Min point distance:       7.9996e-02
+  Max point distance:       1.7999e-01
+  Mean point distance:      1.1392e-01
+
+🔍 OPTIMIZATION INFO:
+  Gradient norm:            2.7640e+09
+  Trust-region radius:      9.9995e-02
+
+💡 ASSESSMENT:
+  ✓ All metrics look reasonable
+======================================================================
+
+
+======================================================================
+CANDIDATE SOLUTION DIAGNOSTICS
+======================================================================
+Distance to nearest design point:  0.1000
+Mean distance to design points:     0.1271
+Full-space step size:               0.1000
+Trust region radius:                0.1000
+Step to radius ratio:               100.0%
+
+Prediction Quality:
+  Model prediction:                 -276386712.713938
+  Actual value:                     -133.618981
+  Prediction error:                 276386579.094957 (206846794.1%)
+
+Improvement:
+  Current objective:                -142.276826
+  Predicted improvement:            276386570.437112
+  Actual improvement:               -8.657845
+
+⚠️  WARNING: High prediction error detected!
+  → Candidate is far from design points (interpolation issue)
+  → Step at trust region boundary (extrapolation issue)
+======================================================================
+
+
+======================================================================
+MODEL QUALITY DIAGNOSTICS
+======================================================================
+
+📊 MODEL FIT QUALITY:
+  R² (goodness of fit):     0.9967  ✓ Good  → (Δ=+0.000)
+  RMSE:                     1.2304e-01
+  Max absolute error:       3.8859e-01
+
+🎯 ACTIVE SUBSPACE QUALITY:
+  Variance captured:        0.8354  ✓ Good
+  Orthonormality error:     6.6613e-16  ✓ Good
+  Subspace dimension:       7/10
+
+📐 DESIGN SET GEOMETRY:
+  Condition number:         9.9377e+09  ⚠️ ILL-CONDITIONED
+  Number of points:         15
+  Min point distance:       7.9996e-02
+  Max point distance:       1.7999e-01
+  Mean point distance:      1.1392e-01
+
+🔍 OPTIMIZATION INFO:
+  Gradient norm:            2.7640e+09
+  Trust-region radius:      9.9995e-02
+
+💡 ASSESSMENT:
+  ✓ All metrics look reasonable
+======================================================================
+
+
+======================================================================
+CANDIDATE SOLUTION DIAGNOSTICS
+======================================================================
+Distance to nearest design point:  0.1000
+Mean distance to design points:     0.1271
+Full-space step size:               0.1000
+Trust region radius:                0.1000
+Step to radius ratio:               100.0%
+
+Prediction Quality:
+  Model prediction:                 -276386712.713938
+  Actual value:                     -133.618981
+  Prediction error:                 276386579.094957 (206846794.1%)
+
+Improvement:
+  Current objective:                -142.276826
+  Predicted improvement:            276386570.437112
+  Actual improvement:               -8.657845
+
+⚠️  WARNING: High prediction error detected!
+  → Candidate is far from design points (interpolation issue)
+  → Step at trust region boundary (extrapolation issue)
+======================================================================
+
+
+======================================================================
+MODEL QUALITY DIAGNOSTICS
+======================================================================
+
+📊 MODEL FIT QUALITY:
+  R² (goodness of fit):     0.9967  ✓ Good  → (Δ=+0.000)
+  RMSE:                     1.2304e-01
+  Max absolute error:       3.8859e-01
+
+🎯 ACTIVE SUBSPACE QUALITY:
+  Variance captured:        0.8354  ✓ Good
+  Orthonormality error:     6.6613e-16  ✓ Good
+  Subspace dimension:       7/10
+
+📐 DESIGN SET GEOMETRY:
+  Condition number:         9.9377e+09  ⚠️ ILL-CONDITIONED
+  Number of points:         15
+  Min point distance:       7.9996e-02
+  Max point distance:       1.7999e-01
+  Mean point distance:      1.1392e-01
+
+🔍 OPTIMIZATION INFO:
+  Gradient norm:            2.7640e+09
+  Trust-region radius:      9.9995e-02
+
+💡 ASSESSMENT:
+  ✓ All metrics look reasonable
+======================================================================
+
+
+======================================================================
+CANDIDATE SOLUTION DIAGNOSTICS
+======================================================================
+Distance to nearest design point:  0.1000
+Mean distance to design points:     0.1271
+Full-space step size:               0.1000
+Trust region radius:                0.1000
+Step to radius ratio:               100.0%
+
+Prediction Quality:
+  Model prediction:                 -276386712.713938
+  Actual value:                     -133.618981
+  Prediction error:                 276386579.094957 (206846794.1%)
+
+Improvement:
+  Current objective:                -142.276826
+  Predicted improvement:            276386570.437112
+  Actual improvement:               -8.657845
+
+⚠️  WARNING: High prediction error detected!
+  → Candidate is far from design points (interpolation issue)
+  → Step at trust region boundary (extrapolation issue)
+======================================================================
+
+
+======================================================================
+MODEL QUALITY DIAGNOSTICS
+======================================================================
+
+📊 MODEL FIT QUALITY:
+  R² (goodness of fit):     0.9967  ✓ Good  → (Δ=+0.000)
+  RMSE:                     1.2304e-01
+  Max absolute error:       3.8859e-01
+
+🎯 ACTIVE SUBSPACE QUALITY:
+  Variance captured:        0.8354  ✓ Good
+  Orthonormality error:     6.6613e-16  ✓ Good
+  Subspace dimension:       7/10
+
+📐 DESIGN SET GEOMETRY:
+  Condition number:         9.9377e+09  ⚠️ ILL-CONDITIONED
+  Number of points:         15
+  Min point distance:       7.9996e-02
+  Max point distance:       1.7999e-01
+  Mean point distance:      1.1392e-01
+
+🔍 OPTIMIZATION INFO:
+  Gradient norm:            2.7640e+09
+  Trust-region radius:      9.9995e-02
+
+💡 ASSESSMENT:
+  ✓ All metrics look reasonable
+======================================================================
+
+
+======================================================================
+CANDIDATE SOLUTION DIAGNOSTICS
+======================================================================
+Distance to nearest design point:  0.1000
+Mean distance to design points:     0.1271
+Full-space step size:               0.1000
+Trust region radius:                0.1000
+Step to radius ratio:               100.0%
+
+Prediction Quality:
+  Model prediction:                 -276386712.713938
+  Actual value:                     -133.618981
+  Prediction error:                 276386579.094957 (206846794.1%)
+
+Improvement:
+  Current objective:                -142.276826
+  Predicted improvement:            276386570.437112
+  Actual improvement:               -8.657845
+
+⚠️  WARNING: High prediction error detected!
+  → Candidate is far from design points (interpolation issue)
+  → Step at trust region boundary (extrapolation issue)
+======================================================================
+
+
+======================================================================
+MODEL QUALITY DIAGNOSTICS
+======================================================================
+
+📊 MODEL FIT QUALITY:
+  R² (goodness of fit):     0.9967  ✓ Good  → (Δ=+0.000)
+  RMSE:                     1.2304e-01
+  Max absolute error:       3.8859e-01
+
+🎯 ACTIVE SUBSPACE QUALITY:
+  Variance captured:        0.8354  ✓ Good
+  Orthonormality error:     6.6613e-16  ✓ Good
+  Subspace dimension:       7/10
+
+📐 DESIGN SET GEOMETRY:
+  Condition number:         9.9377e+09  ⚠️ ILL-CONDITIONED
+  Number of points:         15
+  Min point distance:       7.9996e-02
+  Max point distance:       1.7999e-01
+  Mean point distance:      1.1392e-01
+
+🔍 OPTIMIZATION INFO:
+  Gradient norm:            2.7640e+09
+  Trust-region radius:      9.9995e-02
+
+💡 ASSESSMENT:
+  ✓ All metrics look reasonable
+======================================================================
+
+
+======================================================================
+CANDIDATE SOLUTION DIAGNOSTICS
+======================================================================
+Distance to nearest design point:  0.1000
+Mean distance to design points:     0.1271
+Full-space step size:               0.1000
+Trust region radius:                0.1000
+Step to radius ratio:               100.0%
+
+Prediction Quality:
+  Model prediction:                 -276386712.713938
+  Actual value:                     -133.618981
+  Prediction error:                 276386579.094957 (206846794.1%)
+
+Improvement:
+  Current objective:                -142.276826
+  Predicted improvement:            276386570.437112
+  Actual improvement:               -8.657845
+
+⚠️  WARNING: High prediction error detected!
+  → Candidate is far from design points (interpolation issue)
+  → Step at trust region boundary (extrapolation issue)
+======================================================================
+
+
+======================================================================
+PREDICTION ERROR ANALYSIS
+======================================================================
+Total iterations with predictions: 12
+Mean prediction error: 86298788.0%
+Median prediction error: 675631.9%
+Min prediction error: 0.0%
+Max prediction error: 206846794.1%
+
+Trend: Early errors: 592.1% → Late errors: 206846794.1%
+  ⚠️  WARNING: Prediction quality degraded significantly over iterations
+  Possible causes:
+  - Trust region too large for polynomial model
+  - Subspace dimension too small
+  - Problem has complex local structure
+  - Polynomial degree insufficient
+======================================================================
+
+
+======================================================================
+---- ASTROMoRF Solver Finished ----
+ASTROMoRF completed after 13 iterations and 999 total function evaluations.
+The number of successful iterations was 3 and the number of unsuccessful iterations was 9.
+The percentage of successful iterations was 25.00%.
+The best solution found has an objective value of 142.276826 with a sample size of 7.
+======================================================================
+

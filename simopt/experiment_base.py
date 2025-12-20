@@ -8,9 +8,13 @@ import logging
 import pickle
 import subprocess
 import time
+import sys
+import signal 
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
+from functools import partial
+import os 
 
 import pkgutil, inspect, psutil
 
@@ -547,6 +551,23 @@ class ProblemSolver:
 		rng_list = [MRG32k3a(s_ss_sss_index=[2, i + 1, 0]) for i in range(3)]
 		self.solver.attach_rngs(rng_list)
 
+		checkpoint_interval = 1
+
+		# Define checkpoint handler
+		def save_progress(signum=None, frame=None):
+			logging.warning("Signal received. Saving partial results...")
+			try:
+				if getattr(self, "create_pickle", False):
+					file_name = self.file_name_path.name
+					self.record_experiment_results(file_name=file_name)
+				logging.info("Partial results saved successfully.")
+			except Exception as e:
+				logging.error(f"Failed to save partial results: {e}")
+			sys.exit(0)
+
+		signal.signal(signal.SIGTERM, save_progress)  # Hard kill
+		signal.signal(signal.SIGUSR1, save_progress)  # Optional preemptive signal
+
 		# Start a timer
 		function_start = time.time()
 
@@ -556,13 +577,22 @@ class ProblemSolver:
 		run_multithread_partial = partial(
 			self.run_multithread, solver=self.solver, problem=self.problem
 		)
-		results = Parallel()(
-			delayed(run_multithread_partial)(i) for i in range(n_macroreps)
-		)
-		for mrep, recommended_xs, intermediate_budgets, timing in results:
-			self.all_recommended_xs[mrep] = recommended_xs
-			self.all_intermediate_budgets[mrep] = intermediate_budgets
-			self.timings[mrep] = timing
+		# Run macroreps in chunks for checkpointing
+		for start_idx in range(0, n_macroreps, checkpoint_interval):
+			end_idx = min(start_idx + checkpoint_interval, n_macroreps)
+			logging.info(f"Running macroreplications {start_idx} to {end_idx - 1}")
+
+			results = Parallel()(delayed(run_multithread_partial)(i) for i in range(start_idx, end_idx))
+			for mrep, recommended_xs, intermediate_budgets, timing in results:
+				self.all_recommended_xs[mrep] = recommended_xs
+				self.all_intermediate_budgets[mrep] = intermediate_budgets
+				self.timings[mrep] = timing
+
+			# Checkpoint after chunk
+			if getattr(self, "create_pickle", False):
+				logging.info(f"Checkpointing progress at macrorep {end_idx - 1}")
+				file_name = self.file_name_path.name
+				self.record_experiment_results(file_name=file_name)
 
 		runtime = round(time.time() - function_start, 3)
 		logging.info(f"Finished running {n_macroreps} mreps in {runtime} seconds.")
@@ -575,6 +605,96 @@ class ProblemSolver:
 		if self.create_pickle:
 			file_name = self.file_name_path.name
 			self.record_experiment_results(file_name=file_name)
+			logging.info("Final results saved.")
+
+	def resume_run(self, pickle_file_path: str, total_macroreps: int, checkpoint_interval: int = 5) -> None:
+		"""
+			Resume a partially completed experiment from a pickle file until
+			all macroreplications are completed.
+			Args:
+				pickle_file_path (str): Path to the pickle file containing the partially completed experiment.
+				total_macroreps (int): Total number of macroreplications to run.
+				checkpoint_interval (int): Number of macroreplications after which to checkpoint progress.
+		"""
+		# Load the partially completed experiment
+		if not os.path.exists(pickle_file_path):
+			raise FileNotFoundError(f"Pickle file {pickle_file_path} does not exist.")
+
+		with open(pickle_file_path, "rb") as f:
+			solver_obj = pickle.load(f)
+
+		logging.info(f"Loaded partial experiment from {pickle_file_path}.")
+
+		# Ensure arrays are long enough
+		if len(solver_obj.all_recommended_xs) < total_macroreps:
+			solver_obj.all_recommended_xs.extend([[] for _ in range(total_macroreps - len(solver_obj.all_recommended_xs))])
+			solver_obj.all_intermediate_budgets.extend([[] for _ in range(total_macroreps - len(solver_obj.all_intermediate_budgets))])
+			solver_obj.timings.extend([0.0 for _ in range(total_macroreps - len(solver_obj.timings))])
+
+		# Identify remaining macroreplications
+		indices_to_run = [i for i, x in enumerate(solver_obj.all_recommended_xs) if not x]
+		if not indices_to_run:
+			logging.info("All macroreplications already completed. Nothing to resume.")
+			return
+
+		n_remaining = len(indices_to_run)
+		logging.info(f"Resuming experiment: {n_remaining} macroreplications remaining.")
+
+		# Re-attach RNGs for reproducibility
+		rng_list = [MRG32k3a(s_ss_sss_index=[2, i + 1, 0]) for i in range(3)]
+		solver_obj.solver.attach_rngs(rng_list)
+
+		# Define checkpoint handler for SLURM signals
+		def save_progress(signum=None, frame=None):
+			logging.warning("Signal received. Saving partial results...")
+			try:
+				with open(pickle_file_path, "wb") as f_save:
+					pickle.dump(solver_obj, f_save)
+				logging.info("Partial results saved successfully.")
+			except Exception as e:
+				logging.error(f"Failed to save partial results: {e}")
+			sys.exit(0)
+
+		signal.signal(signal.SIGTERM, save_progress)
+		signal.signal(signal.SIGUSR1, save_progress)
+
+		function_start = time.time()
+		run_multithread_partial = partial(
+			solver_obj.run_multithread,
+			solver=solver_obj.solver,
+			problem=solver_obj.problem
+		)
+
+		# Run remaining macroreplications in chunks for checkpointing
+		for chunk_start in range(0, n_remaining, checkpoint_interval):
+			chunk_end = min(chunk_start + checkpoint_interval, n_remaining)
+			chunk_indices = indices_to_run[chunk_start:chunk_end]
+
+			logging.info(f"Running macroreplications {chunk_indices[0]} to {chunk_indices[-1]}")
+
+			results = Parallel()(delayed(run_multithread_partial)(i) for i in chunk_indices)
+			for mrep, recommended_xs, intermediate_budgets, timing in results:
+				solver_obj.all_recommended_xs[mrep] = recommended_xs
+				solver_obj.all_intermediate_budgets[mrep] = intermediate_budgets
+				solver_obj.timings[mrep] = timing
+
+			# Save progress after each chunk
+			with open(pickle_file_path, "wb") as f_save:
+				pickle.dump(solver_obj, f_save)
+			logging.info(f"Checkpointed progress at macrorep {chunk_indices[-1]}")
+
+		runtime = round(time.time() - function_start, 3)
+		logging.info(f"Finished resuming {n_remaining} macroreps in {runtime} seconds.")
+
+		# Mark flags
+		solver_obj.has_run = True
+		solver_obj.has_postreplicated = False
+		solver_obj.has_postnormalized = False
+
+		# Final save
+		with open(pickle_file_path, "wb") as f_save:
+			pickle.dump(solver_obj, f_save)
+		logging.info(f"Final results saved to {pickle_file_path}.")
 
 	def run_multithread(self, mrep: int, solver: Solver, problem: Problem) -> tuple:
 		"""Runs one macroreplication of the solver on the problem.
@@ -3888,7 +4008,8 @@ class ProblemsSolvers:
 		There are three ways to initialize a ProblemsSolvers object:
 		1. Provide the names of solvers and problems (for lookup in `directory.py`).
 		2. Provide lists of solver and problem objects to pair directly.
-		3. Provide a full list of `ProblemSolver` objects (as nested lists).
+		3. Provide a full list of `ProblemSolver` objects (as nested lists). Where each sublist contains all the problem-solvers for a given problem.
+		Each sublist differentiates by the solver, while each element within a sublist differentiates by the problem.
 
 		Args:
 			solver_factors (list[dict] | None): List of solver factor dictionaries,
@@ -3929,7 +4050,7 @@ class ProblemsSolvers:
 
 		if experiments is not None:  # Method #3
 			self.experiments = experiments
-			self.solvers = [
+			self.solvers = [ #each sublist has same solver, so just take first element from each sublist
 				experiments[idx][0].solver for idx in range(len(experiments))
 			]
 			self.problems = [experiment.problem for experiment in experiments[0]]
@@ -4145,7 +4266,7 @@ class ProblemsSolvers:
 			file_name = f"{self.file_header}group_{s_on_p}.pickle"
 			self.file_name_path = output_dir / file_name
 		else:
-			self.file_name_path = file_name_path
+			self.file_name_path = output_dir / file_name_path
 
 			self.solver_set = self.solver_names
 			self.problem_set = self.problem_names

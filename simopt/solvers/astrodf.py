@@ -898,6 +898,7 @@ class ASTRODF(Solver):
             #     logging.debug("candidate_x " + str(candidate_x))
 
         else:
+            print(f'SOLVING SUBPROBLEM')
             # Search engine - solve subproblem
             def subproblem(s: np.ndarray) -> float:
                 s_grad_dot: np.ndarray = np.dot(s, grad)
@@ -915,6 +916,7 @@ class ASTRODF(Solver):
                 method="trust-constr",
                 constraints=nlc,
             )
+            print(f'the size of the translation for the new step in ASTRO-DF is: {norm(solve_subproblem.x)}')
             candidate_x = self.incumbent_x + solve_subproblem.x
 
         # logging.debug("problem.lower_bounds "+str(problem.lower_bounds))
@@ -1011,6 +1013,7 @@ class ASTRODF(Solver):
         successful = rho >= self.eta_1
         # successful: accept
         if successful:
+            self.successful_iterations.append(candidate_x)
             self.incumbent_x = candidate_x
             self.incumbent_solution = candidate_solution
             self.recommended_solns.append(candidate_solution)
@@ -1025,6 +1028,7 @@ class ASTRODF(Solver):
                 self.update_hessian(candidate_solution, grad, s)
 
         elif not successful:
+            self.unsuccessful_iterations.append(candidate_x)
             self.delta_k = min(self.gamma_2 * self.delta_k, self.delta_max)
 
         # TODO: unified TR management
@@ -1104,9 +1108,17 @@ class ASTRODF(Solver):
     def solve(self, problem: Problem) -> None:
         self.problem = problem
         self._initialize_solving()
-
+        self.successful_iterations = []
+        self.unsuccessful_iterations = []
+        k = 1
         while self.budget.remaining > 0:
             self.iterate()
+            k += 1
+
+        print(f"ASTRODF completed after {k} iterations and {self.budget.used} total function evaluations.")
+        print(f'The number of successful iterations was {len(self.successful_iterations)} and the number of unsuccessful iterations was {len(self.unsuccessful_iterations)}.')
+        print(f'The percentage of successful iterations was {len(self.successful_iterations)/(len(self.successful_iterations)+len(self.unsuccessful_iterations))*100:.2f}%.')
+
 
 
 def clamp_with_epsilon(
