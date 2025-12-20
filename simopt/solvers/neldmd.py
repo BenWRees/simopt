@@ -220,17 +220,25 @@ class NelderMead(Solver):
                 new_pts < self.lower_bounds
             )
             if np.any(out_of_bounds):
-                new_pts[out_of_bounds] -= 2 * distances
+                # Subtract distances for each row where out_of_bounds is True
+                for i in range(problem.dim):
+                    new_pts[i, out_of_bounds[i]] -= 2 * distances[out_of_bounds[i]]
 
             # If still out of bounds, set to nearest bound
             out_of_bounds = (new_pts > self.upper_bounds) | (
                 new_pts < self.lower_bounds
             )
             if np.any(out_of_bounds):
-                new_pts[out_of_bounds] = np.where(
-                    problem.minmax[np.newaxis, :] == -1,
-                    self.lower_bounds,
+                # For points still out of bounds, set to the appropriate bound
+                new_pts = np.where(
+                    new_pts > self.upper_bounds,
                     self.upper_bounds,
+                    new_pts
+                )
+                new_pts = np.where(
+                    new_pts < self.lower_bounds,
+                    self.lower_bounds,
+                    new_pts
                 )
 
             sol.extend(self.create_new_solution(pt, problem) for pt in new_pts)

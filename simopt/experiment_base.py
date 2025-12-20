@@ -58,7 +58,7 @@ def estimate_safe_process_count(mem_per_process_gb=0.5):
 	return max(1, int(available_gb / mem_per_process_gb))
 
 
-def instantiate_solver(solver_name: str, fixed_factors: dict | None = None) -> Solver:
+def instantiate_solver(solver_name: str, fixed_factors: dict | None = None, solver_rename: str | None = None) -> Solver:
 	"""
 		Instantiate a solver class based on class_name_abbr, scanning all submodules of a string module path.
 	"""
@@ -75,9 +75,14 @@ def instantiate_solver(solver_name: str, fixed_factors: dict | None = None) -> S
 			for _, cls in inspect.getmembers(submodule, inspect.isclass):
 				if cls.__module__ == name and hasattr(cls, 'class_name_abbr'):
 					if getattr(cls, 'class_name_abbr') == solver_name:
-						return cls(
-							name=solver_name, 
-							fixed_factors=fixed_factors)
+						if solver_rename is not None:
+							return cls(
+								name=solver_rename, 
+								fixed_factors=fixed_factors)
+						else:
+							return cls(
+								name=solver_name, 
+								fixed_factors=fixed_factors)
 
 		raise ValueError(f"No class with class_name_abbr == '{solver_name}' found in submodules of '{module_path}'.")
 		
@@ -506,7 +511,7 @@ class ProblemSolver:
 		# Strip trailing newline character.
 		return "\n".join(error_messages)
 
-	def run(self, n_macroreps: int) -> None:
+	def run(self, n_macroreps: int, n_jobs: int = -1) -> None:
 		"""Runs the solver on the problem for a given number of macroreplications.
 
 		Note:
@@ -515,6 +520,9 @@ class ProblemSolver:
 
 		Args:
 			n_macroreps (int): Number of macroreplications to run.
+			n_jobs (int, optional): Number of jobs to run in parallel. Defaults to -1.
+				-1: use all available cores
+				1: run sequentially
 
 		Raises:
 			ValueError: If `n_macroreps` is not positive.
@@ -535,6 +543,11 @@ class ProblemSolver:
 		self.all_recommended_xs = [[] for _ in range(n_macroreps)]
 		self.all_intermediate_budgets = [[] for _ in range(n_macroreps)]
 		self.timings = [0.0 for _ in range(n_macroreps)]
+		
+		# Storage for iteration-level data from solver.run()
+		self.all_iterations = [None] * n_macroreps
+		self.all_fn_estimates = [None] * n_macroreps
+		self.all_budget_history = [None] * n_macroreps
 
 		# Create, initialize, and attach random number generators
 		#     Stream 0: reserved for taking post-replications
@@ -551,23 +564,6 @@ class ProblemSolver:
 		rng_list = [MRG32k3a(s_ss_sss_index=[2, i + 1, 0]) for i in range(3)]
 		self.solver.attach_rngs(rng_list)
 
-		checkpoint_interval = 1
-
-		# Define checkpoint handler
-		def save_progress(signum=None, frame=None):
-			logging.warning("Signal received. Saving partial results...")
-			try:
-				if getattr(self, "create_pickle", False):
-					file_name = self.file_name_path.name
-					self.record_experiment_results(file_name=file_name)
-				logging.info("Partial results saved successfully.")
-			except Exception as e:
-				logging.error(f"Failed to save partial results: {e}")
-			sys.exit(0)
-
-		signal.signal(signal.SIGTERM, save_progress)  # Hard kill
-		signal.signal(signal.SIGUSR1, save_progress)  # Optional preemptive signal
-
 		# Start a timer
 		function_start = time.time()
 
@@ -577,124 +573,45 @@ class ProblemSolver:
 		run_multithread_partial = partial(
 			self.run_multithread, solver=self.solver, problem=self.problem
 		)
-		# Run macroreps in chunks for checkpointing
-		for start_idx in range(0, n_macroreps, checkpoint_interval):
-			end_idx = min(start_idx + checkpoint_interval, n_macroreps)
-			logging.info(f"Running macroreplications {start_idx} to {end_idx - 1}")
 
-			results = Parallel()(delayed(run_multithread_partial)(i) for i in range(start_idx, end_idx))
-			for mrep, recommended_xs, intermediate_budgets, timing in results:
-				self.all_recommended_xs[mrep] = recommended_xs
-				self.all_intermediate_budgets[mrep] = intermediate_budgets
-				self.timings[mrep] = timing
+		if n_jobs == 1:
+			results: list[tuple] = [run_multithread_partial(i) for i in range(n_macroreps)]
+		else:
+			results: list[tuple] = Parallel(n_jobs=n_jobs)(
+				delayed(run_multithread_partial)(i) for i in range(n_macroreps)
+			)  # type: ignore
 
-			# Checkpoint after chunk
-			if getattr(self, "create_pickle", False):
-				logging.info(f"Checkpointing progress at macrorep {end_idx - 1}")
-				file_name = self.file_name_path.name
-				self.record_experiment_results(file_name=file_name)
+		for mrep, recommended_xs, intermediate_budgets, timing, iterations, fn_estimates, budget_history in results:
+			self.all_recommended_xs[mrep] = recommended_xs
+			self.all_intermediate_budgets[mrep] = intermediate_budgets
+			self.all_iterations[mrep] = iterations
+			self.all_fn_estimates[mrep] = fn_estimates
+			self.all_budget_history[mrep] = budget_history
+			self.timings[mrep] = timing
 
 		runtime = round(time.time() - function_start, 3)
 		logging.info(f"Finished running {n_macroreps} mreps in {runtime} seconds.")
+		print(f'Finished running {self.solver.name} on {self.problem.name} in {runtime} seconds over {n_macroreps} mreps.')
 
 		self.has_run = True
 		self.has_postreplicated = False
 		self.has_postnormalized = False
 
+		self.all_budget_history
+
+
+		#create csv files for function estimates and budget history
+		#first check if self.all_fn_estimates, self.all_budget_history, and self.all_iterations do not have any None entries
+		if None not in self.all_fn_estimates and None not in self.all_budget_history and None not in self.all_iterations :
+			print("Writing function estimate and budget history data to CSV files...")
+			self.write_fn_estimate_data(self.all_iterations, self.all_fn_estimates)
+			self.write_budget_history_data(self.all_iterations, self.all_budget_history)
+			self.write_unified_csv_files(self.all_fn_estimates, self.all_iterations)
+			self.write_unified_csv_files(self.all_budget_history, self.all_iterations)
 		# Save ProblemSolver object to .pickle file if specified.
 		if self.create_pickle:
 			file_name = self.file_name_path.name
 			self.record_experiment_results(file_name=file_name)
-			logging.info("Final results saved.")
-
-	def resume_run(self, pickle_file_path: str, total_macroreps: int, checkpoint_interval: int = 5) -> None:
-		"""
-			Resume a partially completed experiment from a pickle file until
-			all macroreplications are completed.
-			Args:
-				pickle_file_path (str): Path to the pickle file containing the partially completed experiment.
-				total_macroreps (int): Total number of macroreplications to run.
-				checkpoint_interval (int): Number of macroreplications after which to checkpoint progress.
-		"""
-		# Load the partially completed experiment
-		if not os.path.exists(pickle_file_path):
-			raise FileNotFoundError(f"Pickle file {pickle_file_path} does not exist.")
-
-		with open(pickle_file_path, "rb") as f:
-			solver_obj = pickle.load(f)
-
-		logging.info(f"Loaded partial experiment from {pickle_file_path}.")
-
-		# Ensure arrays are long enough
-		if len(solver_obj.all_recommended_xs) < total_macroreps:
-			solver_obj.all_recommended_xs.extend([[] for _ in range(total_macroreps - len(solver_obj.all_recommended_xs))])
-			solver_obj.all_intermediate_budgets.extend([[] for _ in range(total_macroreps - len(solver_obj.all_intermediate_budgets))])
-			solver_obj.timings.extend([0.0 for _ in range(total_macroreps - len(solver_obj.timings))])
-
-		# Identify remaining macroreplications
-		indices_to_run = [i for i, x in enumerate(solver_obj.all_recommended_xs) if not x]
-		if not indices_to_run:
-			logging.info("All macroreplications already completed. Nothing to resume.")
-			return
-
-		n_remaining = len(indices_to_run)
-		logging.info(f"Resuming experiment: {n_remaining} macroreplications remaining.")
-
-		# Re-attach RNGs for reproducibility
-		rng_list = [MRG32k3a(s_ss_sss_index=[2, i + 1, 0]) for i in range(3)]
-		solver_obj.solver.attach_rngs(rng_list)
-
-		# Define checkpoint handler for SLURM signals
-		def save_progress(signum=None, frame=None):
-			logging.warning("Signal received. Saving partial results...")
-			try:
-				with open(pickle_file_path, "wb") as f_save:
-					pickle.dump(solver_obj, f_save)
-				logging.info("Partial results saved successfully.")
-			except Exception as e:
-				logging.error(f"Failed to save partial results: {e}")
-			sys.exit(0)
-
-		signal.signal(signal.SIGTERM, save_progress)
-		signal.signal(signal.SIGUSR1, save_progress)
-
-		function_start = time.time()
-		run_multithread_partial = partial(
-			solver_obj.run_multithread,
-			solver=solver_obj.solver,
-			problem=solver_obj.problem
-		)
-
-		# Run remaining macroreplications in chunks for checkpointing
-		for chunk_start in range(0, n_remaining, checkpoint_interval):
-			chunk_end = min(chunk_start + checkpoint_interval, n_remaining)
-			chunk_indices = indices_to_run[chunk_start:chunk_end]
-
-			logging.info(f"Running macroreplications {chunk_indices[0]} to {chunk_indices[-1]}")
-
-			results = Parallel()(delayed(run_multithread_partial)(i) for i in chunk_indices)
-			for mrep, recommended_xs, intermediate_budgets, timing in results:
-				solver_obj.all_recommended_xs[mrep] = recommended_xs
-				solver_obj.all_intermediate_budgets[mrep] = intermediate_budgets
-				solver_obj.timings[mrep] = timing
-
-			# Save progress after each chunk
-			with open(pickle_file_path, "wb") as f_save:
-				pickle.dump(solver_obj, f_save)
-			logging.info(f"Checkpointed progress at macrorep {chunk_indices[-1]}")
-
-		runtime = round(time.time() - function_start, 3)
-		logging.info(f"Finished resuming {n_remaining} macroreps in {runtime} seconds.")
-
-		# Mark flags
-		solver_obj.has_run = True
-		solver_obj.has_postreplicated = False
-		solver_obj.has_postnormalized = False
-
-		# Final save
-		with open(pickle_file_path, "wb") as f_save:
-			pickle.dump(solver_obj, f_save)
-		logging.info(f"Final results saved to {pickle_file_path}.")
 
 	def run_multithread(self, mrep: int, solver: Solver, problem: Problem) -> tuple:
 		"""Runs one macroreplication of the solver on the problem.
@@ -749,7 +666,7 @@ class ProblemSolver:
 		# logging.debug([rng.s_ss_sss_index for rng in progenitor_rngs])
 		# Run the solver on the problem.
 		tic = time.perf_counter()
-		recommended_solns, intermediate_budgets = solver.run(problem=problem)
+		recommended_solns, intermediate_budgets, iterations, budget_history, fn_estimates = solver.run(problem=problem)
 		toc = time.perf_counter()
 		runtime = toc - tic
 		logging.debug(
@@ -776,7 +693,95 @@ class ProblemSolver:
 			solutions,
 			intermediate_budgets,
 			runtime,
+			iterations,
+			fn_estimates,
+			budget_history,
 		)
+
+	def write_fn_estimate_data(self, iterations: list[list[int]], fn_estimates: list[list[float]]):
+		"""Writes function estimate data to a CSV file.
+
+		Args:
+			iterations (list): List of iteration numbers.
+			fn_estimates (list): List of function estimates.
+			mrep (int): Macroreplication index.
+		"""
+		for mrep in range(self.n_macroreps):
+			# Create csv_files subdirectory within the pickle file's directory
+			csv_dir = self.file_name_path.parent / "csv_files"
+			if not csv_dir.exists():
+				csv_dir.mkdir(parents=True, exist_ok=True)
+			
+			df = pd.DataFrame({
+				"Iteration": iterations[mrep],
+				"FunctionEstimate": fn_estimates[mrep]
+			})
+			file_path = csv_dir / f"{self.solver.name}_on_{self.problem.name}_mrep{mrep+1}_fn_estimates.csv"
+			df.to_csv(file_path, index=False)
+			logging.debug(f"Wrote function estimate data to {file_path}")
+
+	def write_budget_history_data(self, iterations: list[list[int]], budget_history: list[list[float]]):
+		"""Writes budget history data to a CSV file.
+
+		Args:
+			iterations (list): List of iteration numbers.
+			budget_history (list): List of budget history values.
+			mrep (int): Macroreplication index.
+		"""
+		for mrep in range(self.n_macroreps):
+			# Create csv_files subdirectory within the pickle file's directory
+			csv_dir = self.file_name_path.parent / "csv_files"
+			if not csv_dir.exists():
+				csv_dir.mkdir(parents=True, exist_ok=True)
+			
+			df = pd.DataFrame({
+				"Iteration": iterations[mrep],
+				"BudgetHistory": budget_history[mrep]
+			})
+			file_path = csv_dir / f"{self.solver.name}_on_{self.problem.name}_mrep{mrep+1}_budget_history.csv"
+			df.to_csv(file_path, index=False)
+			logging.debug(f"Wrote budget history data to {file_path}")
+
+	def write_unified_csv_files(self, depen_vars: list[list[float]] | list[list[int]], iterations: list[list[int]]) -> None:
+		"""Writes unified CSV files combining data from all macroreplications.
+		
+		Creates two CSV files with macroreplication-based structure:
+		- One for function estimates across all macroreplications (each row is one mrep's iteration)
+		- One for budget history across all macroreplications (each row is one mrep's iteration)
+		
+		Handles cases where different macroreplications have different numbers of iterations.
+		"""
+		csv_dir = self.file_name_path.parent / "csv_files"
+		if not csv_dir.exists():
+			csv_dir.mkdir(parents=True, exist_ok=True)
+		
+		# Write unified function estimates file
+		if any(x is not None for x in depen_vars):
+			data = []
+			for mrep in range(self.n_macroreps):
+				if depen_vars[mrep] is not None and iterations[mrep] is not None:
+					for iteration, fn_est in zip(iterations[mrep], depen_vars[mrep]):
+						if depen_vars[0][0] is int : #will be budget history
+							data.append({
+								"Macroreplication": mrep + 1,
+								"Iteration": iteration,
+								"BudgetHistory": fn_est
+							})
+						else : #will be function estimates
+							data.append({
+								"Macroreplication": mrep + 1,
+								"Iteration": iteration,
+								"FunctionEstimate": fn_est
+							})
+			
+			if data:
+				df_data = pd.DataFrame(data)
+				if isinstance(depen_vars[0][0], int): #will be budget history 
+					file_path = csv_dir / f"{self.solver.name}_on_{self.problem.name}_all_budget_history.csv"
+				else : #will be function estimates
+					file_path = csv_dir / f"{self.solver.name}_on_{self.problem.name}_all_function_estimates.csv"
+				df_data.to_csv(file_path, index=False)
+				logging.info(f"Wrote unified csv file to {file_path}")
 
 	def post_replicate(
 		self,
@@ -1284,9 +1289,9 @@ def post_normalize(
 	ref_experiment = experiments[0]
 	for experiment in experiments:
 		# Check if problems are the same.
-		if experiment.problem != ref_experiment.problem:
-			error_msg = "At least two experiments have different problems."
-			raise Exception(error_msg)
+		# if experiment.problem != ref_experiment.problem:
+		# 	error_msg = "At least two experiments have different problems."
+		# 	raise Exception(error_msg)
 		# Check if experiments have common number of macroreps.
 		if experiment.n_macroreps != ref_experiment.n_macroreps:
 			error_msg = (
@@ -2076,7 +2081,7 @@ def plot_progress_curves(
 		legend_loc = "best"
 
 	# Check if problems are the same with the same x0 and x*.
-	check_common_problem_and_reference(experiments)
+	# check_common_problem_and_reference(experiments)
 	file_list: list[Path] = []
 	# Set up plot.
 	n_experiments = len(experiments)
@@ -4356,6 +4361,7 @@ class ProblemsSolvers:
 					experiment.post_replicate(
 						n_postreps, crn_across_budget, crn_across_macroreps
 					)
+					print(f'Finished Postreplications for {experiment.solver.name} on {experiment.problem.name}')
 		# Save ProblemsSolvers object to .pickle file.
 		self.record_group_experiment_results()
 

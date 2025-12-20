@@ -89,7 +89,7 @@ class OMoRF(Solver):
 			"interpolation update tol":{
 				"description": "tolerance values to check for updating the interpolation model",
 				"datatype": tuple, 
-				"default": (2.0,10.0)
+				"default": (0.1, 0.1)
 			},
 			"delta": {
 				"description": "initial trust-region radius",
@@ -282,10 +282,10 @@ class OMoRF(Solver):
 			raise ValueError('sampling rule is not implemented')
 
 	#nice way to allow for different types of random models
-	def model_instantiation(self) :
-		class_name = self.factors['model type'].strip()
-		module = importlib.import_module('simopt.solvers.TrustRegion.Models')
-		return getattr(module, class_name)
+	# def model_instantiation(self) :
+	# 	class_name = self.factors['model type'].strip()
+	# 	module = importlib.import_module('simopt.solvers.TrustRegion.Models')
+	# 	return getattr(module, class_name)
 	
 	def polynomial_basis_instantiation(self) :
 		class_name = self.factors['polynomial basis'].strip()
@@ -675,7 +675,7 @@ class OMoRF(Solver):
 			self.s_old = self._apply_scaling(s_old) #shifts the old solution into the unit ball
 			"""
 
-			self.iteration_count = 0
+			self.iteration_count = 1
 			self._set_counter(0)
 
 			geo_factors = {
@@ -740,7 +740,7 @@ class OMoRF(Solver):
 			S_red, f_red = self.geometry_instance.sample_set('new', self.s_old, self.delta_k, self.rho_k, self.f_old, self.U, full_space=False)
 			
 			while self.budget.remaining > 0 :
-				if self.iteration_count > 0 : 
+				if self.iteration_count > 1 : 
 					self.iterations.append(self.iteration_count)
 					self.budget_history.append(self.budget.used)
 					self.fn_estimates.append(self.f_old)

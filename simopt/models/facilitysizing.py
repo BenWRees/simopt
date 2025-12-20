@@ -44,8 +44,10 @@ class FacilitySize(Model):
     @override
     def specifications(cls) -> dict[str, dict]:
         return {
-            'mean_vec': {
-                "description": "location parameters of the multivariate normal distribution",
+            "mean_vec": {
+                "description": (
+                    "location parameters of the multivariate normal distribution"
+                ),
                 "datatype": list,
                 "default": [100] * NUM_FACILITIES,
             },
@@ -102,13 +104,14 @@ class FacilitySize(Model):
         if any(mean <= 0 for mean in self.factors["mean_vec"]):
             raise ValueError("All elements in mean_vec must be greater than 0.")
 
-    def _check_cov(self) -> None:
+    def _check_cov(self) -> bool:
         try:
             np.linalg.cholesky(np.array(self.factors["cov"]))
+            return True
         except np.linalg.LinAlgError as err:
             if "Matrix is not positive definite" in str(err):
-                raise ValueError("Covariance matrix must be positive definite.")
-            
+                return False
+            raise
 
     def _check_capacity(self) -> None:
         if len(self.factors["capacity"]) != self.factors["n_fac"]:
@@ -251,7 +254,7 @@ class FacilitySizingTotalCost(Problem):
             "budget": {
                 "description": "Max # of replications for a solver to take.",
                 "datatype": int,
-                "default": 5000,
+                "default": 1000,
                 "isDatafarmable": False,
             },
             "installation_costs": {
@@ -321,12 +324,6 @@ class FacilitySizingTotalCost(Problem):
             raise ValueError(
                 "All elements in installation_costs must be greater than or equal to 0."
             )
-        
-    # def _check_installation_costs(self) -> bool:
-    #     return not (
-    #         len(self.factors["installation_costs"]) != self.model.factors["n_fac"]
-    #         or any(elem < 0 for elem in self.factors["installation_costs"])
-    #     )
 
     def _check_epsilon(self) -> None:
         if self.factors["epsilon"] < 0 or self.factors["epsilon"] > 1:
@@ -395,10 +392,12 @@ class FacilitySizingTotalCost(Problem):
         x = rand_sol_rng.mvnormalvariate(
             self.factors["initial_solution"], cov_matrix, factorized=False
         )
-        while any(elem < 0 for elem in x):
-            x = rand_sol_rng.mvnormalvariate(
-                self.factors["initial_solution"], cov_matrix, factorized=False
-            )
+        if any(elem < 0 for elem in x):
+            x = np.abs(x)
+        # while any(elem < 0 for elem in x):
+        #     x = rand_sol_rng.mvnormalvariate(
+        #         self.factors["initial_solution"], cov_matrix, factorized=False
+        #     )
         return tuple(x)
 
 
@@ -478,7 +477,7 @@ class FacilitySizingMaxService(Problem):
             "budget": {
                 "description": "Max # of replications for a solver to take.",
                 "datatype": int,
-                "default": 1000,
+                "default": 10000,
             },
             "installation_costs": {
                 "description": "Cost to install a unit of capacity at each facility.",

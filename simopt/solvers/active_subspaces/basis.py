@@ -23,8 +23,11 @@ __all__ = ['PolynomialTensorBasis', #THIS IS A BASE CLASS TO BE INHERITED BY SPE
 import numpy as np
 from numpy.polynomial.legendre import legvander, legder, legroots 
 from numpy.polynomial.chebyshev import chebvander, chebder, chebroots
-from numpy.polynomial.hermite import hermvander, hermder, hermroots
+from numpy.polynomial.hermite_e import hermevander, hermeder, hermeroots
 from numpy.polynomial.laguerre import lagvander, lagder, lagroots
+from numpy.polynomial.polynomial import polyvander, polyder, polyroots
+from numpy.polynomial.legendre import legvander, legder, legroots
+
 from itertools import combinations_with_replacement
 from math import factorial, comb
 from copy import deepcopy
@@ -114,18 +117,16 @@ class PolynomialTensorBasis(Basis):
  
 	"""
 
-	def __init__(self, degree, problem, X = None, dim = None):
+	def __init__(self, degree, dim):
 		self.degree = int(degree)
-		if X is not None:
-			self.X = np.atleast_2d(X)
-			self.dim = self.X.shape[1]
-			self.set_scale(self.X)
-		elif dim is not None:
-			self.dim = int(dim)
-			self.X = None
-	
+		self.dim = int(dim)
+
 		self.indices = index_set(self.degree, self.dim).astype(int)
 		self._build_Dmat()
+		
+		# Initialize scaling parameters to None - will be set on first scale() call
+		self._lb = None
+		self._ub = None
 
 	def __len__(self):
 		return len(self.indices)
@@ -159,12 +160,12 @@ class PolynomialTensorBasis(Basis):
 	def scale(self, X):
 		r""" Apply the scaling to the input coordinates
 		"""
-		try:
-			return 2*(X-self._lb[None,:])/(self._ub[None,:] - self._lb[None,:]) - 1
-		except AttributeError:
-			return X
+		# Auto-initialize scaling on first call if not already set
+		if self._lb is None or self._ub is None:
+			self._set_scale(X)
+		return 2*(X-self._lb[None,:])/(self._ub[None,:] - self._lb[None,:]) - 1
 
-	def _dscale(self):
+	def dscale(self):
 		r""" returns the scaling associated with the scaling transform
 		"""
 		try:
@@ -172,7 +173,7 @@ class PolynomialTensorBasis(Basis):
 		except AttributeError:
 			raise NotImplementedError
 
-	def V(self, X = None, dim=None):
+	def V(self, X = None):
 		r""" Builds the Vandermonde matrix associated with this basis
 
 		Given points :math:`\mathbf x_i \in \mathbb{R}^n`, 
@@ -195,12 +196,10 @@ class PolynomialTensorBasis(Basis):
 		V: np.array
 			Vandermonde matrix of shape (M, N) where M is the number of desired points and N is the number of Basis Elements
 		"""
-		if dim is None:
+		if X is None:
 			raise NotImplementedError
-		if X is None and self.X is not None:
-			X = self.X
-		elif X is None:
-			raise NotImplementedError
+		
+		dim = X.shape[1]
 		
 		self.indices = index_set(self.degree, dim).astype(int)
 		X = X.reshape(-1, dim)
@@ -274,7 +273,7 @@ class PolynomialTensorBasis(Basis):
 			out = out.flatten()
 		return out
 
-	def DV(self, X, dim):
+	def DV(self, X):
 		r""" Column-wise derivative of the Vandermonde matrix
 
 		Given points :math:`\mathbf x_i \in \mathbb{R}^n`, 
@@ -299,6 +298,7 @@ class PolynomialTensorBasis(Basis):
 			Derivative of Vandermonde matrix where :code:`Vp[i,j,:]`
 			is the gradient of :code:`V[i,j]`. 
 		"""
+		dim = X.shape[1]
 		self.indices = index_set(self.degree, dim).astype(int)
 		if len(X.shape) == 1:
 			X = X.reshape(1,-1)
@@ -311,7 +311,7 @@ class PolynomialTensorBasis(Basis):
 		DV = np.ones((M, N, dim), dtype = X.dtype)
 
 		try:
-			dscale = self._dscale()
+			dscale = self.dscale()
 		except NotImplementedError:
 			dscale = np.ones(X.shape[1])	
 
@@ -365,7 +365,7 @@ class PolynomialTensorBasis(Basis):
 		DDV = np.ones((M, N, dim, dim), dtype = X.dtype)
 
 		try:
-			dscale = self._dscale()
+			dscale = self.dscale()
 		except NotImplementedError:
 			dscale = np.ones(X.shape[1])	
 
@@ -400,9 +400,9 @@ class PolynomialTensorBasis(Basis):
 class MonomialTensorBasis(PolynomialTensorBasis):
 	"""A tensor product basis of bounded total degree built from the monomials"""
 	def __init__(self, *args, **kwargs):
-		self.vander = np.polynomial.polynomial.polyvander
-		self.polyder = np.polynomial.polynomial.polyder
-		self.polyroots = np.polynomial.polynomial.polyroots
+		self.vander = polyvander
+		self.polyder = polyder
+		self.polyroots = polyroots
 		PolynomialTensorBasis.__init__(self, *args, **kwargs)	
 
 	def __name__(self) : 
@@ -451,6 +451,196 @@ class LaguerreTensorBasis(PolynomialTensorBasis):
 
 	def __name__(self) : 
 		return "LaguerreTensorBasis"
+	
+
+class NFPTensorBasis(PolynomialTensorBasis):
+	"""A tensor product basis of bounded total degree built from the Newton Fundamental Polynomials
+
+	"""
+	def __init__(self, *args, **kwargs):
+		self.vander = self.vander_fn
+		self.polyder = self.vander_der_fn
+		self.polyroots = self.vander_roots_fn
+		PolynomialTensorBasis.__init__(self, *args, **kwargs)	
+
+	def __name__(self) : 
+		return "NFPTensorBasis"
+	
+	def vander_fn(self, x, deg):
+		"""Generate a Vandermonde matrix for Newton Fundamental Polynomials.
+		
+		The Newton basis polynomials are:
+		- N_0(x) = 1
+		- N_k(x) = ∏_{i=0}^{k-1} (x - x_i) for k > 0
+		
+		where x_i are the interpolation nodes stored in self.X.
+		
+		Parameters
+		----------
+		x : array_like
+			Array of points at which to evaluate the basis.
+		deg : int
+			Degree of the resulting matrix.
+			
+		Returns
+		-------
+		vander : ndarray
+			The Vandermonde matrix. Shape is x.shape + (deg + 1,).
+		"""
+		x = np.asarray(x)
+		if x.ndim == 0:
+			x = x.reshape(1)
+		
+		n = len(x)
+		V = np.ones((n, deg + 1))
+		
+		# If we have interpolation nodes stored, use them
+		if hasattr(self, 'X') and self.X is not None:
+			nodes = self.X.flatten() if self.X.ndim > 1 else self.X
+		else:
+			# Default: use equally spaced nodes from min to max of x
+			nodes = np.linspace(x.min(), x.max(), deg + 1)
+		
+		# Build Newton basis: N_k(x) = ∏_{i=0}^{k-1} (x - nodes[i])
+		for k in range(1, deg + 1):
+			for i in range(k):
+				if i < len(nodes):
+					V[:, k] *= (x - nodes[i])
+					
+		return V
+
+	def vander_der_fn(self, c, m=1):
+		"""Differentiate a Newton Fundamental Polynomial series.
+		
+		Given coefficients c for a Newton basis representation, compute the
+		coefficients of the m-th derivative.
+		
+		Parameters
+		----------
+		c : array_like
+			Array of Newton series coefficients.
+		m : int, optional
+			Number of derivatives taken, must be non-negative. (Default: 1)
+			
+		Returns
+		-------
+		der : ndarray
+			Newton series coefficients of the derivative.
+		"""
+		c = np.array(c, ndmin=1, copy=True)
+		
+		if m < 0:
+			raise ValueError("Order of derivative must be non-negative")
+		if m == 0:
+			return c
+		
+		# Get interpolation nodes
+		if hasattr(self, 'X') and self.X is not None:
+			nodes = self.X.flatten() if self.X.ndim > 1 else self.X
+		else:
+			# Use zero nodes as default
+			nodes = np.zeros(len(c))
+		
+		# Convert Newton form to standard polynomial form
+		# Then differentiate and convert back
+		poly_coef = self._newton_to_poly(c, nodes[:len(c)])
+		
+		# Differentiate in standard form
+		for _ in range(m):
+			if len(poly_coef) <= 1:
+				return np.array([0.0])
+			poly_coef = polyder(poly_coef)
+		
+		# Convert back to Newton form
+		if len(poly_coef) == 0:
+			return np.array([0.0])
+			
+		return self._poly_to_newton(poly_coef, nodes[:len(poly_coef)])
+
+	def vander_roots_fn(self, c):
+		"""Compute the roots of a Newton Fundamental Polynomial series.
+		
+		Parameters
+		----------
+		c : 1-D array_like
+			1-D array of Newton series coefficients.
+			
+		Returns
+		-------
+		out : ndarray
+			Array of the roots of the series.
+		"""
+		c = np.array(c, ndmin=1, copy=True)
+		
+		# Get interpolation nodes
+		if hasattr(self, 'X') and self.X is not None:
+			nodes = self.X.flatten() if self.X.ndim > 1 else self.X
+		else:
+			nodes = np.zeros(len(c))
+		
+		# Convert Newton form to standard polynomial form
+		poly_coef = self._newton_to_poly(c, nodes[:len(c)])
+		
+		# Find roots using standard polynomial root finding
+		return polyroots(poly_coef)
+	
+	def _newton_to_poly(self, newton_coef, nodes):
+		"""Convert Newton form coefficients to standard polynomial form."""
+		newton_coef = np.asarray(newton_coef)
+		nodes = np.asarray(nodes)
+		
+		if len(newton_coef) == 0:
+			return np.array([0.0])
+		
+		# Start with the highest degree term
+		poly = np.array([newton_coef[-1]])
+		
+		# Work backwards through the Newton coefficients
+		for i in range(len(newton_coef) - 2, -1, -1):
+			# Multiply by (x - nodes[i])
+			if i < len(nodes):
+				poly = np.convolve(poly, [1, -nodes[i]])
+			else:
+				poly = np.convolve(poly, [1, 0])
+			# Add the next coefficient
+			poly[-1] += newton_coef[i]
+			
+		return poly
+	
+	def _poly_to_newton(self, poly_coef, nodes):
+		"""Convert standard polynomial form to Newton form coefficients."""
+		poly_coef = np.asarray(poly_coef, dtype=float)
+		nodes = np.asarray(nodes)
+		
+		if len(poly_coef) == 0:
+			return np.array([0.0])
+		
+		n = len(poly_coef)
+		newton_coef = np.zeros(n)
+		
+		# Use divided differences to compute Newton coefficients
+		# Create synthetic evaluation points
+		if len(nodes) < n:
+			# Extend nodes if needed
+			extended_nodes = np.concatenate([nodes, np.zeros(n - len(nodes))])
+		else:
+			extended_nodes = nodes[:n]
+		
+		# Evaluate polynomial at nodes
+		y_vals = np.polyval(poly_coef[::-1], extended_nodes)
+		
+		# Compute divided differences
+		div_diff = y_vals.copy()
+		for i in range(n):
+			newton_coef[i] = div_diff[i]
+			for j in range(n - 1, i, -1):
+				denom = extended_nodes[j] - extended_nodes[j - i - 1]
+				if abs(denom) > 1e-14:
+					div_diff[j] = (div_diff[j] - div_diff[j - 1]) / denom
+				else:
+					div_diff[j] = 0.0
+					
+		return newton_coef
 
 class HermiteTensorBasis(PolynomialTensorBasis):
 	"""A tensor product basis of bounded total degree built from the Hermite polynomials
@@ -475,7 +665,7 @@ class HermiteTensorBasis(PolynomialTensorBasis):
 		except AttributeError:
 			return X
 
-	def _dscale(self):
+	def dscale(self):
 		try:
 			return 1./self._std/np.sqrt(2)
 		except AttributeError:
@@ -629,17 +819,10 @@ class PolynomialBasis(Basis) :
 	#vander - vandermonde matrix of the polynomial basis series
 	#polyroots - the roots of the of the polynomial basis series 
 
-	def __init__(self, degree, problem, X=None, dim=None) : 
+	def __init__(self, degree, dim) : 
 		self.degree = int(degree)
-		if X is not None:
-			self.X = np.atleast_2d(X)
-			self.dim = self.X.shape[1]
-			self.set_scale(self.X)
-		elif dim is not None:
-			self.dim = int(dim)
-			self.X = None
+		self.dim = int(dim)
 
-		self.indices = index_set(self.degree, self.dim).astype(int)
 		self._build_Dmat()
 		
 	def __name__(self) : 
@@ -718,7 +901,7 @@ class PolynomialBasis(Basis) :
 		except AttributeError:
 			return X
 
-	def _dscale(self):
+	def dscale(self):
 		r""" returns the scaling associated with the scaling transform
 		"""
 		try:
@@ -727,11 +910,12 @@ class PolynomialBasis(Basis) :
 			raise NotImplementedError
 
 	#Construct a matrix Row by Row
-	def V(self, X: np.ndarray, dim: int) -> np.ndarray :
+	def V(self, X: np.ndarray) -> np.ndarray :
+		dim = X.shape[1]
 		self.indices = index_set(self.degree, dim).astype(int)
 		# print(f'dimension: {self.dim}')
 		# print(f'shape of X: {X.shape}')
-		X = X.reshape(-1, dim)
+		# X = X.reshape(-1, dim)
 		self.X = X
 		X = self.scale(np.array(X))
 		M = X.shape[0]
@@ -746,9 +930,10 @@ class PolynomialBasis(Basis) :
 
 		return V
 	
-	def DV(self, X, dim):
+	def DV(self, X):
+		dim = X.shape[1]
 		self.indices = index_set(self.degree, dim).astype(int)
-		X = X.reshape(-1, dim)
+		# X = X.reshape(-1, dim)
 		X = self.scale(np.array(X))
 		M = X.shape[0]
 		V_coordinate = [self.vander(X[:,k]) for k in range(dim)]
@@ -757,7 +942,7 @@ class PolynomialBasis(Basis) :
 		DV = np.ones((M, N, dim), dtype = X.dtype)
 
 		try:
-			dscale = self._dscale()
+			dscale = self.dscale()
 		except NotImplementedError:
 			dscale = np.ones(X.shape[1])	
 
@@ -774,9 +959,10 @@ class PolynomialBasis(Basis) :
 
 		return DV
 	
-	def DDV(self, X, dim):
+	def DDV(self, X):
+		dim = X.shape[1]
 		self.indices = index_set(self.degree, dim).astype(int)
-		X = X.reshape(-1, dim)
+		# X = X.reshape(-1, dim)
 		X = self.scale(np.array(X))
 		M = X.shape[0]
 		V_coordinate = [self.vander(X[:,k]) for k in range(dim)]
@@ -785,7 +971,7 @@ class PolynomialBasis(Basis) :
 		DDV = np.ones((M, N, dim, dim), dtype = X.dtype)
 
 		try:
-			dscale = self._dscale()
+			dscale = self.dscale()
 		except NotImplementedError:
 			dscale = np.ones(X.shape[1])	
 
@@ -810,9 +996,9 @@ class PolynomialBasis(Basis) :
 				DDV[:,:,ell, k] = DDV[:,:,k, ell]
 		return DDV
 
-	def roots(self, coef, dim):
-		if dim > 1:
-			raise NotImplementedError
+	def roots(self, coef):
+		# if dim > 1:
+		# 	raise NotImplementedError
 		r = self.polyroots(coef)
 		return r*(self._ub[0] - self._lb[0])/2.0 + (self._ub[0] + self._lb[0])/2.
 
@@ -1029,43 +1215,158 @@ class LagrangePolynomialBasis(PolynomialBasis) :
 
 	#lagrange polynomial function for each element in the matrix 
 	def poly_basis_fn(self, interpolation_set, row_num, col_num) :
-		# interpolation_set = [a for a in interpolation_set]
-		# if len(interpolation_set) == 1 : 
-		# 	interpolation_set = [interpolation_set[0] for _ in range(self.degree + 1)]
-		# val = interpolation_set[row_num]
-		# def lagrange(x, i) : 
-		# 	set_excl_i = deepcopy(interpolation_set[:i] + interpolation_set[i+1:])
-		# 	# print(f'set_excl_{interpolation_set[i]}: {set_excl_i}')
-		# 	numerator = [x-a for a in set_excl_i]
-		# 	denominator = [interpolation_set[i]-a for a in set_excl_i]
-		# 	denominator = [np.inf if x == 0 else x for x in denominator]
-
-		# 	# print(f'numerator: {numerator}')
-		# 	# print(f'denominator: {denominator}')
-		# 	res = np.prod([1 if a/b ==0 else a/b  for a,b in zip(numerator,denominator)])
-		# 	# print(f'result of lagrange function for point {x} at {i}: {res}')
-		# 	return res
-		if row_num == col_num :
-			return 1. 
-		else :
-			return 0.
-
+		"""Evaluate the col_num-th Lagrange basis function at interpolation_set[row_num].
 		
-		# return lagrange(val,col_num)
+		For multidimensional case, this evaluates the tensor product of 1D Lagrange polynomials.
+		"""
+		# For the tensor product case, we need the stored interpolation nodes
+		if not hasattr(self, 'X') or self.X is None:
+			raise ValueError("Interpolation nodes self.X must be set before evaluating basis")
+		
+		# Get the evaluation point
+		x = np.atleast_1d(interpolation_set[row_num])
+		dim = len(x)
+		
+		# Get the node corresponding to this basis function
+		nodes = self.X
+		M = len(nodes)
+		
+		if col_num >= M:
+			raise IndexError(f"Column index {col_num} out of range for {M} basis functions")
+		
+		# For each dimension, compute the 1D Lagrange polynomial
+		result = 1.0
+		for d in range(dim):
+			lagrange_1d = 1.0
+			x_d = x[d]
+			node_d = nodes[col_num, d]
+			
+			for k in range(M):
+				if k == col_num:
+					continue
+				numerator = x_d - nodes[k, d]
+				denominator = node_d - nodes[k, d]
+				
+				if abs(denominator) < 1e-14:
+					# Duplicate nodes - handle carefully
+					if abs(numerator) < 1e-14:
+						lagrange_1d *= 1.0
+					else:
+						lagrange_1d = 0.0
+						break
+				else:
+					lagrange_1d *= numerator / denominator
+			
+			result *= lagrange_1d
+		
+		return result
 	
 
-	#!!This is a cheeky fix as we known the vandermonde will be equivalent to the identity
 	def V(self, X):
-		N, _ = X.shape
-		M = len(self)
-		return np.eye(N,M)
+		"""Construct Vandermonde matrix for Lagrange polynomial basis.
+		
+		V[i, j] = L_j(X[i]) where L_j is the j-th Lagrange basis polynomial.
+		
+		Parameters
+		----------
+		X : np.ndarray
+			Evaluation points of shape (N, dim)
+			
+		Returns
+		-------
+		V : np.ndarray
+			Vandermonde matrix of shape (N, M) where M = len(self.X)
+		"""
+		X = np.atleast_2d(X)
+		N, dim = X.shape
+		
+		if self.X is None:
+			raise ValueError("Interpolation nodes self.X must be set")
+		
+		M = len(self.X)  # Number of basis functions
+		V = np.zeros((N, M))
+		
+		# Check if evaluating at the interpolation nodes (optimization)
+		if np.allclose(X, self.X) and N == M:
+			return np.eye(N, M)
+		
+		# General case: compute Lagrange polynomials
+		for i in range(N):
+			for j in range(M):
+				V[i, j] = self.poly_basis_fn(X, i, j)
+		
+		return V
 	
 	def _build_Dmat(self):
 		return None
 
-	#TODO: Implement the derivative function
 	def DV(self, X = None):
-		raise NotImplementedError
+		"""Compute the column-wise derivative of the Vandermonde matrix for Lagrange basis.
+		
+		For Lagrange polynomials L_j(x), the derivative at node x_i is:
+		dL_j/dx|_{x=x_i} = sum_{k≠j} 1/(x_i - x_k) * product_{m≠j,k} (x_i - x_m)/(x_j - x_m)
+		
+		Parameters
+		----------
+		X : np.ndarray, optional
+			Points at which to evaluate derivatives. If None, uses self.X
+			
+		Returns
+		-------
+		DV : np.ndarray
+			Derivative matrix of shape (N, M, dim) where N is number of points,
+			M is number of basis functions, dim is the dimension
+		"""
+		if X is None:
+			X = self.X
+		
+		if X is None:
+			raise ValueError("No interpolation points provided")
+			
+		X = np.atleast_2d(X)
+		N, dim = X.shape
+		M = len(self.X)  # Number of Lagrange basis functions
+		
+		DV = np.zeros((N, M, dim))
+		
+		# For each dimension
+		for d in range(dim):
+			# Get the interpolation nodes for this dimension
+			nodes = self.X[:, d]
+			
+			# For each basis function j
+			for j in range(M):
+				x_j = nodes[j]
+				
+				# For each evaluation point i
+				for i in range(N):
+					x_i = X[i, d]
+					
+					# Compute derivative of L_j at x_i
+					derivative = 0.0
+					
+					# For Lagrange polynomial L_j(x) = prod_{k≠j} (x - x_k)/(x_j - x_k)
+					# The derivative is: sum_{k≠j} [1/(x_j - x_k) * prod_{m≠j,k} (x - x_m)/(x_j - x_m)]
+					
+					for k in range(M):
+						if k == j:
+							continue
+							
+						# Compute the term for index k
+						numerator_deriv = 1.0
+						for m in range(M):
+							if m == j or m == k:
+								continue
+							numerator_deriv *= (x_i - nodes[m]) / (x_j - nodes[m])
+						
+						denominator_k = x_j - nodes[k]
+						if abs(denominator_k) > 1e-14:  # Avoid division by zero
+							derivative += numerator_deriv / denominator_k
+					
+					DV[i, j, d] = derivative
+		
+		return DV 
+
 		
 	def DDV(self, X = None):
 		raise NotImplementedError
@@ -1098,9 +1399,72 @@ class NFPPolynomialBasis(PolynomialBasis) :
 	def _build_Dmat(self):
 		return None 
 	
-	#TODO: Implement the derivative function
 	def DV(self, X = None):
-		raise NotImplementedError
+		"""Compute the column-wise derivative of the Vandermonde matrix for NFP basis.
+		
+		For NFP (Newton Forward Polynomial) basis, the basis functions are:
+		- φ_0(x) = 1
+		- φ_j(x) = ∏_{k=0}^{j-1} (x - x_k) for j > 0
+		
+		The derivative of φ_j(x) is computed using the product rule:
+		dφ_j/dx = ∑_{i=0}^{j-1} [∏_{k=0, k≠i}^{j-1} (x - x_k)]
+		
+		Parameters
+		----------
+		X : np.ndarray, optional
+			Points at which to evaluate derivatives. If None, uses self.X
+			
+		Returns
+		-------
+		DV : np.ndarray
+			Derivative matrix of shape (N, M, dim) where N is number of points,
+			M is number of basis functions, dim is the dimension
+		"""
+		if X is None:
+			X = self.X
+		
+		if X is None:
+			raise ValueError("No interpolation points provided")
+		
+		X = np.atleast_2d(X)
+		N, dim = X.shape
+		
+		if self.X is None:
+			raise ValueError("Interpolation nodes self.X must be set")
+		
+		M = len(self.X)  # Number of basis functions
+		DV = np.zeros((N, M, dim))
+		
+		# For each dimension
+		for d in range(dim):
+			# Get the interpolation nodes for this dimension
+			nodes = self.X[:, d]
+			
+			# For each basis function j
+			for j in range(M):
+				# For each evaluation point i
+				for i in range(N):
+					x_i = X[i, d]
+					
+					if j == 0:
+						# Derivative of constant is 0
+						DV[i, j, d] = 0.0
+					else:
+						# φ_j(x) = ∏_{k=0}^{j-1} (x - x_k)
+						# dφ_j/dx = ∑_{m=0}^{j-1} [∏_{k=0, k≠m}^{j-1} (x - x_k)]
+						derivative = 0.0
+						
+						for m in range(j):
+							# Compute the product excluding term m
+							term = 1.0
+							for k in range(j):
+								if k != m:
+									term *= (x_i - nodes[k])
+							derivative += term
+						
+						DV[i, j, d] = derivative
+		
+		return DV
 
 	def DDV(self, X = None):
 		raise NotImplementedError

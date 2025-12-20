@@ -327,17 +327,16 @@ class STRONG(Solver):
             # Stage II.
             # When trust region size is very small, use the quadratic design.
             else:
-                n_onbound = np.sum(bounds_check != 0)
+                n_onbound = int(np.sum(bounds_check != 0))
                 if n_onbound <= 1:
                     num_evals = dim_sq
                 else:
-                    # TODO: Check the formula, it seems to be dividing an
-                    # integer by a tuple.
-                    num_evals = (
-                        dim_sq
-                        + problem.dim
-                        - factorials[n_onbound] / (2, factorials[n_onbound - 2])
-                    )
+                    # Number of unique pair interactions among on-bound variables:
+                    # C(n_onbound, 2) = n_onbound * (n_onbound - 1) / 2
+                    # Use integer arithmetic to avoid out-of-bounds indexing into
+                    # the precomputed `factorials` array and to avoid accidental
+                    # division by a tuple. This yields an integer count.
+                    num_evals = dim_sq + problem.dim - (n_onbound * (n_onbound - 1)) // 2
                 # Step 1: Build the quadratic model.
                 num_generated_grads = 0
                 while True:

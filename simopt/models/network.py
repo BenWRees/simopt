@@ -245,7 +245,6 @@ class Network(Model):
         arrival_times = [
             arrival_rng.expovariate(arrival_rate) for _ in range(total_arrivals)
         ]
-
         network_routes = network_rng.choices(
             range(n_networks),
             weights=process_prob,
@@ -479,7 +478,7 @@ class NetworkMinTotalCost(Problem):
             return False
 
         # Check constraint that probabilities sum to one.
-        return round(sum(x), 10) == 1.0
+        return round(sum(x), self.model.factors["n_networks"]) == 1.0
 
     @override
     def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:

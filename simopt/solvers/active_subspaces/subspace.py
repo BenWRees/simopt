@@ -318,7 +318,7 @@ class SubspaceBasedDimensionReduction(object):
 		h = float(h)
 
 		# Build the piecewise linear interpolation matrix
-		j = np.floor( (y - yy[0])/h ).astype(np.integer)
+		j = np.floor( (y - yy[0])/h ).astype(np.int_)
 		row = []
 		col = []
 		val = []

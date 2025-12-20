@@ -87,7 +87,7 @@ class SGD(Solver):
 			"r": {
 				"description": "number of replications taken at each solution",
 				"datatype": int,
-				"default": 30
+				"default": 10
 			},
 			"alpha": {
 				"description": "step size",
@@ -97,7 +97,7 @@ class SGD(Solver):
 			"gradient clipping check" : {
 				"description": "checks if gradient clipping is in use",
 				"datatype": bool, 
-				"default": True
+				"default": False
 			},
 			"gradient clipping" : {
 				"description": "gives a gradient clipping value",
@@ -174,7 +174,6 @@ class SGD(Solver):
 		crn_across_solns : bool
 			indicates if CRN are used when simulating different solutions
 		"""
-		expended_budget = 0
 
 		# Default values.
 		r = self.factors["r"]
@@ -190,11 +189,11 @@ class SGD(Solver):
 		# Start with the initial solution.
 		new_solution = self.create_new_solution(problem.factors["initial_solution"], problem)
 		self.recommended_solns.append(new_solution)
-		self.intermediate_budgets.append(expended_budget)
+		self.intermediate_budgets.append(self.budget.used)
 
 		# Initialize the timestep.
 		t = 1
-		while expended_budget < problem.factors["budget"]:
+		while self.budget.remaining > 0:
 			# Update timestep.
 			t = t + 1
 			new_x = new_solution.x
@@ -208,10 +207,10 @@ class SGD(Solver):
 			# Use finite difference to estimate gradient if IPA gradient is not available.
 			if spsa_check :
 				grad = self.finite_diff_spsa(new_solution, t, BdsCheck, problem)
-				expended_budget += 2* r
+				self.budget.request(2 * r)
 			else :
 				grad = self.finite_diff(new_solution, BdsCheck, problem)
-				expended_budget += (2 * problem.dim) * r
+				self.budget.request((2 * problem.dim) * r)
 
 			#undergo gradient clipping if necessary
 			if grad_clip_check== True and np.linalg.norm(grad) >= grad_clip_val  : 
@@ -235,7 +234,7 @@ class SGD(Solver):
 			# Create new solution based on new x
 			new_solution = self.create_new_solution(tuple(new_x), problem)
 			self.recommended_solns.append(new_solution)
-			self.intermediate_budgets.append(expended_budget)
+			self.intermediate_budgets.append(self.budget.used)
 
 
 	#gradient approximation of 

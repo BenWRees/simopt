@@ -251,7 +251,8 @@ class RosenbrockFunctionProblem (Problem) :
 	def optimal_solution(cls) -> tuple:
 		# Change if f is changed
 		# TODO: figure out what f is
-		return (1,) * cls.dim
+		# Global minimiser of the standard Rosenbrock function is at x = (1, ..., 1)
+		return (1.0,) * DIM
 
 	@classproperty
 	@override

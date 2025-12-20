@@ -45,9 +45,14 @@ class ExampleModel(Model):
             "x": {
                 "description": "point to evaluate",
                 "datatype": tuple,
-                "default": (2.0, 2.0),
+                "default": (2.0, 2.0, 2.0),
             }
         }
+
+    def fn(self, x) -> float:
+        """Deterministic function to be minimized."""
+        return np.linalg.norm(x) ** 2
+        # return float(0.5 * np.sin(x) + 0.5)
 
     @property
     @override
@@ -82,6 +87,7 @@ class ExampleModel(Model):
         noise_rng = rng_list[0]
         x = np.array(self.factors["x"])
         fn_eval_at_x = np.linalg.norm(x) ** 2 + noise_rng.normalvariate()
+        # fn_eval_at_x = float(0.5*np.sin(x) + 0.5 + noise_rng.normalvariate())
 
         # Compose responses and gradients.
         responses = {"est_f(x)": fn_eval_at_x}
@@ -173,7 +179,7 @@ class ExampleProblem(Problem):
             "initial_solution": {
                 "description": "initial solution",
                 "datatype": tuple,
-                "default": (2.0, 2.0),
+                "default": (2.0, 2.0, 2.0),
             },
             "budget": {
                 "description": "max # of replications for a solver to take",
