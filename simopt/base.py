@@ -327,15 +327,15 @@ class Solver(ABC):
         """
         raise NotImplementedError
 
-    def run(self, problem: Problem) -> tuple[list[Solution], list[int]]:
+    def run(self, problem: Problem) -> tuple[list[Solution], list[int], list[int], list[int], list[float]]:
         """Run the solver on a problem.
 
         Args:
             problem (Problem): The problem to solve.
 
         Returns:
-            tuple[list[Solution], list[int]]: A tuple containing a list of solutions
-            and a list of intermediate budgets.
+            tuple[list[Solution], list[int], list[int], list[int], list[float]]: A tuple containing a list of solutions,
+            a list of intermediate budgets, a list of iterations, a list of budget history, and a list of function estimates.
         """
         self.budget = Budget(problem.factors["budget"])
         with contextlib.suppress(BudgetExhaustedError):
@@ -343,10 +343,17 @@ class Solver(ABC):
 
         recommended_solns = self.recommended_solns
         intermediate_budgets = self.intermediate_budgets
+        iterations = getattr(self, 'iterations', None)
+        budget_history = getattr(self, 'budget_history', None)
+        fn_estimates = getattr(self, 'fn_estimates', None)
+        
+        self.iterations = []
+        self.budget_history = []
+        self.fn_estimates = []
         self.recommended_solns = []
         self.intermediate_budgets = []
 
-        return recommended_solns, intermediate_budgets
+        return recommended_solns, intermediate_budgets, iterations, budget_history, fn_estimates
 
     def check_crn_across_solns(self) -> bool:
         """Check solver factor crn_across_solns.
