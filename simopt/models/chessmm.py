@@ -2,17 +2,126 @@
 
 from __future__ import annotations
 
-from typing import Callable, Final
+from random import Random
+from typing import Annotated, ClassVar, Final
 
 import numpy as np
+from pydantic import BaseModel, Field
 from scipy import special
 
 from mrg32k3a.mrg32k3a import MRG32k3a
-from simopt.base import ConstraintType, Model, Problem, VariableType
-from simopt.utils import classproperty, override
+from simopt.base import (
+    ConstraintType,
+    Model,
+    Objective,
+    Problem,
+    RepResult,
+    StochasticConstraint,
+    VariableType,
+)
+from simopt.input_models import InputModel, Poisson
 
 MEAN_ELO: Final[int] = 1200
 MAX_ALLOWABLE_DIFF: Final[int] = 150
+
+
+class ChessMatchmakingConfig(BaseModel):
+    """Configuration model for Chess Matchmaking simulation.
+
+    A model that simulates a matchmaking problem with a Elo (truncated normal)
+    distribution of players and Poisson arrivals and returns the average difference
+    between matched players.
+    """
+
+    elo_mean: Annotated[
+        float,
+        Field(
+            default=MEAN_ELO,
+            description="mean of normal distribution for Elo rating",
+            gt=0,
+        ),
+    ]
+    elo_sd: Annotated[
+        float,
+        Field(
+            default=round(MEAN_ELO / (np.sqrt(2) * special.erfcinv(1 / 50)), 1),
+            description="standard deviation of normal distribution for Elo rating",
+            gt=0,
+        ),
+    ]
+    poisson_rate: Annotated[
+        float,
+        Field(
+            default=1.0,
+            description="rate of Poisson process for player arrivals",
+            gt=0,
+        ),
+    ]
+    num_players: Annotated[
+        int,
+        Field(
+            default=1000,
+            description="number of players",
+            gt=0,
+        ),
+    ]
+    allowable_diff: Annotated[
+        float,
+        Field(
+            default=MAX_ALLOWABLE_DIFF,
+            description="maximum allowable difference between Elo ratings",
+            gt=0,
+        ),
+    ]
+
+
+class ChessAvgDifferenceConfig(BaseModel):
+    """Configuration model for Chess Average Difference Problem.
+
+    A problem configuration that minimizes the average difference in Elo ratings
+    between matched chess players while maintaining wait time constraints.
+    """
+
+    initial_solution: Annotated[
+        tuple[float, ...],
+        Field(
+            default=(MAX_ALLOWABLE_DIFF,),
+            description="initial solution",
+        ),
+    ]
+    budget: Annotated[
+        int,
+        Field(
+            default=1000,
+            description="max # of replications for a solver to take",
+            gt=0,
+            json_schema_extra={"isDatafarmable": False},
+        ),
+    ]
+    upper_time: Annotated[
+        float,
+        Field(
+            default=5.0,
+            description="upper bound on wait time",
+            gt=0,
+        ),
+    ]
+
+
+class EloInputModel(InputModel):
+    """Input model for player Elo ratings."""
+
+    rng: Random | None = None
+
+    def random(
+        self, mean: float, std: float, min_rating: float, max_rating: float
+    ) -> float:
+        """Draw a truncated normal rating within [min_rating, max_rating]."""
+        assert self.rng is not None
+        while True:
+            rating = self.rng.normalvariate(mean, std)
+            if min_rating <= rating <= max_rating:
+                return rating
 
 
 class ChessMatchmaking(Model):
@@ -23,69 +132,11 @@ class ChessMatchmaking(Model):
     between matched players.
     """
 
-    @classproperty
-    @override
-    def class_name_abbr(cls) -> str:
-        return "CHESS"
-
-    @classproperty
-    @override
-    def class_name(cls) -> str:
-        return "Chess Matchmaking"
-
-    @classproperty
-    @override
-    def n_rngs(cls) -> int:
-        return 2
-
-    @classproperty
-    @override
-    def n_responses(cls) -> int:
-        return 2
-
-    @classproperty
-    @override
-    def specifications(cls) -> dict[str, dict]:
-        return {
-            "elo_mean": {
-                "description": "mean of normal distribution for Elo rating",
-                "datatype": float,
-                "default": MEAN_ELO,
-            },
-            "elo_sd": {
-                "description": (
-                    "standard deviation of normal distribution for Elo rating"
-                ),
-                "datatype": float,
-                "default": round(MEAN_ELO / (np.sqrt(2) * special.erfcinv(1 / 50)), 1),
-            },
-            "poisson_rate": {
-                "description": "rate of Poisson process for player arrivals",
-                "datatype": float,
-                "default": 1.0,
-            },
-            "num_players": {
-                "description": "number of players",
-                "datatype": int,
-                "default": 1000,
-            },
-            "allowable_diff": {
-                "description": "maximum allowable difference between Elo ratings",
-                "datatype": float,
-                "default": MAX_ALLOWABLE_DIFF,
-            },
-        }
-
-    @property
-    @override
-    def check_factor_list(self) -> dict[str, Callable]:
-        return {
-            "elo_mean": self._check_elo_mean,
-            "elo_sd": self._check_elo_sd,
-            "poisson_rate": self._check_poisson_rate,
-            "num_players": self._check_num_players,
-            "allowable_diff": self._check_allowable_diff,
-        }
+    class_name_abbr: ClassVar[str] = "CHESS"
+    class_name: ClassVar[str] = "Chess Matchmaking"
+    config_class: ClassVar[type[BaseModel]] = ChessMatchmakingConfig
+    n_rngs: ClassVar[int] = 2
+    n_responses: ClassVar[int] = 2
 
     def __init__(self, fixed_factors: dict | None = None) -> None:
         """Initialize the ChessMatchmaking model.
@@ -97,42 +148,14 @@ class ChessMatchmaking(Model):
         # Let the base class handle default arguments.
         super().__init__(fixed_factors)
 
-    def _check_elo_mean(self) -> None:
-        if self.factors["elo_mean"] <= 0:
-            raise ValueError(
-                "Mean of normal distribution for Elo rating must be greater than 0."
-            )
+        self.elo_model = EloInputModel()
+        self.arrival_model = Poisson()
 
-    def _check_elo_sd(self) -> None:
-        if self.factors["elo_sd"] <= 0:
-            raise ValueError(
-                "Standard deviation of normal distribution for Elo rating must be "
-                "greater than 0."
-            )
+    def before_replicate(self, rng_list: list[MRG32k3a]) -> None:  # noqa: D102
+        self.elo_model.set_rng(rng_list[0])
+        self.arrival_model.set_rng(rng_list[1])
 
-    def _check_poisson_rate(self) -> None:
-        if self.factors["poisson_rate"] <= 0:
-            raise ValueError(
-                "Rate of Poisson process for player arrivals must be greater than 0."
-            )
-
-    def _check_num_players(self) -> None:
-        if self.factors["num_players"] <= 0:
-            raise ValueError("Number of players must be greater than 0.")
-
-    def _check_allowable_diff(self) -> None:
-        if self.factors["allowable_diff"] <= 0:
-            raise ValueError(
-                "The maximum mallowable different between Elo ratings must be greater "
-                "than 0."
-            )
-
-    @override
-    def check_simulatable_factors(self) -> bool:
-        # No factors need cross-checked
-        return True
-
-    def replicate(self, rng_list: list[MRG32k3a]) -> tuple[dict, dict[str, dict]]:
+    def replicate(self) -> tuple[dict, dict]:
         """Simulate a single replication for the current model factors.
 
         Args:
@@ -155,22 +178,15 @@ class ChessMatchmaking(Model):
         allowable_diff = self.factors["allowable_diff"]
         poisson_rate = self.factors["poisson_rate"]
 
-        # Designate separate RNGs for Elo and arrival times.
-        elo_rng = rng_list[0]
-        arrival_rng = rng_list[1]
-
-        def generate_elo() -> float:
-            while True:
-                rating = elo_rng.normalvariate(elo_mean, elo_sd)
-                if elo_min <= rating <= elo_max:
-                    return rating
-
         # Generate Elo ratings (normal distribution).
-        player_ratings = [generate_elo() for _ in num_players_range]
+        player_ratings = [
+            self.elo_model.random(elo_mean, elo_sd, elo_min, elo_max)
+            for _ in num_players_range
+        ]
 
         # Generate interarrival times (Poisson distribution).
         interarrival_times = [
-            arrival_rng.poissonvariate(poisson_rate) for _ in num_players_range
+            self.arrival_model.random(poisson_rate) for _ in num_players_range
         ]
 
         # Initialize statistics.
@@ -181,7 +197,9 @@ class ChessMatchmaking(Model):
         elo_diffs = []
 
         # Simulate arrival and matching and players.
-        for interarrival_time, player_rating in zip(interarrival_times, player_ratings):
+        for interarrival_time, player_rating in zip(
+            interarrival_times, player_ratings, strict=False
+        ):
             # Try to match the player
             for i, waiting_rating in enumerate(waiting_players):
                 diff = abs(player_rating - waiting_rating)
@@ -202,195 +220,60 @@ class ChessMatchmaking(Model):
             "avg_diff": avg_diff,
             "avg_wait_time": np.mean(wait_times),
         }
-        gradients = {
-            response_key: dict.fromkeys(self.specifications, np.nan)
-            for response_key in responses
-        }
-        return responses, gradients
+        return responses, {}
 
 
 class ChessAvgDifference(Problem):
     """Base class to implement simulation-optimization problems."""
 
-    @classproperty
-    @override
-    def class_name_abbr(cls) -> str:
-        return "CHESS-1"
-
-    @classproperty
-    @override
-    def class_name(cls) -> str:
-        return "Min Avg Difference for Chess Matchmaking"
-
-    @classproperty
-    @override
-    def n_objectives(cls) -> int:
-        return 1
-
-    @classproperty
-    @override
-    def n_stochastic_constraints(cls) -> int:
-        return 1
-
-    @classproperty
-    @override
-    def minmax(cls) -> tuple[int]:
-        return (-1,)
-
-    @classproperty
-    @override
-    def constraint_type(cls) -> ConstraintType:
-        return ConstraintType.STOCHASTIC
-
-    @classproperty
-    @override
-    def variable_type(cls) -> VariableType:
-        return VariableType.CONTINUOUS
-
-    @classproperty
-    @override
-    def gradient_available(cls) -> bool:
-        return False
-
-    @classproperty
-    @override
-    def optimal_value(cls) -> float | None:
-        return None
-
-    @classproperty
-    @override
-    def optimal_solution(cls) -> tuple | None:
-        return None
-
-    @classproperty
-    @override
-    def model_default_factors(cls) -> dict:
-        return {}
-
-    @classproperty
-    @override
-    def model_decision_factors(cls) -> set:
-        return {"allowable_diff"}
-
-    @classproperty
-    @override
-    def specifications(cls) -> dict[str, dict]:
-        return {
-            "initial_solution": {
-                "description": "initial solution",
-                "datatype": tuple,
-                "default": (MAX_ALLOWABLE_DIFF,),
-            },
-            "budget": {
-                "description": "max # of replications for a solver to take",
-                "datatype": int,
-                "default": 1000,
-                "isDatafarmable": False,
-            },
-            "upper_time": {
-                "description": "upper bound on wait time",
-                "datatype": float,
-                "default": 5.0,
-            },
-        }
+    class_name_abbr: ClassVar[str] = "CHESS-1"
+    class_name: ClassVar[str] = "Min Avg Difference for Chess Matchmaking"
+    config_class: ClassVar[type[BaseModel]] = ChessAvgDifferenceConfig
+    model_class: ClassVar[type[Model]] = ChessMatchmaking
+    n_objectives: ClassVar[int] = 1
+    n_stochastic_constraints: ClassVar[int] = 1
+    minmax: ClassVar[tuple[int, ...]] = (-1,)
+    constraint_type: ClassVar[ConstraintType] = ConstraintType.STOCHASTIC
+    variable_type: ClassVar[VariableType] = VariableType.CONTINUOUS
+    gradient_available: ClassVar[bool] = False
+    optimal_value: ClassVar[float | None] = None
+    optimal_solution: tuple | None = None
+    model_default_factors: ClassVar[dict] = {}
+    model_decision_factors: ClassVar[set[str]] = {"allowable_diff"}
 
     @property
-    @override
-    def check_factor_list(self) -> dict[str, Callable]:
-        return {
-            "initial_solution": self.check_initial_solution,
-            "budget": self.check_budget,
-            "upper_time": self._check_upper_time,
-        }
-
-    @classproperty
-    @override
-    def dim(cls) -> int:
+    def dim(self) -> int:  # noqa: D102
         return 1
 
-    @classproperty
-    @override
-    def lower_bounds(cls) -> tuple:
+    @property
+    def lower_bounds(self) -> tuple:  # noqa: D102
         return (0,)
 
-    @classproperty
-    @override
-    def upper_bounds(cls) -> tuple:
+    @property
+    def upper_bounds(self) -> tuple:  # noqa: D102
         return (2400,)
 
-    def __init__(
-        self,
-        name: str = "CHESS-1",
-        fixed_factors: dict | None = None,
-        model_fixed_factors: dict | None = None,
-    ) -> None:
-        """Initialize the ChessAvgDifference problem.
-
-        Args:
-            name (str, optional): User-specified name for the problem.
-                Defaults to "CHESS-1".
-            fixed_factors (dict, optional): Fixed factors for the problem.
-                Defaults to None.
-            model_fixed_factors (dict, optional): Fixed factors for the model.
-                Defaults to None.
-        """
-        # Let the base class handle default arguments.
-        super().__init__(name, fixed_factors, model_fixed_factors, ChessMatchmaking)
-
-    def _check_upper_time(self) -> None:
-        if self.factors["upper_time"] <= 0:
-            raise ValueError("The upper bound on wait time must be greater than 0.")
-
-    @override
-    def vector_to_factor_dict(self, vector: tuple) -> dict:
+    def vector_to_factor_dict(self, vector: tuple) -> dict:  # noqa: D102
         return {"allowable_diff": vector[0]}
 
-    @override
-    def factor_dict_to_vector(self, factor_dict: dict) -> tuple:
+    def factor_dict_to_vector(self, factor_dict: dict) -> tuple:  # noqa: D102
         return (factor_dict["allowable_diff"],)
 
-    @override
-    def response_dict_to_objectives(self, response_dict: dict) -> tuple:
-        return (response_dict["avg_diff"],)
+    def replicate(self, _x: tuple) -> RepResult:  # noqa: D102
+        responses, _ = self.model.replicate()
+        return RepResult(
+            objectives=[Objective(stochastic=responses["avg_diff"])],
+            stochastic_constraints=[
+                StochasticConstraint(
+                    stochastic=responses["avg_wait_time"],
+                    deterministic=-1 * self.factors["upper_time"],
+                )
+            ],
+        )
 
-    def response_dict_to_stoch_constraints(self, response_dict: dict) -> tuple:
-        """Convert a response dictionary to a vector of stochastic constraint values.
-
-        Each returned value represents the left-hand side of a constraint of the form
-        E[Y] ≤ 0.
-
-        Args:
-            response_dict (dict): A dictionary containing response keys and their
-                associated values.
-
-        Returns:
-            tuple: A tuple representing the left-hand sides of the stochastic
-                constraints.
-        """
-        return (response_dict["avg_wait_time"],)
-
-    def deterministic_stochastic_constraints_and_gradients(self) -> tuple[tuple, tuple]:
-        """Compute deterministic components of stochastic constraints.
-
-        Returns:
-            tuple:
-                - tuple: The deterministic components of the stochastic constraints.
-                - tuple: The gradients of those deterministic components.
-        """
-        det_stoch_constraints = (-1 * self.factors["upper_time"],)
-        det_stoch_constraints_gradients = ((0,),)
-        return det_stoch_constraints, det_stoch_constraints_gradients
-
-    @override
-    def deterministic_objectives_and_gradients(self, _x: tuple) -> tuple[tuple, tuple]:
-        det_objectives = (0,)
-        det_objectives_gradients = ()
-        return det_objectives, det_objectives_gradients
-
-    @override
-    def check_deterministic_constraints(self, x: tuple) -> bool:
+    def check_deterministic_constraints(self, x: tuple) -> bool:  # noqa: D102
         return all(x_val > 0 for x_val in x)
 
-    @override
-    def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:
-        return (min(max(0, rand_sol_rng.normalvariate(150, 50)), 2400),)
+    def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:  # noqa: D102
+        val = rand_sol_rng.normalvariate(150, 50)
+        return (min(max(0.0, float(val)), 2400.0),)

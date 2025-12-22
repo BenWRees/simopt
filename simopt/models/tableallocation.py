@@ -5,15 +5,153 @@ from __future__ import annotations
 import bisect
 import itertools
 from collections.abc import Sequence
-from typing import Callable, Final
+from typing import Annotated, ClassVar, Self, cast
 
 import numpy as np
+from pydantic import BaseModel, Field, model_validator
 
 from mrg32k3a.mrg32k3a import MRG32k3a
-from simopt.base import ConstraintType, Model, Problem, VariableType
-from simopt.utils import classproperty, override
+from simopt.base import (
+    ConstraintType,
+    Model,
+    Objective,
+    Problem,
+    RepResult,
+    VariableType,
+)
+from simopt.input_models import Exp, Poisson, Uniform, WeightedChoice
 
-NUM_CAPACITIES: Final[int] = 4
+
+class TableAllocationConfig(BaseModel):
+    """Configuration for the Table Allocation model."""
+
+    n_hours: Annotated[
+        float,
+        Field(
+            default=5.0,
+            description="number of hours to simulate",
+            gt=0,
+        ),
+    ]
+    capacity: Annotated[
+        int,
+        Field(
+            default=80,
+            description="maximum capacity of restaurant",
+            gt=0,
+        ),
+    ]
+    table_cap: Annotated[
+        list[int],
+        Field(
+            default=[2, 4, 6, 8],
+            description="seating capacity of each type of table",
+        ),
+    ]
+    lambda_: Annotated[
+        list[float],
+        Field(
+            default=[3, 6, 3, 3, 2, 4 / 3, 6 / 5, 1],
+            description="average number of arrivals per hour",
+            alias="lambda",
+        ),
+    ]
+    service_time_means: Annotated[
+        list[float],
+        Field(
+            default=[20, 25, 30, 35, 40, 45, 50, 60],
+            description="mean service time (in minutes)",
+        ),
+    ]
+    table_revenue: Annotated[
+        list[float],
+        Field(
+            default=[15, 30, 45, 60, 75, 90, 105, 120],
+            description="revenue earned for each group size",
+        ),
+    ]
+    num_tables: Annotated[
+        list[int],
+        Field(
+            default=[10, 5, 4, 2],
+            description="number of tables of each capacity",
+        ),
+    ]
+
+    def _check_table_cap(self) -> None:
+        if any(x <= 0 for x in self.table_cap):
+            raise ValueError("All elements in table_cap must be greater than 0.")
+
+    def _check_lambda(self) -> None:
+        if any(lam < 0 for lam in self.lambda_):
+            raise ValueError("Each element in lambda must be non-negative.")
+
+    def _check_service_time_means(self) -> None:
+        if any(x <= 0 for x in self.service_time_means):
+            raise ValueError("Each element in service_time_means must be positive.")
+
+    def _check_table_revenue(self) -> None:
+        if any(x < 0 for x in self.table_revenue):
+            raise ValueError("Each element in table_revenue must be non-negative.")
+
+    def _check_num_tables(self) -> None:
+        if any(x < 0 for x in self.num_tables):
+            raise ValueError(
+                "Each element in num_tables must be greater than or equal to 0."
+            )
+
+    @model_validator(mode="after")
+    def _validate_model(self) -> Self:
+        self._check_table_cap()
+        self._check_lambda()
+        self._check_service_time_means()
+        self._check_table_revenue()
+        self._check_num_tables()
+
+        if len(self.num_tables) != len(self.table_cap):
+            raise ValueError(
+                "The length of num_tables must be equal to the length of table_cap."
+            )
+        if len(self.lambda_) != max(self.table_cap):
+            raise ValueError(
+                "The length of lamda must be equal to the maximum value in table_cap."
+            )
+        if len(self.lambda_) != len(self.service_time_means):
+            raise ValueError(
+                "The length of lambda must be equal to the length of "
+                "service_time_means."
+            )
+        if len(self.service_time_means) != len(self.table_revenue):
+            raise ValueError(
+                "The length of service_time_means must be equal to the length of "
+                "table_revenue."
+            )
+        return self
+
+
+class TableAllocationMaxRevConfig(BaseModel):
+    """Configuration model for Table Allocation Max Revenue Problem.
+
+    Max Revenue for Restaurant Table Allocation simulation-optimization problem.
+    """
+
+    initial_solution: Annotated[
+        tuple[int, ...],
+        Field(
+            default=(10, 5, 4, 2),
+            description="initial solution",
+        ),
+    ]
+    budget: Annotated[
+        int,
+        Field(
+            default=1000,
+            description="max # of replications for a solver to take",
+            gt=0,
+            json_schema_extra={"isDatafarmable": False},
+        ),
+    ]
+
 
 class TableAllocation(Model):
     """Table Allocation Model.
@@ -23,74 +161,11 @@ class TableAllocation(Model):
     Returns expected maximum revenue.
     """
 
-    @classproperty
-    @override
-    def class_name(cls) -> str:
-        return "Restaurant Table Allocation"
-
-    @classproperty
-    @override
-    def n_rngs(cls) -> int:
-        return 3
-
-    @classproperty
-    @override
-    def n_responses(cls) -> int:
-        return 2
-
-    @classproperty
-    @override
-    def specifications(cls) -> dict[str, dict]:
-        return {
-            "n_hours": {
-                "description": "number of hours to simulate",
-                "datatype": float,
-                "default": 5.0,
-            },
-            "capacity": {
-                "description": "maximum capacity of restaurant",
-                "datatype": int,
-                "default": 80, 
-            },
-            "table_cap": {
-                "description": "seating capacity of each type of table",
-                "datatype": list,
-                "default": [2, 4, 6, 8],
-            },
-            "lambda": {
-                "description": "average number of arrivals per hour",
-                "datatype": list,
-                "default": [3, 6, 3, 3, 2, 4 / 3, 6 / 5, 1],
-            },
-            "service_time_means": {
-                "description": "mean service time (in minutes)",
-                "datatype": list,
-                "default": [20, 25, 30, 35, 40, 45, 50, 60], 
-            },
-            "table_revenue": {
-                "description": "revenue earned for each group size",
-                "datatype": list,
-                "default": [15, 30, 45, 60, 75, 90, 105, 120], 
-            },
-            "num_tables": {
-                "description": "number of tables of each capacity",
-                "datatype": list,
-                "default": [10, 5, 4, 2], 
-            },
-        }
-
-    @property
-    @override
-    def check_factor_list(self) -> dict[str, Callable]:
-        return {
-            "n_hours": self._check_n_hours,
-            "capacity": self._check_capacity,
-            "table_cap": self._check_table_cap,
-            "lambda": self._check_lambda,
-            "service_time_means": self._check_service_time_means,
-            "table_revenue": self._check_table_revenue,
-            "num_tables": self._check_num_tables,
-        }
+    class_name_abbr: ClassVar[str] = "TABLEALLOCATION"
+    class_name: ClassVar[str] = "Restaurant Table Allocation"
+    config_class: ClassVar[type[BaseModel]] = TableAllocationConfig
+    n_rngs: ClassVar[int] = 3
+    n_responses: ClassVar[int] = 2
 
     def __init__(self, fixed_factors: dict | None = None) -> None:
         """Initialize the Table Allocation Model.
@@ -102,59 +177,18 @@ class TableAllocation(Model):
         # Let the base class handle default arguments.
         super().__init__(fixed_factors)
 
-    # Check for simulatable factors
-    def _check_n_hours(self) -> None:
-        if self.factors["n_hours"] <= 0:
-            raise ValueError("n_hours must be greater than 0.")
+        self.arrival_time_model = Uniform()
+        self.arrival_number_model = Poisson()
+        self.group_size_model = WeightedChoice()
+        self.service_time_model = Exp()
 
-    def _check_capacity(self) -> None:
-        if self.factors["capacity"] <= 0:
-            raise ValueError("capacity must be greater than 0.")
+    def before_replicate(self, rng_list: list[MRG32k3a]) -> None:  # noqa: D102
+        self.arrival_time_model.set_rng(rng_list[0])
+        self.arrival_number_model.set_rng(rng_list[0])
+        self.group_size_model.set_rng(rng_list[1])
+        self.service_time_model.set_rng(rng_list[2])
 
-    def _check_table_cap(self) -> None:
-        if self.factors["table_cap"] <= [0, 0, 0, 0]:
-            raise ValueError("All elements in table_cap must be greater than 0.")
-
-    def _check_lambda(self) -> bool:
-        return self.factors["lambda"] >= [0] * max(self.factors["table_cap"])
-
-    def _check_service_time_means(self) -> bool:
-        return self.factors["service_time_means"] > [0] * max(self.factors["table_cap"])
-
-    def _check_table_revenue(self) -> bool:
-        return self.factors["table_revenue"] >= [0] * max(self.factors["table_cap"])
-
-    def _check_num_tables(self) -> None:
-        if self.factors["num_tables"] < [0, 0, 0, 0]:
-            raise ValueError(
-                "Each element in num_tables must be greater than or equal to 0."
-            )
-
-    @override
-    def check_simulatable_factors(self) -> bool:
-        if len(self.factors["num_tables"]) != len(self.factors["table_cap"]):
-            raise ValueError(
-                "The length of num_tables must be equal to the length of table_cap."
-            )
-        if len(self.factors["lambda"]) != max(self.factors["table_cap"]):
-            raise ValueError(
-                "The length of lamda must be equal to the maximum value in table_cap."
-            )
-        if len(self.factors["lambda"]) != len(self.factors["service_time_means"]):
-            raise ValueError(
-                "The length of lambda must be equal to the length of "
-                "service_time_means."
-            )
-        if len(self.factors["service_time_means"]) != len(
-            self.factors["table_revenue"]
-        ):
-            raise ValueError(
-                "The length of service_time_means must be equal to the length of "
-                "table_revenue."
-            )
-        return True
-
-    def replicate(self, rng_list: list[MRG32k3a]) -> tuple[dict, dict]:
+    def replicate(self) -> tuple[dict, dict]:
         """Simulate a single replication for the current model factors.
 
         Args:
@@ -204,32 +238,30 @@ class TableAllocation(Model):
         max_table_cap = max(table_cap)
         service_time_means = self.factors["service_time_means"]
         table_revenue = self.factors["table_revenue"]
-        # Designate separate random number generators.
-        arrival_rng = rng_list[0]
-        group_size_rng = rng_list[1]
-        service_rng = rng_list[2]
         # Track total revenue.
         total_rev = 0
         # Track table availability.
         # (i,j) is the time that jth table of size i becomes available.
         table_avail = np.zeros((4, max(num_tables)))
         # Generate total number of arrivals in the period
-        n_arrivals = arrival_rng.poissonvariate(round(n_hours * sum(f_lambda)))
+        n_arrivals = self.arrival_number_model.random(round(n_hours * sum(f_lambda)))
         # Generate arrival times in minutes
         arrival_times = 60 * np.sort(
-            [arrival_rng.uniform(0, n_hours) for _ in range(n_arrivals)]
+            [self.arrival_time_model.random(0, n_hours) for _ in range(n_arrivals)]
         )
         # Track seating rate
         found = np.zeros(n_arrivals)
         # Precompute options for group sizes.
-        group_size_options = range(1, max_table_cap + 1)
+        group_size_options = list(range(1, max_table_cap + 1))
         # Pass through all arrivals of groups to the restaurants.
         for n in range(n_arrivals):
             # Determine group size.
-            group_size = fast_weighted_choice(
-                population=group_size_options,
-                weights=f_lambda,
-                rng=group_size_rng,
+            group_size = cast(
+                int,
+                self.group_size_model.random(
+                    population=group_size_options,
+                    weights=f_lambda,
+                ),
             )
 
             # Find smallest table size to start search.
@@ -255,8 +287,8 @@ class TableAllocation(Model):
             # Mark group as seated.
             found[n] = 1
             # Sample service time.
-            service_time = service_rng.expovariate(
-                lambd=1 / service_time_means[group_size - 1]
+            service_time = self.service_time_model.random(
+                1 / service_time_means[group_size - 1]
             )
             # Update table availability.
             table_avail[k, j] += service_time
@@ -267,182 +299,71 @@ class TableAllocation(Model):
             "total_revenue": total_rev,
             "service_rate": sum(found) / len(found),
         }
-        gradients = {
-            response_key: dict.fromkeys(self.specifications, np.nan)
-            for response_key in responses
-        }
-        return responses, gradients
+        return responses, {}
 
 
 class TableAllocationMaxRev(Problem):
     """Class to make table allocation simulation-optimization problems."""
 
-    @classproperty
-    @override
-    def class_name_abbr(cls) -> str:
-        return "TABLEALLOCATION-1"
-
-    @classproperty
-    @override
-    def class_name(cls) -> str:
-        return "Max Revenue for Restaurant Table Allocation"
-
-    @classproperty
-    @override
-    def n_objectives(cls) -> int:
-        return 1
-
-    @classproperty
-    @override
-    def n_stochastic_constraints(cls) -> int:
-        return 0
-
-    @classproperty
-    @override
-    def minmax(cls) -> tuple[int]:
-        return (1,)
-
-    @classproperty
-    @override
-    def constraint_type(cls) -> ConstraintType:
-        return ConstraintType.DETERMINISTIC
-
-    @classproperty
-    @override
-    def variable_type(cls) -> VariableType:
-        return VariableType.DISCRETE
-
-    @classproperty
-    @override
-    def gradient_available(cls) -> bool:
-        return False
-
-    @classproperty
-    @override
-    def optimal_value(cls) -> None:
-        return None
-
-    @classproperty
-    @override
-    def optimal_solution(cls) -> None:
-        return None
-
-    @classproperty
-    @override
-    def model_default_factors(cls) -> dict:
-        return {}
-
-    @classproperty
-    @override
-    def model_decision_factors(cls) -> set[str]:
-        return {"num_tables"}
-
-    @classproperty
-    @override
-    def specifications(cls) -> dict[str, dict]:
-        return {
-            "initial_solution": {
-                "description": "initial solution",
-                "datatype": tuple,
-                "default": (10, 5, 4, 2),
-            },
-            "budget": {
-                "description": "max # of replications for a solver to take",
-                "datatype": int,
-                "default": 1000,
-                "isDatafarmable": False,
-            },
-        }
+    class_name_abbr: ClassVar[str] = "TABLEALLOCATION-1"
+    class_name: ClassVar[str] = "Max Revenue for Restaurant Table Allocation"
+    config_class: ClassVar[type[BaseModel]] = TableAllocationMaxRevConfig
+    model_class: ClassVar[type[Model]] = TableAllocation
+    n_objectives: ClassVar[int] = 1
+    n_stochastic_constraints: ClassVar[int] = 0
+    minmax: ClassVar[tuple[int, ...]] = (1,)
+    constraint_type: ClassVar[ConstraintType] = ConstraintType.DETERMINISTIC
+    variable_type: ClassVar[VariableType] = VariableType.DISCRETE
+    gradient_available: ClassVar[bool] = False
+    optimal_value: ClassVar[float | None] = None
+    optimal_solution: tuple | None = None
+    model_default_factors: ClassVar[dict] = {}
+    model_decision_factors: ClassVar[set[str]] = {"num_tables"}
 
     @property
-    @override
-    def check_factor_list(self) -> dict[str, Callable]:
-        return {
-            "initial_solution": self.check_initial_solution,
-            "budget": self.check_budget,
-        }
-
-    @classproperty
-    @override
-    def dim(cls) -> int:
+    def dim(self) -> int:  # noqa: D102
         return 4
 
-    @classproperty
-    @override
-    def lower_bounds(cls) -> tuple:
-        return (0,) * cls.dim
+    @property
+    def lower_bounds(self) -> tuple:  # noqa: D102
+        return (0,) * self.dim
 
-    @classproperty
-    @override
-    def upper_bounds(cls) -> tuple:
-        return (np.inf,) * cls.dim
+    @property
+    def upper_bounds(self) -> tuple:  # noqa: D102
+        return (np.inf,) * self.dim
 
-    def __init__(
-        self,
-        name: str = "TABLEALLOCATION-1",
-        fixed_factors: dict | None = None,
-        model_fixed_factors: dict | None = None,
-    ) -> None:
-        """Initialize the Table Allocation Problem.
-
-        Args:
-            name (str, optional): Name of the problem. Defaults to "TABLEALLOCATION-1".
-            fixed_factors (dict, optional): Fixed factors for the problem.
-                Defaults to None.
-            model_fixed_factors (dict, optional): Fixed factors for the model.
-                Defaults to None.
-        """
-        # Let the base class handle default arguments.
-        super().__init__(
-            name=name,
-            fixed_factors=fixed_factors,
-            model_fixed_factors=model_fixed_factors,
-            model=TableAllocation,
-        )
-
-    @override
-    def vector_to_factor_dict(self, vector: tuple) -> dict:
+    def vector_to_factor_dict(self, vector: tuple) -> dict:  # noqa: D102
         return {"num_tables": vector[:]}
 
-    @override
-    def factor_dict_to_vector(self, factor_dict: dict) -> tuple:
+    def factor_dict_to_vector(self, factor_dict: dict) -> tuple:  # noqa: D102
         return (factor_dict["num_tables"],)
 
-    @override
-    def response_dict_to_objectives(self, response_dict: dict) -> tuple:
-        return (response_dict["total_revenue"],)
+    def replicate(self, _x: tuple) -> RepResult:  # noqa: D102
+        responses, _ = self.model.replicate()
+        objectives = [Objective(stochastic=responses["total_revenue"])]
+        return RepResult(objectives=objectives)
 
-    @override
-    def deterministic_objectives_and_gradients(self, _x: tuple) -> tuple[tuple, tuple]:
-        det_objectives = (0,)
-        det_objectives_gradients = ((0,) * self.dim,)
-        return det_objectives, det_objectives_gradients
-
-    @override
-    def check_deterministic_constraints(self, x: tuple) -> bool:
+    def check_deterministic_constraints(self, x: tuple) -> bool:  # noqa: D102
         return (
-            np.sum(np.multiply(self.model_fixed_factors["table_cap"], x))
-            <= self.model_fixed_factors["capacity"]
+            np.sum(np.multiply(self.model.factors["table_cap"], x))
+            <= self.model.factors["capacity"]
         )
 
-    @override
-    def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:
+    def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:  # noqa: D102
         # Add new tables of random size to the restaurant until the capacity is reached.
         # TODO: Replace this with call to integer_random_vector_from_simplex().
         # The different-weight case is not yet implemented.
         allocated = 0
         num_tables = [0, 0, 0, 0]
-        while allocated < self.model_fixed_factors["capacity"]:
-            table = rand_sol_rng.randint(
-                0, len(self.model_fixed_factors["table_cap"]) - 1
-            )
-            if self.model_fixed_factors["table_cap"][table] <= (
-                self.model_fixed_factors["capacity"] - allocated
+        while allocated < self.model.factors["capacity"]:
+            table = rand_sol_rng.randint(0, len(self.model.factors["table_cap"]) - 1)
+            if self.model.factors["table_cap"][table] <= (
+                self.model.factors["capacity"] - allocated
             ):
                 num_tables[table] += 1
-                allocated += self.model_fixed_factors["table_cap"][table]
-            elif self.model_fixed_factors["table_cap"][0] > (
-                self.model_fixed_factors["capacity"] - allocated
+                allocated += self.model.factors["table_cap"][table]
+            elif self.model.factors["table_cap"][0] > (
+                self.model.factors["capacity"] - allocated
             ):
                 break
         return tuple(num_tables)

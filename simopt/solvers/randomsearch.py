@@ -7,16 +7,27 @@ A detailed description of the solver can be found `here <https://simopt.readthed
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Annotated, ClassVar
+
+import numpy as np
+from pydantic import Field
 
 from simopt.base import (
     ConstraintType,
     ObjectiveType,
     Problem,
     Solver,
+    SolverConfig,
     VariableType,
 )
-from simopt.utils import classproperty, override
+
+
+class RandomSearchConfig(SolverConfig):
+    """Configuration for Random Search solver."""
+
+    sample_size: Annotated[
+        int, Field(default=10, gt=0, description="sample size per solution")
+    ]
 
 
 class RandomSearch(Solver):
@@ -26,79 +37,16 @@ class RandomSearch(Solver):
     Take a fixed number of replications at each solution.
     """
 
-    @classproperty
-    @override
-    def class_name_abbr(cls) -> str:
-        return "RNDSRCH"
+    name: str = "RNDSRCH"
+    config_class: ClassVar[type[SolverConfig]] = RandomSearchConfig
+    class_name_abbr: ClassVar[str] = "RNDSRCH"
+    class_name: ClassVar[str] = "Random Search"
+    objective_type: ClassVar[ObjectiveType] = ObjectiveType.SINGLE
+    constraint_type: ClassVar[ConstraintType] = ConstraintType.STOCHASTIC
+    variable_type: ClassVar[VariableType] = VariableType.MIXED
+    gradient_needed: ClassVar[bool] = False
 
-    @classproperty
-    @override
-    def class_name(cls) -> str:
-        return "Random Search"
-
-    @classproperty
-    @override
-    def objective_type(cls) -> ObjectiveType:
-        return ObjectiveType.SINGLE
-
-    @classproperty
-    @override
-    def constraint_type(cls) -> ConstraintType:
-        return ConstraintType.STOCHASTIC
-
-    @classproperty
-    @override
-    def variable_type(cls) -> VariableType:
-        return VariableType.MIXED
-
-    @classproperty
-    @override
-    def gradient_needed(cls) -> bool:
-        return False
-
-    @classproperty
-    @override
-    def specifications(cls) -> dict[str, dict]:
-        return {
-            "crn_across_solns": {
-                "description": "use CRN across solutions?",
-                "datatype": bool,
-                "default": True,
-            },
-            "sample_size": {
-                "description": "sample size per solution",
-                "datatype": int,
-                "default": 10,
-            },
-        }
-
-    @property
-    @override
-    def check_factor_list(self) -> dict[str, Callable]:
-        return {
-            "crn_across_solns": self.check_crn_across_solns,
-            "sample_size": self._check_sample_size,
-        }
-
-    def __init__(
-        self, name: str = "RNDSRCH", fixed_factors: dict | None = None
-    ) -> None:
-        """Initialize Random Search solver.
-
-        Args:
-            name (str): user-specified name for solver
-            fixed_factors (dict, optional): fixed_factors of the solver.
-                Defaults to None.
-        """
-        # Let the base class handle default arguments.
-        super().__init__(name, fixed_factors)
-
-    def _check_sample_size(self) -> None:
-        if self.factors["sample_size"] <= 0:
-            raise ValueError("Sample size must be greater than 0.")
-
-    @override
-    def solve(self, problem: Problem) -> None:
+    def solve(self, problem: Problem) -> None:  # noqa: D102
         # Designate random number generator for random sampling.
         find_next_soln_rng = self.rng_list[1]
         # Start at initial solution and record as best.
@@ -121,7 +69,7 @@ class RandomSearch(Solver):
             # Check for improvement relative to incumbent best solution.
             # Also check for feasibility w.r.t. stochastic constraints.
             mean_diff = new_solution.objectives_mean - best_solution.objectives_mean
-            if all(problem.minmax * mean_diff > 0) and all(
+            if all(np.array(problem.minmax) * mean_diff > 0) and all(
                 new_solution.stoch_constraints_mean[idx] <= 0
                 for idx in stoch_constraint_range
             ):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import pickle
 import re
 import threading
@@ -1282,7 +1283,7 @@ class NewExperimentWindow(Toplevel):
             return
         # Open the file with Pandas
         try:
-            design_df = pd.read_csv(design_file)
+            design_df = pd.read_csv(design_file, sep="\t")
         except Exception as e:
             messagebox.showerror(
                 "Error Reading File",
@@ -1646,6 +1647,13 @@ class NewExperimentWindow(Toplevel):
             for factor in model_specifications:
                 specifications[factor] = model_specifications[factor]
         # Convert the specifications to a dictionary of DFFactor objects
+
+        # TODO: This is a hack to remove the step_type and search_direction factors 
+        # because str type is not currently supported in the GUI.
+        if isinstance(base_object, Solver) and base_object.class_name_abbr == "FCSA":
+            del specifications["step_type"]
+            del specifications["search_direction"]
+
         self.factor_dict = spec_dict_to_df_dict(specifications)
 
         # Add all the column headers
@@ -1765,19 +1773,15 @@ class NewExperimentWindow(Toplevel):
                 settings_file.write(data_insert)
 
         try:
-            # Get the base object name in lowercase
-            base_object_lower = base_object.lower()
-            assert base_object_lower in ("problem", "solver")
             # Create the design
             create_design(
                 name=base_name,
                 factor_headers=design_factors,
-                factor_settings_filename=design_name,
+                factor_settings=Path(design_name),
                 fixed_factors=fixed_factors,
                 cross_design_factors=cross_design_factors,
                 n_stacks=num_stacks,
                 design_type=design_type,  # type: ignore
-                class_type=base_object_lower,
             )
 
         except Exception as e:
@@ -1848,7 +1852,7 @@ class NewExperimentWindow(Toplevel):
         # If the CSV filename is provided, read the design table from the CSV
         if csv_filename is not None:
             # Read  the design table from the csv file
-            design_table = pd.read_csv(csv_filename, index_col="design_num")
+            design_table = pd.read_csv(csv_filename, index_col="design_num", sep="\t")
             # Now drop the 'name', 'design_type', and 'num_stacks' columns
             design_table.drop(
                 columns=["name", "design_type", "num_stacks"], inplace=True
@@ -1866,11 +1870,9 @@ class NewExperimentWindow(Toplevel):
 
         # Modify the header to show the # of design points and # of duplicates
         unique_design_points = design_table.drop_duplicates().shape[0]
-        num_duplicates = design_table.shape[0] - unique_design_points
         point_plural = "" if unique_design_points == 1 else "s"
-        duplicate_plural = "" if num_duplicates == 1 else "s"
         self.tk_labels["gen_design.header"].configure(
-            text=f"Generated Design - {len(design_table)} Design Point{point_plural} ({num_duplicates} Duplicate{duplicate_plural})"
+            text=f"Generated Design - {len(design_table)} Design Point{point_plural} ({unique_design_points} Unique)"
         )
 
         self.design_tree = ttk.Treeview(master=master_frame)
@@ -2360,7 +2362,7 @@ class NewExperimentWindow(Toplevel):
         self.__update_experiment_label(experiment_name, "Logging")
         # Try to log the experiment
         try:
-            self.post_normalize(experiment_name)
+            self.log_results(experiment_name)
             # If successful, update the label and button
             self.__update_experiment_label(experiment_name, "Logged")
             self.__update_action_button(experiment_name, "All Steps\nComplete")

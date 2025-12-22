@@ -9,21 +9,101 @@ A detailed description of the solver can be found
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable
-from typing import Callable, Literal
+from typing import Annotated, ClassVar, Self
 
 import numpy as np
 from numpy.linalg import norm
+from pydantic import Field, model_validator
 
 from simopt.base import (
     ConstraintType,
     ObjectiveType,
     Problem,
-    Solution,
     Solver,
+    SolverConfig,
     VariableType,
 )
-from simopt.utils import classproperty, make_nonzero, override
+from simopt.solvers.utils import bfgs_hessian_approx, finite_diff
+from simopt.utils import make_nonzero
+
+
+class STRONGConfig(SolverConfig):
+    """Configuration for STRONG solver."""
+
+    n0: Annotated[int, Field(default=10, gt=0, description="initial sample size")]
+    n_r: Annotated[
+        int,
+        Field(
+            default=10,
+            gt=0,
+            description="number of replications taken at each solution",
+        ),
+    ]
+    sensitivity: Annotated[
+        float, Field(default=1e-7, gt=0, description="shrinking scale for VarBds")
+    ]
+    delta_threshold: Annotated[
+        float,
+        Field(default=1.2, gt=0, description="maximum value of the radius"),
+    ]
+    delta_t: Annotated[
+        float,
+        Field(default=2.0, description="initial size of trust region", alias="delta_T"),
+    ]
+    eta_0: Annotated[
+        float,
+        Field(default=0.01, gt=0, lt=1, description="constant for accepting"),
+    ]
+    eta_1: Annotated[
+        float,
+        Field(
+            default=0.3,
+            lt=1,
+            description="constant for more confident accepting",
+        ),
+    ]
+    gamma_1: Annotated[
+        float,
+        Field(
+            default=0.9,
+            gt=0,
+            lt=1,
+            description="constant for shrinking the trust region",
+        ),
+    ]
+    gamma_2: Annotated[
+        float,
+        Field(
+            default=1.11,
+            gt=1,
+            description="constant for expanding the trust region",
+        ),
+    ]
+    lambda_: Annotated[
+        int,
+        Field(
+            default=2,
+            gt=1,
+            alias="lambda",
+            description="magnifying factor for n_r in finite difference function",
+        ),
+    ]
+    lambda_2: Annotated[
+        float,
+        Field(
+            default=1.01,
+            gt=1,
+            description="magnifying factor for n_r in stage I and stage II (>1)",
+        ),
+    ]
+
+    @model_validator(mode="after")
+    def _validate_cross_field_constraints(self) -> Self:
+        if self.delta_t <= self.delta_threshold:
+            raise ValueError("delta_t must be greater than delta_threshold")
+        if self.eta_1 <= self.eta_0:
+            raise ValueError("eta_1 must be greater than eta_0")
+        return self
 
 
 class STRONG(Solver):
@@ -33,173 +113,16 @@ class STRONG(Solver):
     function evaluations taken within a neighborhood of the incumbent solution.
     """
 
-    @classproperty
-    @override
-    def objective_type(cls) -> ObjectiveType:
-        return ObjectiveType.SINGLE
+    name: str = "STRONG"
+    config_class: ClassVar[type[SolverConfig]] = STRONGConfig
+    class_name_abbr: ClassVar[str] = "STRONG"
+    class_name: ClassVar[str] = "STRONG"
+    objective_type: ClassVar[ObjectiveType] = ObjectiveType.SINGLE
+    constraint_type: ClassVar[ConstraintType] = ConstraintType.BOX
+    variable_type: ClassVar[VariableType] = VariableType.CONTINUOUS
+    gradient_needed: ClassVar[bool] = False
 
-    @classproperty
-    @override
-    def constraint_type(cls) -> ConstraintType:
-        return ConstraintType.BOX
-
-    @classproperty
-    @override
-    def variable_type(cls) -> VariableType:
-        return VariableType.CONTINUOUS
-
-    @classproperty
-    @override
-    def gradient_needed(cls) -> bool:
-        return False
-
-    @classproperty
-    @override
-    def specifications(cls) -> dict[str, dict]:
-        return {
-            "crn_across_solns": {
-                "description": "use CRN across solutions?",
-                "datatype": bool,
-                "default": True,
-            },
-            "n0": {
-                "description": "initial sample size",
-                "datatype": int,
-                "default": 10,
-            },
-            "n_r": {
-                "description": "number of replications taken at each solution",
-                "datatype": int,
-                "default": 10,
-            },
-            "sensitivity": {
-                "description": "shrinking scale for VarBds",
-                "datatype": float,
-                "default": 10 ** (-7),
-            },
-            "delta_threshold": {
-                "description": "maximum value of the radius",
-                "datatype": float,
-                "default": 1.2,
-            },
-            "delta_T": {
-                "description": "initial size of trust region",
-                "datatype": float,
-                "default": 2.0,
-            },
-            "eta_0": {
-                "description": "constant for accepting",
-                "datatype": float,
-                "default": 0.01,
-            },
-            "eta_1": {
-                "description": "constant for more confident accepting",
-                "datatype": float,
-                "default": 0.3,
-            },
-            "gamma_1": {
-                "description": "constant for shrinking the trust region",
-                "datatype": float,
-                "default": 0.9,
-            },
-            "gamma_2": {
-                "description": "constant for expanding the trust region",
-                "datatype": float,
-                "default": 1.11,
-            },
-            "lambda": {
-                "description": (
-                    "magnifying factor for n_r inside the finite difference function"
-                ),
-                "datatype": int,
-                "default": 2,
-            },
-            "lambda_2": {
-                "description": "magnifying factor for n_r in stage I and stage II (>1)",
-                "datatype": float,
-                "default": 1.01,
-            },
-        }
-
-    @property
-    @override
-    def check_factor_list(self) -> dict[str, Callable]:
-        return {
-            "crn_across_solns": self.check_crn_across_solns,
-            "n0": self._check_n0,
-            "n_r": self._check_n_r,
-            "sensitivity": self._check_sensitivity,
-            "delta_threshold": self._check_delta_threshold,
-            "delta_T": self._check_delta_t,
-            "eta_0": self._check_eta_0,
-            "eta_1": self._check_eta_1,
-            "gamma_1": self._check_gamma_1,
-            "gamma_2": self._check_gamma_2,
-            "lambda": self._check_lambda,
-            "lambda_2": self._check_lambda_2,
-        }
-
-    def __init__(self, name: str = "STRONG", fixed_factors: dict | None = None) -> None:
-        """Initialize STRONG solver.
-
-        Args:
-            name (str): name of the solver.
-            fixed_factors (dict, optional): fixed factors of the solver.
-                Defaults to None.
-        """
-        # Let the base class handle default arguments.
-        super().__init__(name, fixed_factors)
-
-    def _check_n0(self) -> None:
-        if self.factors["n0"] <= 0:
-            raise ValueError("n0 must be greater than 0.")
-
-    def _check_n_r(self) -> None:
-        if self.factors["n_r"] <= 0:
-            raise ValueError(
-                "The number of replications taken at each solution must be greater "
-                "than 0."
-            )
-
-    def _check_sensitivity(self) -> None:
-        if self.factors["sensitivity"] <= 0:
-            raise ValueError("sensitivity must be greater than 0.")
-
-    def _check_delta_threshold(self) -> None:
-        if self.factors["delta_threshold"] <= 0:
-            raise ValueError("delta_threshold must be greater than 0.")
-
-    def _check_delta_t(self) -> None:
-        if self.factors["delta_T"] <= self.factors["delta_threshold"]:
-            raise ValueError("delta_T must be greater than delta_threshold")
-
-    def _check_eta_0(self) -> None:
-        if self.factors["eta_0"] <= 0 or self.factors["eta_0"] >= 1:
-            raise ValueError("eta_0 must be between 0 and 1.")
-
-    def _check_eta_1(self) -> None:
-        if self.factors["eta_1"] >= 1 or self.factors["eta_1"] <= self.factors["eta_0"]:
-            raise ValueError("eta_1 must be between eta_0 and 1.")
-
-    def _check_gamma_1(self) -> None:
-        if self.factors["gamma_1"] <= 0 or self.factors["gamma_1"] >= 1:
-            raise ValueError("gamma_1 must be between 0 and 1.")
-
-    def _check_gamma_2(self) -> None:
-        if self.factors["gamma_2"] <= 1:
-            raise ValueError("gamma_2 must be greater than 1.")
-
-    def _check_lambda(self) -> None:
-        if self.factors["lambda"] <= 1:
-            raise ValueError("lambda must be greater than 1.")
-
-    def _check_lambda_2(self) -> None:
-        # TODO: Check if this is the correct condition.
-        if self.factors["lambda_2"] <= 1:
-            raise ValueError("lambda_2 must be greater than 1.")
-
-    @override
-    def solve(self, problem: Problem) -> None:
+    def solve(self, problem: Problem) -> None:  # noqa: D102
         # Default values.
         n0: int = self.factors["n0"]
         n_r: int = self.factors["n_r"]
@@ -233,17 +156,15 @@ class STRONG(Solver):
         neg_minmax = -problem.minmax[0]
         dim_sq = problem.dim**2
 
-        t = 0 
         while True:
-            t += 1
             new_x = np.array(new_solution.x)
             # Check variable bounds.
             forward = np.isclose(
                 new_x, lower_bound, atol=self.factors["sensitivity"]
-            ).astype(int)
+            ).astype(np.int32)
             backward = np.isclose(
                 new_x, upper_bound, atol=self.factors["sensitivity"]
-            ).astype(int)
+            ).astype(np.int32)
             # bounds_check:
             #   1 stands for forward, -1 stands for backward, 0 means central diff.
             bounds_check = forward - backward
@@ -255,8 +176,13 @@ class STRONG(Solver):
                 # Generate a new gradient and Hessian matrix.
                 num_generated_grads = 0
                 while True:
-                    grad, hessian = self.finite_diff(
-                        new_solution, bounds_check, 1, problem, n_r
+                    grad = finite_diff(
+                        self,
+                        new_solution,
+                        bounds_check,
+                        problem,
+                        self.factors["delta_T"],
+                        n_r,
                     )
                     self.budget.request(num_evals * n_r)
                     num_generated_grads += 1
@@ -269,6 +195,7 @@ class STRONG(Solver):
 
                 # Step 2: Solve the subproblem.
                 # Cauchy reduction.
+                hessian = np.zeros((problem.dim, problem.dim))
                 candidate_x = self.cauchy_point(grad, hessian, new_x, problem)
                 candidate_solution = self.create_new_solution(
                     tuple(candidate_x), problem
@@ -340,8 +267,16 @@ class STRONG(Solver):
                 # Step 1: Build the quadratic model.
                 num_generated_grads = 0
                 while True:
-                    grad, hessian = self.finite_diff(
-                        new_solution, bounds_check, 2, problem, n_r
+                    grad = finite_diff(
+                        self,
+                        new_solution,
+                        bounds_check,
+                        problem,
+                        self.factors["delta_T"],
+                        n_r,
+                    )
+                    hessian = bfgs_hessian_approx(
+                        self, new_solution, bounds_check, problem, n_r
                     )
                     self.budget.request(num_evals * n_r)
                     num_generated_grads += 1
@@ -395,12 +330,16 @@ class STRONG(Solver):
                         # A while loop to prevent zero gradient
                         while True:
                             n_r_loop = (sub_counter + 1) * n_r
-                            g_var, h_var = self.finite_diff(
+                            g_var = finite_diff(
+                                self,
                                 new_solution,
                                 bounds_check,
-                                2,
                                 problem,
+                                self.factors["delta_T"],
                                 n_r_loop,
+                            )
+                            h_var = bfgs_hessian_approx(
+                                self, new_solution, bounds_check, problem, n_r_loop
                             )
                             self.budget.request(num_evals * n_r_loop)
                             num_generated_grads += 1
@@ -497,31 +436,6 @@ class STRONG(Solver):
                         self.intermediate_budgets.append(self.budget.used)
                 n_r = int(np.ceil(self.factors["lambda_2"] * n_r))
 
-        # Loop through each budget and convert any numpy int32s to Python ints.
-        self.intermediate_budgets = [int(i) for i in self.intermediate_budgets]
-
-
-
-    def check_bounds_soln(self, solution: Solution, problem: Problem) -> Solution :
-        """
-            Checks the bounds of the new solution and modifies the bounds if it is close to the constrained boundaries.
-        """
-        new_x = list(solution.x)
-
-        upper_bound = problem.upper_bounds
-        lower_bound = problem.lower_bounds
-        tol = self.factors['sensitivity']
-
-        for i in range(len(new_x)) :
-            # Check variable bounds.
-            if new_x[i]  > upper_bound[i]:
-                new_x[i] = upper_bound[i] - tol
-            if new_x[i]  < lower_bound[i]:
-                new_x[i] = lower_bound[i] + tol
-
-        new_solution = self.create_new_solution(tuple(new_x),problem)
-        return new_solution
-
     def cauchy_point(
         self,
         grad: np.ndarray,
@@ -573,228 +487,18 @@ class STRONG(Solver):
         upper_bound_arr = np.array(upper_bound)
         # The current step.
         # Form a matrix to determine the possible stepsize.
-        min_step = 1
+        min_step = 1.0
         pos_mask = current_step > 0
         if np.any(pos_mask):
             step_diff = (upper_bound_arr[pos_mask] - new_x[pos_mask]) / current_step[
                 pos_mask
             ]
-            min_step = min(min_step, float(np.min(step_diff)))
+            min_step = min(min_step, float(np.min(step_diff).item()))
         neg_mask = current_step < 0
         if np.any(neg_mask):
             step_diff = (lower_bound_arr[neg_mask] - new_x[neg_mask]) / current_step[
                 neg_mask
             ]
-            min_step = min(min_step, float(np.min(step_diff)))
+            min_step = min(min_step, float(np.min(step_diff).item()))
         # Calculate the modified x.
         return new_x + min_step * current_step
-
-    def finite_diff(
-        self,
-        new_solution: Solution,
-        bounds_check: np.ndarray,
-        stage: Literal[1, 2],
-        problem: Problem,
-        n_r: int,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """Estimate gradients and approximate Hessian using finite differences and BFGS.
-
-        This method uses finite differencing to compute gradients of the objective,
-        and applies BFGS updates to build or refine a Hessian approximation.
-
-        Args:
-            new_solution (Solution): The solution at which derivatives are computed.
-            bounds_check (np.ndarray): Boolean mask indicating which variables are
-                within bounds and eligible for perturbation.
-            stage (Literal[1, 2]): Indicates the optimization stage
-                (e.g., 1 for initial approximation, 2 for refinement).
-            problem (Problem): The simulation-optimization problem being solved.
-            n_r (int): Number of replications used when estimating gradients.
-
-        Returns:
-            tuple[np.ndarray, np.ndarray]: A tuple containing:
-                - Gradient estimate as a NumPy array.
-                - Hessian approximation (updated via BFGS) as a NumPy array.
-        """
-        neg_minmax = -np.array(problem.minmax)
-        fn = (neg_minmax * new_solution.objectives_mean)[0]
-        new_x = np.array(new_solution.x, dtype=float)
-        # Store values for each dimension.
-        f_x_minus_h = np.zeros(problem.dim)  # f(x - h)
-        f_x_plus_h = np.zeros(problem.dim)  # f(x + h)
-
-        def get_fn_x(x: Iterable) -> float:
-            """Helper to simulate the function at a given x."""
-            x_solution = self.create_new_solution(tuple(x), problem)
-            problem.simulate_up_to([x_solution], n_r)
-            return (neg_minmax * x_solution.objectives_mean)[0]
-
-        # Initialize step sizes.
-        delta_t: float = self.factors["delta_T"]
-        ub_steps = np.minimum(delta_t, np.array(problem.upper_bounds) - new_x)
-        lb_steps = np.minimum(delta_t, new_x - np.array(problem.lower_bounds))
-
-        # Create independent fresh copies for each dimension
-        # Tiling creates a 2D array, each row is a copy of new_x
-        x1 = np.tile(new_x, (problem.dim, 1))
-        x2 = np.tile(new_x, (problem.dim, 1))
-
-
-        # Compute masks for numpy vectorization
-        bounds_neg = bounds_check == -1
-        bounds_zero = bounds_check == 0
-        bounds_pos = bounds_check == 1
-        bounds_non_neg = bounds_zero | bounds_pos
-        bounds_non_zero = bounds_neg | bounds_pos
-        bounds_non_pos = bounds_zero | bounds_neg
-
-
-
-
-
-
-        steps = np.minimum(ub_steps, lb_steps)
-        # Apply step modifications per bounds_check conditions
-        steps = np.where(bounds_neg, lb_steps, steps)
-        steps = np.where(bounds_pos, ub_steps, steps)
-
-
-
-        # Modify x1 and x2 based on step sizes
-        # x1[np.arange(problem.dim), bounds_non_neg] += steps[bounds_non_neg]
-        # x2[np.arange(problem.dim), bounds_non_pos] -= steps[bounds_non_pos]
-
-        idx_non_neg = np.where(bounds_non_neg)[0]
-        idx_non_pos = np.where(bounds_non_pos)[0]
-
-        x1[idx_non_neg, idx_non_neg] += steps[idx_non_neg]
-        x2[idx_non_pos, idx_non_pos] -= steps[idx_non_pos]
-
-        # Compute function values
-        non_neg_indices = np.where(bounds_non_neg)[0]
-        non_pos_indices = np.where(bounds_non_pos)[0]
-        f_x_minus_h[non_neg_indices] = np.array(
-            list(map(get_fn_x, x1[non_neg_indices]))
-        )
-        f_x_plus_h[non_pos_indices] = np.array(list(map(get_fn_x, x2[non_pos_indices])))
-
-        # Compute gradients
-        grad = np.zeros(problem.dim)
-        grad[bounds_neg] = (fn - f_x_plus_h[bounds_neg]) / steps[bounds_neg]
-        grad[bounds_zero] = (f_x_minus_h[bounds_zero] - f_x_plus_h[bounds_zero]) / (
-            2 * steps[bounds_zero]
-        )
-        grad[bounds_pos] = (f_x_minus_h[bounds_pos] - fn) / steps[bounds_pos]
-
-        hessian = np.zeros((problem.dim, problem.dim))
-        # If stage 1, exit without calculating the Hessian.
-        if stage == 1:
-            return grad, hessian
-
-        # Initialize the diagonal of the Hessian matrix.
-        hessian_diag = np.zeros(problem.dim)
-
-        # Case where bounds_check[i] == 0 (Central Difference)
-        if np.any(bounds_zero):
-            hessian_diag[bounds_zero] = (
-                f_x_minus_h[bounds_zero] - 2 * fn + f_x_plus_h[bounds_zero]
-            ) / (steps[bounds_zero] ** 2)
-
-        # Case where bounds_check[i] != 0 (One-Sided Difference)
-        if np.any(bounds_non_zero):
-            x = new_x.copy()
-            x[bounds_non_zero] += (steps[bounds_non_zero] / 2) * bounds_check[
-                bounds_non_zero
-            ]  # Apply h shift
-            fn_x = np.array(
-                [get_fn_x(x) for _ in range(np.sum(bounds_non_zero))]
-            )  # Simulate function evaluations
-            hessian_diag[bounds_non_zero] = (
-                4
-                * (fn - 2 * fn_x + f_x_plus_h[bounds_non_zero])
-                / (steps[bounds_non_zero] ** 2)
-            )
-
-        # Fill the diagonal of the Hessian matrix.
-        np.fill_diagonal(hessian, hessian_diag)
-
-        # Fill the upper triangle of the Hessian matrix.
-        for i in range(problem.dim):
-            f_i_minus_h = f_x_minus_h[i]
-            f_i_plus_h = f_x_plus_h[i]
-            h = steps[i]  # h step size
-            # Upper triangle in Hessian
-            for j in range(i + 1, problem.dim):
-                f_j_minus_k = f_x_minus_h[j]
-                f_j_plus_k = f_x_plus_h[j]
-                k = steps[j]  # k step size
-
-                x5 = new_x.copy()
-                # Neither x nor y on boundary.
-                if bounds_check[i] == 0 and bounds_check[j] == 0:
-                    # Represent f(x+h,y+k).
-                    x5[i] += h
-                    x5[j] += k
-                    fn5 = get_fn_x(x5)
-                    # Represent f(x-h,y-k).
-                    x6 = new_x.copy()
-                    x6[i] -= h
-                    x6[j] -= k
-                    fn6 = get_fn_x(x6)
-                    # Compute second order gradient.
-                    hessian[i, j] = (
-                        2 * fn
-                        + (fn5 - f_i_minus_h - f_j_minus_k)
-                        + (fn6 - f_i_plus_h - f_j_plus_k)
-                    ) / (2 * h * k)
-                # When x on boundary, y not.
-                elif bounds_check[j] == 0:
-                    i_plus_minus = bounds_check[i] * h
-                    # Represent f(x+/-h,y+k).
-                    x5[i] += i_plus_minus
-                    x5[j] += k
-                    fn5 = get_fn_x(x5)
-                    # Represent f(x+/-h,y-k).
-                    x6 = new_x.copy()
-                    x6[i] += i_plus_minus
-                    x6[j] -= k
-                    fn6 = get_fn_x(x6)
-                    # Compute second order gradient.
-                    hessian[i, j] = (
-                        (fn5 - f_j_minus_k - fn6 + f_j_plus_k)
-                        / (2 * h * k)
-                        * bounds_check[i]
-                    )
-                # When y on boundary, x not.
-                elif bounds_check[i] == 0:
-                    k_plus_minus = bounds_check[j] * k
-                    # Represent f(x+h,y+/-k).
-                    x5[i] += h
-                    x5[j] += k_plus_minus
-                    fn5 = get_fn_x(x5)
-                    # Represent f(x-h,y+/-k).
-                    x6 = new_x.copy()
-                    x6[i] -= h
-                    x6[j] += k_plus_minus
-                    fn6 = get_fn_x(x6)
-                    # Compute second order gradient.
-                    hessian[i, j] = (
-                        (fn5 - f_i_minus_h - fn6 + f_i_plus_h)
-                        / (2 * h * k)
-                        * bounds_check[j]
-                    )
-                # If only using one side
-                else:
-                    x5[i] += h * bounds_check[i]
-                    x5[j] += k * bounds_check[j]
-                    # TODO: verify the i and j mappings are inverted
-                    fd_ix = f_i_minus_h if bounds_check[i] == -1 else f_i_plus_h
-                    fd_jx = f_j_minus_k if bounds_check[j] == -1 else f_j_plus_k
-                    fn5 = get_fn_x(x5)
-                    hessian[i, j] = (
-                        ((fn + fn5) - (fd_jx + fd_ix)) / (h * k) * bounds_check[j]
-                    )
-                # Since we're only computing the upper half the matrix, we
-                # need to copy the value to the lower triangle.
-                hessian[j, i] = hessian[i, j]
-        return grad, hessian

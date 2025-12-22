@@ -2,13 +2,189 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Annotated, ClassVar, Self
 
 import numpy as np
+from pydantic import BaseModel, Field, model_validator
 
 from mrg32k3a.mrg32k3a import MRG32k3a
-from simopt.base import ConstraintType, Model, Problem, VariableType
-from simopt.utils import classproperty, override
+from simopt.base import (
+    ConstraintType,
+    Model,
+    Objective,
+    Problem,
+    RepResult,
+    VariableType,
+)
+from simopt.input_models import InputModel
+
+
+class RMITDConfig(BaseModel):
+    """Configuration for the RMITD model."""
+
+    time_horizon: Annotated[
+        int,
+        Field(
+            default=3,
+            description="time horizon",
+            gt=0,
+        ),
+    ]
+    prices: Annotated[
+        list[float],
+        Field(
+            default=[100, 300, 400],
+            description="prices for each period",
+        ),
+    ]
+    demand_means: Annotated[
+        list[float],
+        Field(
+            default=[50, 20, 30],
+            description="mean demand for each period",
+        ),
+    ]
+    cost: Annotated[
+        float,
+        Field(
+            default=80.0,
+            description="cost per unit of capacity at t = 0",
+            gt=0,
+        ),
+    ]
+    gamma_shape: Annotated[
+        float,
+        Field(
+            default=1.0,
+            description="shape parameter of gamma distribution",
+            gt=0,
+        ),
+    ]
+    gamma_scale: Annotated[
+        float,
+        Field(
+            default=1.0,
+            description="scale parameter of gamma distribution",
+            gt=0,
+        ),
+    ]
+    initial_inventory: Annotated[
+        int,
+        Field(
+            default=100,
+            description="initial inventory",
+            gt=0,
+        ),
+    ]
+    reservation_qtys: Annotated[
+        list[int],
+        Field(
+            default=[50, 30],
+            description="inventory to reserve going into periods 2, 3, ..., T",
+        ),
+    ]
+
+    def _check_prices(self) -> None:
+        if any(price <= 0 for price in self.prices):
+            raise ValueError("All elements in prices must be greater than 0.")
+
+    def _check_demand_means(self) -> None:
+        if any(demand_mean <= 0 for demand_mean in self.demand_means):
+            raise ValueError("All elements in demand_means must be greater than 0.")
+
+    def _check_reservation_qtys(self) -> None:
+        if any(reservation_qty <= 0 for reservation_qty in self.reservation_qtys):
+            raise ValueError("All elements in reservation_qtys must be greater than 0.")
+
+    @model_validator(mode="after")
+    def _validate_model(self) -> Self:
+        self._check_prices()
+        self._check_demand_means()
+        self._check_reservation_qtys()
+
+        if len(self.prices) != self.time_horizon:
+            raise ValueError("The length of prices must be equal to time_horizon.")
+        if len(self.demand_means) != self.time_horizon:
+            raise ValueError(
+                "The length of demand_means must be equal to time_horizon."
+            )
+        if len(self.reservation_qtys) != self.time_horizon - 1:
+            raise ValueError(
+                "The length of reservation_qtys must be equal to the time_horizon "
+                "minus 1."
+            )
+
+        if self.initial_inventory < self.reservation_qtys[0]:
+            raise ValueError(
+                "The initial_inventory must be greater than or equal to the first "
+                "element in reservation_qtys."
+            )
+
+        if any(
+            self.reservation_qtys[idx] < self.reservation_qtys[idx + 1]
+            for idx in range(self.time_horizon - 2)
+        ):
+            raise ValueError(
+                "Each value in reservation_qtys must be greater than the next value "
+                "in the list."
+            )
+
+        if not np.isclose(self.gamma_shape * self.gamma_scale, 1):
+            raise ValueError("gamma_shape times gamma_scale should be close to 1.")
+
+        return self
+
+
+class RMITDMaxRevenueConfig(BaseModel):
+    """Configuration model for RMITD Max Revenue Problem.
+
+    Max Revenue for Revenue Management Temporal Demand simulation-optimization problem.
+    """
+
+    initial_solution: Annotated[
+        tuple[int, ...],
+        Field(
+            default=(100, 50, 30),
+            description="initial solution",
+        ),
+    ]
+    budget: Annotated[
+        int,
+        Field(
+            default=10000,
+            description="max # of replications for a solver to take",
+            gt=0,
+            json_schema_extra={"isDatafarmable": False},
+        ),
+    ]
+
+
+class DemandInputModel(InputModel):
+    """Input model for temporally dependent demand components."""
+
+    x_rng: MRG32k3a | None = None
+    y_rng: MRG32k3a | None = None
+
+    def set_rng(self, rng: list[MRG32k3a] | tuple[MRG32k3a, MRG32k3a]) -> None:  # noqa: D102 # type: ignore
+        self.x_rng = rng[0]
+        self.y_rng = rng[1]
+
+    def unset_rng(self) -> None:  # noqa: D102
+        self.x_rng = None
+        self.y_rng = None
+
+    def random(  # noqa: D102
+        self, demand_means: np.ndarray, gamma_shape: float, gamma_scale: float
+    ) -> np.ndarray:
+        assert self.x_rng is not None and self.y_rng is not None
+        x_demand = self.x_rng.gammavariate(
+            alpha=gamma_shape,
+            beta=1.0 / gamma_scale,
+        )
+        y_demand = np.array(
+            [self.y_rng.expovariate(1) for _ in range(len(demand_means))]
+        )
+        return demand_means * x_demand * y_demand
 
 
 class RMITD(Model):
@@ -18,80 +194,11 @@ class RMITD(Model):
     inter-temporal dependence. Returns the total revenue.
     """
 
-    @classproperty
-    @override
-    def class_name(cls) -> str:
-        return "Revenue Management Temporal Demand"
-
-    @classproperty
-    @override
-    def n_rngs(cls) -> int:
-        return 2
-
-    @classproperty
-    @override
-    def n_responses(cls) -> int:
-        return 1
-
-    @classproperty
-    @override
-    def specifications(cls) -> dict[str, dict]:
-        return {
-            "time_horizon": {
-                "description": "time horizon",
-                "datatype": int,
-                "default": 3,
-            },
-            "prices": {
-                "description": "prices for each period",
-                "datatype": list,
-                "default": [100, 300, 400],
-            },
-            "demand_means": {
-                "description": "mean demand for each period",
-                "datatype": list,
-                "default": [50, 20, 30],
-            },
-            "cost": {
-                "description": "cost per unit of capacity at t = 0",
-                "datatype": float,
-                "default": 80.0,
-            },
-            "gamma_shape": {
-                "description": "shape parameter of gamma distribution",
-                "datatype": float,
-                "default": 1.0,
-            },
-            "gamma_scale": {
-                "description": "scale parameter of gamma distribution",
-                "datatype": float,
-                "default": 1.0,
-            },
-            "initial_inventory": {
-                "description": "initial inventory",
-                "datatype": int,
-                "default": 100,
-            },
-            "reservation_qtys": {
-                "description": "inventory to reserve going into periods 2, 3, ..., T",
-                "datatype": list,
-                "default": [50, 30],
-            },
-        }
-
-    @property
-    @override
-    def check_factor_list(self) -> dict[str, Callable]:
-        return {
-            "time_horizon": self._check_time_horizon,
-            "prices": self._check_prices,
-            "demand_means": self._check_demand_means,
-            "cost": self._check_cost,
-            "gamma_shape": self._check_gamma_shape,
-            "gamma_scale": self._check_gamma_scale,
-            "initial_inventory": self._check_initial_inventory,
-            "reservation_qtys": self._check_reservation_qtys,
-        }
+    class_name_abbr: ClassVar[str] = "RMITD"
+    class_name: ClassVar[str] = "Revenue Management Temporal Demand"
+    config_class: ClassVar[type[BaseModel]] = RMITDConfig
+    n_rngs: ClassVar[int] = 2
+    n_responses: ClassVar[int] = 1
 
     def __init__(self, fixed_factors: dict | None = None) -> None:
         """Initialize the RMITD model.
@@ -103,79 +210,12 @@ class RMITD(Model):
         # Let the base class handle default arguments.
         super().__init__(fixed_factors)
 
-    def _check_time_horizon(self) -> None:
-        if self.factors["time_horizon"] <= 0:
-            raise ValueError("time_horizon must be greater than 0.")
+        self.demand_model = DemandInputModel()
 
-    def _check_prices(self) -> None:
-        if any(price <= 0 for price in self.factors["prices"]):
-            raise ValueError("All elements in prices must be greater than 0.")
+    def before_replicate(self, rng_list: list[MRG32k3a]) -> None:  # noqa: D102
+        self.demand_model.set_rng(rng_list)
 
-    def _check_demand_means(self) -> None:
-        if any(demand_mean <= 0 for demand_mean in self.factors["demand_means"]):
-            raise ValueError("All elements in demand_means must be greater than 0.")
-
-    def _check_cost(self) -> None:
-        if self.factors["cost"] <= 0:
-            raise ValueError("cost must be greater than 0.")
-
-    def _check_gamma_shape(self) -> None:
-        if self.factors["gamma_shape"] <= 0:
-            raise ValueError("gamma_shape must be greater than 0.")
-
-    def _check_gamma_scale(self) -> None:
-        if self.factors["gamma_scale"] <= 0:
-            raise ValueError("gamma_scale must be greater than 0.")
-
-    def _check_initial_inventory(self) -> None:
-        if self.factors["initial_inventory"] <= 0:
-            raise ValueError("initial_inventory must be greater than 0.")
-
-    def _check_reservation_qtys(self) -> None:
-        if any(
-            reservation_qty <= 0 for reservation_qty in self.factors["reservation_qtys"]
-        ):
-            raise ValueError("All elements in reservation_qtys must be greater than 0.")
-
-    @override
-    def check_simulatable_factors(self) -> bool:
-        # Check for matching number of periods.
-        if len(self.factors["prices"]) != self.factors["time_horizon"]:
-            raise ValueError("The length of prices must be equal to time_horizon.")
-        if len(self.factors["demand_means"]) != self.factors["time_horizon"]:
-            raise ValueError(
-                "The length of demand_means must be equal to time_horizon."
-            )
-        if len(self.factors["reservation_qtys"]) != self.factors["time_horizon"] - 1:
-            raise ValueError(
-                "The length of reservation_qtys must be equal to the time_horizon "
-                "minus 1."
-            )
-        # Check that first reservation level is less than initial inventory.
-        if self.factors["initial_inventory"] < self.factors["reservation_qtys"][0]:
-            raise ValueError(
-                "The initial_inventory must be greater than or equal to the first "
-                "element in reservation_qtys."
-            )
-        # Check for non-increasing reservation levels.
-        if any(
-            self.factors["reservation_qtys"][idx]
-            < self.factors["reservation_qtys"][idx + 1]
-            for idx in range(self.factors["time_horizon"] - 2)
-        ):
-            raise ValueError(
-                "Each value in reservation_qtys must be greater than the next value "
-                "in the list."
-            )
-        # Check that gamma_shape*gamma_scale = 1.
-        if (
-            np.isclose(self.factors["gamma_shape"] * self.factors["gamma_scale"], 1)
-            is False
-        ):
-            raise ValueError("gamma_shape times gamma_scale should be close to 1.")
-        return True
-
-    def replicate(self, rng_list: list[MRG32k3a]) -> tuple[dict, dict]:
+    def replicate(self) -> tuple[dict, dict]:
         """Simulate a single replication for the current model factors.
 
         Args:
@@ -191,34 +231,26 @@ class RMITD(Model):
         """
         gamma_shape = self.factors["gamma_shape"]
         gamma_scale = self.factors["gamma_scale"]
-        time_horizon = self.factors["time_horizon"]
         initial_inventory = self.factors["initial_inventory"]
         reservation_qtys: list = self.factors["reservation_qtys"]
         demand_means = np.array(self.factors["demand_means"])
         prices = self.factors["prices"]
         cost = self.factors["cost"]
-        # Designate separate random number generators.
-        # Outputs will be coupled when generating demand.
-        x_rng = rng_list[0]
-        y_rng = rng_list[1]
         # Generate X and Y (to use for computing demand).
         # random.gammavariate takes two inputs: alpha and beta.
         #     alpha = k = gamma_shape
         #     beta = 1/theta = 1/gamma_scale
-        x_demand = x_rng.gammavariate(
-            alpha=gamma_shape,
-            beta=1.0 / gamma_scale,
-        )
-        y_demand = np.array([y_rng.expovariate(1) for _ in range(time_horizon)])
         reservations = [*reservation_qtys, 0]
-        demand_vec = demand_means * x_demand * y_demand
+        demand_vec = self.demand_model.random(demand_means, gamma_shape, gamma_scale)
 
         # Set initial inventory and revenue
         remaining_inventory = initial_inventory
         revenue = 0.0
 
         # Compute revenue for each period.
-        for reservation, demand, price in zip(reservations, demand_vec, prices):
+        for reservation, demand, price in zip(
+            reservations, list(demand_vec), prices, strict=False
+        ):
             available = max(remaining_inventory - reservation, 0)
             sell = min(available, demand)
             remaining_inventory -= sell
@@ -228,163 +260,63 @@ class RMITD(Model):
 
         # Compose responses and gradients.
         responses = {"revenue": revenue}
-        gradients = {
-            response_key: dict.fromkeys(self.specifications, np.nan)
-            for response_key in responses
-        }
-        return responses, gradients
+        return responses, {}
 
 
 class RMITDMaxRevenue(Problem):
     """Base class to implement simulation-optimization problems."""
 
-    @classproperty
-    @override
-    def class_name_abbr(cls) -> str:
-        return "RMITD-1"
-
-    @classproperty
-    @override
-    def class_name(cls) -> str:
-        return "Max Revenue for Revenue Management Temporal Demand"
-
-    @classproperty
-    @override
-    def n_objectives(cls) -> int:
-        return 1
-
-    @classproperty
-    @override
-    def n_stochastic_constraints(cls) -> int:
-        return 0
-
-    @classproperty
-    @override
-    def minmax(cls) -> tuple[int]:
-        return (1,)
-
-    @classproperty
-    @override
-    def constraint_type(cls) -> ConstraintType:
-        return ConstraintType.DETERMINISTIC
-
-    @classproperty
-    @override
-    def variable_type(cls) -> VariableType:
-        return VariableType.DISCRETE
-
-    @classproperty
-    @override
-    def gradient_available(cls) -> bool:
-        return False
-
-    @classproperty
-    @override
-    def optimal_value(cls) -> float | None:
-        return None
-
-    @classproperty
-    @override
-    def optimal_solution(cls) -> None:
-        return None
-
-    @classproperty
-    @override
-    def model_default_factors(cls) -> dict:
-        return {}
-
-    @classproperty
-    @override
-    def model_decision_factors(cls) -> set[str]:
-        return {"initial_inventory", "reservation_qtys"}
-
-    @classproperty
-    @override
-    def specifications(cls) -> dict[str, dict]:
-        return {
-            "initial_solution": {
-                "description": "initial solution",
-                "datatype": tuple,
-                "default": (100, 50, 30),
-            },
-            "budget": {
-                "description": "max # of replications for a solver to take",
-                "datatype": int,
-                "default": 10000,
-                "isDatafarmable": False,
-            },
-        }
+    class_name_abbr: ClassVar[str] = "RMITD-1"
+    class_name: ClassVar[str] = "Max Revenue for Revenue Management Temporal Demand"
+    config_class: ClassVar[type[BaseModel]] = RMITDMaxRevenueConfig
+    model_class: ClassVar[type[Model]] = RMITD
+    n_objectives: ClassVar[int] = 1
+    n_stochastic_constraints: ClassVar[int] = 0
+    minmax: ClassVar[tuple[int, ...]] = (1,)
+    constraint_type: ClassVar[ConstraintType] = ConstraintType.DETERMINISTIC
+    variable_type: ClassVar[VariableType] = VariableType.DISCRETE
+    gradient_available: ClassVar[bool] = False
+    optimal_value: ClassVar[float | None] = None
+    optimal_solution: tuple | None = None
+    model_default_factors: ClassVar[dict] = {}
+    model_decision_factors: ClassVar[set[str]] = {
+        "initial_inventory",
+        "reservation_qtys",
+    }
 
     @property
-    @override
-    def check_factor_list(self) -> dict[str, Callable]:
-        return {
-            "initial_solution": self.check_initial_solution,
-            "budget": self.check_budget,
-        }
-
-    @classproperty
-    @override
-    def dim(cls) -> int:
+    def dim(self) -> int:  # noqa: D102
         return 3
 
-    @classproperty
-    @override
-    def lower_bounds(cls) -> tuple:
-        return (0,) * cls.dim
+    @property
+    def lower_bounds(self) -> tuple:  # noqa: D102
+        return (0,) * self.dim
 
-    @classproperty
-    @override
-    def upper_bounds(cls) -> tuple:
-        return (np.inf,) * cls.dim
+    @property
+    def upper_bounds(self) -> tuple:  # noqa: D102
+        return (np.inf,) * self.dim
 
-    def __init__(
-        self,
-        name: str = "RMITD-1",
-        fixed_factors: dict | None = None,
-        model_fixed_factors: dict | None = None,
-    ) -> None:
-        """Initialize the RMITDMaxRevenue problem.
-
-        Args:
-            name (str): Name of the problem.
-            fixed_factors (dict, optional): Dictionary of fixed factors for the model.
-                Defaults to None.
-            model_fixed_factors (dict, optional): Dictionary of fixed factors for the
-                model. Defaults to None.
-        """
-        # Let the base class handle default arguments.
-        super().__init__(
-            name=name,
-            fixed_factors=fixed_factors,
-            model_fixed_factors=model_fixed_factors,
-            model=RMITD,
-        )
-
-    @override
-    def vector_to_factor_dict(self, vector: tuple) -> dict:
+    def vector_to_factor_dict(self, vector: tuple) -> dict:  # noqa: D102
         return {
             "initial_inventory": vector[0],
             "reservation_qtys": list(vector[0:]),
         }
 
-    @override
-    def factor_dict_to_vector(self, factor_dict: dict) -> tuple:
+    def factor_dict_to_vector(self, factor_dict: dict) -> tuple:  # noqa: D102
         return (
             factor_dict["initial_inventory"],
             *tuple(factor_dict["reservation_qtys"]),
         )
 
-    @override
-    def response_dict_to_objectives(self, response_dict: dict) -> tuple:
-        return (response_dict["revenue"],)
+    def replicate(self, _x: tuple) -> RepResult:  # noqa: D102
+        responses, _ = self.model.replicate()
+        objectives = [Objective(stochastic=responses["revenue"])]
+        return RepResult(objectives=objectives)
 
-    @override
-    def check_deterministic_constraints(self, x: tuple) -> bool:
+    def check_deterministic_constraints(self, x: tuple) -> bool:  # noqa: D102
         return all(x[idx] >= x[idx + 1] for idx in range(self.dim - 1))
 
-    @override
-    def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:
+    def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:  # noqa: D102
         # Generate random solution using acceptable/rejection.
         while True:
             x = tuple([200 * rand_sol_rng.random() for _ in range(self.dim)])

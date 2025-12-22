@@ -128,6 +128,8 @@ class DataFarmingWindow(Toplevel):
             )
             self.load_design_button.grid(row=0, column=3, sticky=tk.W)
 
+            self.experiment_name = "experiment"
+
     def clear_frame(self, frame: tk.Frame) -> None:
         """Clear all widgets from a frame.
 
@@ -215,12 +217,13 @@ class DataFarmingWindow(Toplevel):
         self.experiment_name = name.replace("_design", "")
 
         # convert loaded design to data frame
-        self.design_table = pd.read_csv(self.csv_filename, index_col=False)
+        self.design_table = pd.read_csv(self.csv_filename, sep="\t", header=None, index_col=False)
+        self.design_table.columns = self.design_table.iloc[0]
 
         # Get design information from table
-        self.model_name = self.design_table.at[1, "Name"]
-        self.design_type = self.design_table.at[1, "Design Type"]
-        self.n_stacks = self.design_table.at[1, "Number Stacks"]
+        self.model_name = self.design_table.at[1, "name"]
+        self.design_type = self.design_table.at[1, "design_type"]
+        self.n_stacks = self.design_table.at[1, "num_stacks"]
         self.model_var.set(self.model_name)
 
         all_factor_names = list(self.design_table.columns[1:-3])
@@ -242,6 +245,15 @@ class DataFarmingWindow(Toplevel):
                 self.default_factors[factor] = self.design_table.at[1, factor]
             else:
                 self.factor_names.append(factor)
+
+        # TODO: consolidate with copy in data_farming_base.py
+        # If for some reason the user provides the module name instead of the
+        # abbreviated class name, set the proper name.
+        if self.model_name not in model_directory:
+            for name, model_class in directory.model_directory.items():
+                if model_class.name == self.model_name:
+                    self.model_name = name
+                    break
 
         self.model_object = model_directory[self.model_name]()
 
@@ -459,7 +471,7 @@ class DataFarmingWindow(Toplevel):
 
         self.csv_filename = DATA_FARMING_DIR / design_csv_name
 
-        self.design_table.to_csv(self.csv_filename, index=False)
+        self.design_table.to_csv(self.csv_filename, index=False, sep="\t")
 
         # read new design csv and convert to df
         self.design_table = pd.read_csv(self.csv_filename, index_col=False)
@@ -479,7 +491,9 @@ class DataFarmingWindow(Toplevel):
         self.experiment_name = self.design_filename_var.get()
         self.design_filename = f"{self.experiment_name}_design.csv"
         file_path = DATA_FARMING_DIR / self.design_filename
-        self.design_table[self.factor_names].to_csv(
+        if not file_path.parent.exists():
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+        self.design_table.to_csv(
             file_path,
             sep="\t",
             index=False,
@@ -1064,7 +1078,7 @@ class DataFarmingWindow(Toplevel):
         self.design_tree.heading("#0", text="Design #")
 
         # Get design point values from csv
-        design_table = pd.read_csv(self.csv_filename, index_col="Design #")
+        design_table = pd.read_csv(self.csv_filename, index_col="design_num", sep="\t")
         num_dp = len(design_table)  # used for label
         self.create_design_label = tk.Label(
             master=self.create_design_frame,
@@ -1174,12 +1188,6 @@ class DataFarmingWindow(Toplevel):
         max_values = [max_val.get() for max_val in self.max_list]
         dec_values = [dec_val.get() for dec_val in self.dec_list]
 
-        # Create an empty file to append to later
-        file_name = f"{self.experiment_name}.txt"
-        file_path = DATA_FARMING_DIR / file_name
-        with file_path.open() as self.model_design_factors:
-            self.model_design_factors.write("")
-
         # values to index through factors
         maxmin_index = 0
         dec_index = 0
@@ -1188,51 +1196,54 @@ class DataFarmingWindow(Toplevel):
         self.factor_names = []
         def_factor_str = {}
 
-        # Get experiment information
-        for factor_index, factor in enumerate(self.model_object.specifications):
-            factor_datatype = self.model_object.specifications[factor].get("datatype")
-            is_datafarmable_factor = self.model_object.specifications[factor].get(
-                "isDatafarmable"
-            )
-            factor_include = check_values[factor_index]
+        # Write factor information to design txt file
+        file_name = f"{self.experiment_name}.txt"
+        file_path = DATA_FARMING_DIR / file_name
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with file_path.open("w") as file:
+            for factor_index, factor in enumerate(self.model_object.specifications):
+                factor_datatype = self.model_object.specifications[factor].get("datatype")
+                is_datafarmable_factor = self.model_object.specifications[factor].get(
+                    "isDatafarmable", True
+                )
+                factor_include = check_values[factor_index]
 
-            # get user inputs for design factors
+                # get user inputs for design factors
 
-            if factor_include:
-                self.factor_names.append(factor)
+                if factor_include:
+                    self.factor_names.append(factor)
 
-                if not (factor_datatype in (float, int) and is_datafarmable_factor):
-                    error_msg = "Factor datatype not supported."
-                    logging.error(error_msg)
+                    if not (factor_datatype in (float, int) and is_datafarmable_factor):
+                        error_msg = "Factor datatype not supported."
+                        logging.error(error_msg)
 
-                factor_min = str(min_values[maxmin_index])
-                factor_max = str(max_values[maxmin_index])
-                maxmin_index += 1
-
-                if factor_datatype is float:
-                    # NOTE: this doesn't work with 1e-XX values
-                    factor_dec = str(dec_values[dec_index])
-                    dec_index += 1
-                else:  # factor is int
-                    factor_dec = "0"
-
-                data_insert = f"{factor_min} {factor_max} {factor_dec}\n"
-                file_name = f"{self.experiment_name}.txt"
-                file_path = DATA_FARMING_DIR / file_name
-
-                with file_path.open(
-                    mode="a",
-                ) as self.model_design_factors:
-                    self.model_design_factors.write(data_insert)
-
-            # add fixed factors to dictionary and increase index values
-            else:
-                def_factor_str[factor] = default_values[factor_index]
-                if factor_datatype is float:
-                    dec_index += 1
+                    factor_min = str(min_values[maxmin_index])
+                    factor_max = str(max_values[maxmin_index])
                     maxmin_index += 1
-                elif factor_datatype is int:
-                    maxmin_index += 1
+
+                    if factor_datatype is float:
+                        # NOTE: this doesn't work with 1e-XX values
+                        factor_dec = str(dec_values[dec_index])
+                        dec_index += 1
+                    else:  # factor is int
+                        factor_dec = "0"
+
+                    data_insert = f"{factor_min} {factor_max} {factor_dec}\n"
+                    file_name = f"{self.experiment_name}.txt"
+                    file_path = DATA_FARMING_DIR / file_name
+
+                    file.write(data_insert)
+
+                # add fixed factors to dictionary and increase index values
+                else:
+                    def_factor_str[factor] = default_values[factor_index]
+                    if not is_datafarmable_factor:
+                        continue
+                    if factor_datatype is float:
+                        dec_index += 1
+                        maxmin_index += 1
+                    elif factor_datatype is int:
+                        maxmin_index += 1
 
         # convert fixed factors to proper data type
         self.fixed_factors = self.convert_proper_datatype(def_factor_str)
@@ -1240,15 +1251,14 @@ class DataFarmingWindow(Toplevel):
         design_csv = f"{self.experiment_name}_design.csv"
         self.csv_filename = DATA_FARMING_DIR / design_csv
 
-        """ Use create_design to create a design txt file & design csv"""
+        # Use create_design to create a design txt file & design csv
         self.design_list = create_design(
-            name=self.model_object.name,
+            name=self.model_object.class_name_abbr,
             factor_headers=self.factor_names,
-            factor_settings_filename=self.experiment_name,
+            factor_settings=Path(self.experiment_name),
             fixed_factors=self.fixed_factors,
             n_stacks=n_stacks,
             design_type=design_type,
-            class_type="model",
         )
         # Pop up message that csv design file has been created
         messagebox.showinfo(
@@ -1274,13 +1284,13 @@ class DataFarmingWindow(Toplevel):
         # of the model.
         crn_across_design_pts = self.crn_var.get() == "Yes"
 
-        raw_results = f"{self.experiment_name}_raw_results"
+        raw_results = f"{self.experiment_name}_raw_results.csv"
         output_filename = DATA_FARMING_DIR / raw_results
 
         # Create DataFarmingExperiment object.
         myexperiment = DataFarmingExperiment(
             model_name=self.model_object.name,
-            factor_settings_file_name=None,
+            factor_settings=None,
             factor_headers=self.factor_names,
             design_path=self.design_filename,
             model_fixed_factors=self.fixed_factors,
@@ -1288,7 +1298,7 @@ class DataFarmingWindow(Toplevel):
 
         # Run replications and print results to file.
         myexperiment.run(n_reps=n_reps, crn_across_design_pts=crn_across_design_pts)
-        myexperiment.print_to_csv(csv_file_name=output_filename)
+        myexperiment.print_to_csv(csv_file_name=output_filename, overwrite=True)
 
         # run confirmation message
         messagebox.showinfo(

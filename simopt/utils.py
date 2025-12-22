@@ -1,8 +1,13 @@
 """Utility functions for simopt."""
 
 import sys
+import types
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Generic, Optional, TypeVar
+from typing import Generic, TypeVar
+
+from pydantic import BaseModel
+from pydantic_core import PydanticUndefined
 
 T = TypeVar("T", bound=type)
 R = TypeVar("R")
@@ -19,7 +24,7 @@ class ClassPropertyDescriptor(Generic[T, R]):
         """
         self.fget = fget
 
-    def __get__(self, instance: Optional[object], owner: type[T]) -> R:
+    def __get__(self, instance: object | None, owner: type[T]) -> R:
         """Get the class property.
 
         Args:
@@ -124,11 +129,13 @@ def print_table(name: str, headers: list[str], data: list[tuple] | dict) -> None
     if isinstance(data, dict):
         data = list(data.items())
     # Calculate the maximum length of each column
-    data_widths = [max(len(str(item)) for item in col) for col in zip(*data)]
+    data_widths = [
+        max(len(str(item)) for item in col) for col in zip(*data, strict=False)
+    ]
     header_widths = [len(header) for header in headers]
     max_widths = [
         max(header_width, col_width)
-        for header_width, col_width in zip(header_widths, data_widths)
+        for header_width, col_width in zip(header_widths, data_widths, strict=False)
     ]
 
     # Compute total width of the table
@@ -182,7 +189,7 @@ def print_table(name: str, headers: list[str], data: list[tuple] | dict) -> None
 
     underline_row = dash * (total_width + 2)  # Extend to the tees
     header_row = f" {pipe} ".join(
-        f"{header:<{width}}" for header, width in zip(headers, max_widths)
+        f"{header:<{width}}" for header, width in zip(headers, max_widths, strict=False)
     )
     sep_row = plus.join(dash * width for width in max_widths)
     rows = []
@@ -191,7 +198,7 @@ def print_table(name: str, headers: list[str], data: list[tuple] | dict) -> None
             f"{item!s:>{width}}"
             if isinstance(item, (int, float))
             else f"{item!s:<{width}}"
-            for item, width in zip(row, max_widths)
+            for item, width in zip(row, max_widths, strict=False)
         )
         rows.append(row_str)
 
@@ -209,3 +216,44 @@ def print_table(name: str, headers: list[str], data: list[tuple] | dict) -> None
         print(f"{bg_black}{fg_white}{pipe}{row_bg} {row} {bg_black}{pipe}{reset}")
     print(f"{corner_bl}{dash * border_width}{corner_br}")
     print(reset, end="")  # Reset colors
+
+
+def get_specifications(config_class: type[BaseModel]) -> dict[str, dict]:
+    """Get the specifications for a configuration class."""
+    spec = {}
+
+    for name, field in config_class.model_fields.items():
+        data = {
+            "description": field.description,
+        }
+
+        datatype = field.annotation
+
+        # `field.default` can be missing when `default_factory` is used
+        default = (
+            field.default
+            if field.default is not PydanticUndefined
+            else field.default_factory()
+        )
+
+        # Handle data type like list[int]
+        if isinstance(datatype, types.GenericAlias):
+            datatype = datatype.__origin__
+            # NOTE: the GUI only supports lists
+            if datatype is tuple:
+                datatype = list
+                default = list(default)
+
+        data["datatype"] = datatype
+        data["default"] = default
+
+        if (
+            field.json_schema_extra is not None
+            and "isDatafarmable" in field.json_schema_extra
+        ):
+            data["isDatafarmable"] = field.json_schema_extra["isDatafarmable"]
+
+        name = field.alias or name
+        spec[name] = data
+
+    return spec

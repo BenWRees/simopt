@@ -2,39 +2,64 @@
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["simopt", "simopt.gui", "simopt.models", "simopt.solvers"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["simopt*"]
+# Ignore the build directory so we don't circularly include built distributions.
+exclude = ["build*"]
+
+[tool.setuptools.package-data]
+"simopt.data_farming" = ["*.npz"]
+
+[tool.uv.sources]
+simopt-extensions = { git = "https://github.com/cenwangumass/simopt-extensions", rev = "b40a9c8" }
 
 [project]
 name = "simoptlib"
-version = "1.2.0"
+version = "1.2.2.post0"
 authors = [
   { name = "David Eckman", email = "eckman@tamu.edu" },
   { name = "Shane Henderson", email = "sgh9@cornell.edu" },
   { name = "Sara Shashaani", email = "sshasha2@ncsu.edu" },
-  { name = "William Grochocinski", email = "wagrocho@ncsu.edu" },
+  { name = "Cen Wang", email = "cenwang@tamu.edu" }
 ]
 description = "A testbed for simulation-optimization experiments."
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.9,<3.14"
+requires-python = ">=3.11,<3.14"
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
 ]
 dependencies = [
-    "numpy",
-    "scipy",
-    "matplotlib",
-    "pandas",
-    "seaborn",
-    "mrg32k3a",
-    "joblib>=1.5.1",
+    "boltons>=25.0.0",
+    "cvxpy>=1.7.3",
+    "joblib>=1.5.2",
+    "matplotlib>=3.10.7",
+    "mrg32k3a[rust]>=2.0.0",
+    "numpy>=2.3.4",
+    "pandas>=2.3.3",
+    "pillow>=12.0.0",
+    "pydantic>=2.12.3",
+    "scipy>=1.16.3",
+    "seaborn>=0.13.2",
 ]
 
 [project.optional-dependencies]
-dev = ["sphinx"]
+dev = [
+    "jupytext>=1.18.1",
+    "pytest-xdist>=3.8.0",
+    "pytest>=9.0.1",
+    "ruff>=0.14.2",
+    "ty>=0.0.1a26",
+    "zstandard>=0.25.0",
+]
+docs = ["sphinx>=8.2.3", "sphinx-autoapi>=3.6.1", "sphinx-rtd-theme>=3.0.2"]
+notebooks = ["ipykernel>=7.1.0"]
+ext = [
+    "simopt-extensions",
+]
 
 [project.urls]
 "Homepage" = "https://github.com/simopt-admin/simopt"

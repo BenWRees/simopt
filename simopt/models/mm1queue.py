@@ -3,13 +3,110 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Callable
+from typing import Annotated, ClassVar
 
 import numpy as np
+from pydantic import BaseModel, Field
 
 from mrg32k3a.mrg32k3a import MRG32k3a
-from simopt.base import ConstraintType, Model, Problem, VariableType
-from simopt.utils import classproperty, override
+from simopt.base import (
+    ConstraintType,
+    Model,
+    Objective,
+    Problem,
+    RepResult,
+    VariableType,
+)
+from simopt.input_models import Exp
+
+
+class MM1QueueConfig(BaseModel):
+    """Configuration model for MM1 Queue simulation.
+
+    A model that simulates an M/M/1 queue with an Exponential(lambda)
+    interarrival time distribution and an Exponential(x) service time
+    distribution. Returns:
+    - the average sojourn time
+    - the average waiting time
+    - the fraction of customers who wait
+    for customers after a warmup period.
+    """
+
+    lambda_: Annotated[
+        float,
+        Field(
+            default=1.5,
+            description="rate parameter of interarrival time distribution",
+            gt=0,
+            alias="lambda",
+        ),
+    ]
+    mu: Annotated[
+        float,
+        Field(
+            default=3.0,
+            description="rate parameter of service time distribution",
+            gt=0,
+        ),
+    ]
+    epsilon: Annotated[
+        float,
+        Field(
+            default=0.001,
+            description="the minimum value of mu",
+            gt=0,
+        ),
+    ]
+    warmup: Annotated[
+        int,
+        Field(
+            default=20,
+            description="number of people as warmup before collecting statistics",
+            ge=0,
+        ),
+    ]
+    people: Annotated[
+        int,
+        Field(
+            default=50,
+            description=(
+                "number of people from which to calculate the average sojourn time"
+            ),
+            ge=1,
+        ),
+    ]
+
+
+class MM1MinMeanSojournTimeConfig(BaseModel):
+    """Configuration model for MM1 Min Mean Sojourn Time Problem.
+
+    Min Mean Sojourn Time for MM1 Queue simulation-optimization problem.
+    """
+
+    initial_solution: Annotated[
+        tuple[float, ...],
+        Field(
+            default=(5,),
+            description="initial solution from which solvers start",
+        ),
+    ]
+    budget: Annotated[
+        int,
+        Field(
+            default=1000,
+            description="max # of replications for a solver to take",
+            gt=0,
+            json_schema_extra={"isDatafarmable": False},
+        ),
+    ]
+    cost: Annotated[
+        float,
+        Field(
+            default=0.1,
+            description="cost for increasing service rate",
+            gt=0,
+        ),
+    ]
 
 
 class MM1Queue(Model):
@@ -24,71 +121,11 @@ class MM1Queue(Model):
     for customers after a warmup period.
     """
 
-    @classproperty
-    @override
-    def class_name_abbr(cls) -> str:
-        return "MM1"
-
-    @classproperty
-    @override
-    def class_name(cls) -> str:
-        return "MM1 Queue"
-
-    @classproperty
-    @override
-    def n_rngs(cls) -> int:
-        return 2
-
-    @classproperty
-    @override
-    def n_responses(cls) -> int:
-        return 3
-
-    @classproperty
-    @override
-    def specifications(cls) -> dict[str, dict]:
-        return {
-            "lambda": {
-                "description": "rate parameter of interarrival time distribution",
-                "datatype": float,
-                "default": 1.5,
-            },
-            "mu": {
-                "description": "rate parameter of service time distribution",
-                "datatype": float,
-                "default": 3.0,
-            },
-            "epsilon": {
-                "description": "the minimum value of mu",
-                "datatype": float,
-                "default": 0.001,
-            },
-            "warmup": {
-                "description": (
-                    "number of people as warmup before collecting statistics"
-                ),
-                "datatype": int,
-                "default": 20,
-            },
-            "people": {
-                "description": (
-                    "number of people from which to calculate the average sojourn time"
-                ),
-                "datatype": int,
-                "default": 50,
-            },
-        }
-
-    @property
-    @override
-    def check_factor_list(self) -> dict[str, Callable]:
-        return {
-            "lambda": self._check_lambda,
-            "mu": self._check_mu,
-            "epsilon": self._check_epsilon,
-            "warmup": self._check_warmup,
-            "people": self._check_people,
-        }
+    class_name_abbr: ClassVar[str] = "MM1"
+    class_name: ClassVar[str] = "MM1 Queue"
+    config_class: ClassVar[type[BaseModel]] = MM1QueueConfig
+    n_rngs: ClassVar[int] = 2
+    n_responses: ClassVar[int] = 3
 
     def __init__(self, fixed_factors: dict | None = None) -> None:
         """Initialize the MM1Queue model.
@@ -99,27 +136,14 @@ class MM1Queue(Model):
         """
         # Let the base class handle default arguments.
         super().__init__(fixed_factors)
+        self.arrival_model = Exp()
+        self.service_model = Exp()
 
-    def _check_lambda(self) -> None:
-        if self.factors["lambda"] <= 0:
-            raise ValueError("lambda must be greater than 0.")
+    def before_replicate(self, rng_list: list[MRG32k3a]) -> None:  # noqa: D102
+        self.arrival_model.set_rng(rng_list[0])
+        self.service_model.set_rng(rng_list[1])
 
-    def _check_mu(self) -> None:
-        if self.factors["mu"] <= 0:
-            raise ValueError("mu must be greater than 0.")
-
-    def _check_warmup(self) -> None:
-        if self.factors["warmup"] < 0:
-            raise ValueError("warmup must be greater than or equal to 0.")
-
-    def _check_people(self) -> None:
-        if self.factors["people"] < 1:
-            raise ValueError("people must be greater than or equal to 1.")
-
-    def _check_epsilon(self) -> bool:
-        return self.factors["epsilon"] > 0
-
-    def replicate(self, rng_list: list[MRG32k3a]) -> tuple[dict, dict]:
+    def replicate(self) -> tuple[dict, dict]:
         """Simulate a single replication for the current model factors.
 
         Args:
@@ -141,15 +165,13 @@ class MM1Queue(Model):
         people: int = self.factors["people"]
         f_lambda: float = self.factors["lambda"]
         # Designate separate RNGs for interarrival and serivce times.
-        arrival_rng = rng_list[0]
-        service_rng = rng_list[1]
         # Set mu to be at least epsilon.
         mu_floor = max(mu, epsilon)
         # Calculate total number of arrivals to simulate.
         total = warmup + people
         # Generate all interarrival and service times up front.
-        arrival_times = [arrival_rng.expovariate(f_lambda) for _ in range(total)]
-        service_times = [service_rng.expovariate(mu_floor) for _ in range(total)]
+        arrival_times = [self.arrival_model.random(f_lambda) for _ in range(total)]
+        service_times = [self.service_model.random(mu_floor) for _ in range(total)]
 
         # Create matrix storing times and metrics for each customer:
         #     column 0 : arrival time to queue;
@@ -249,158 +271,51 @@ class MM1Queue(Model):
 class MM1MinMeanSojournTime(Problem):
     """Base class to implement simulation-optimization problems."""
 
-    @classproperty
-    @override
-    def class_name_abbr(cls) -> str:
-        return "MM1-1"
-
-    @classproperty
-    @override
-    def class_name(cls) -> str:
-        return "Min Mean Sojourn Time for MM1 Queue"
-
-    @classproperty
-    @override
-    def n_objectives(cls) -> int:
-        return 1
-
-    @classproperty
-    @override
-    def n_stochastic_constraints(cls) -> int:
-        return 0
-
-    @classproperty
-    @override
-    def minmax(cls) -> tuple[int]:
-        return (-1,)
-
-    @classproperty
-    @override
-    def constraint_type(cls) -> ConstraintType:
-        return ConstraintType.BOX
-
-    @classproperty
-    @override
-    def variable_type(cls) -> VariableType:
-        return VariableType.CONTINUOUS
-
-    @classproperty
-    @override
-    def gradient_available(cls) -> bool:
-        return True
-
-    @classproperty
-    @override
-    def optimal_value(cls) -> float | None:
-        return None
-
-    @classproperty
-    @override
-    def optimal_solution(cls) -> tuple | None:
-        return None
-
-    @classproperty
-    @override
-    def model_default_factors(cls) -> dict:
-        return {"warmup": 50, "people": 200}
-
-    @classproperty
-    @override
-    def model_decision_factors(cls) -> set[str]:
-        return {"mu"}
-
-    @classproperty
-    @override
-    def specifications(cls) -> dict[str, dict]:
-        return {
-            "initial_solution": {
-                "description": "initial solution from which solvers start",
-                "datatype": tuple,
-                "default": (5,),
-            },
-            "budget": {
-                "description": "max # of replications for a solver to take",
-                "datatype": int,
-                "default": 1000,
-                "isDatafarmable": False,
-            },
-            "cost": {
-                "description": "cost for increasing service rate",
-                "datatype": float,
-                "default": 0.1,
-            },
-        }
+    class_name_abbr: ClassVar[str] = "MM1-1"
+    class_name: ClassVar[str] = "Min Mean Sojourn Time for MM1 Queue"
+    config_class: ClassVar[type[BaseModel]] = MM1MinMeanSojournTimeConfig
+    model_class: ClassVar[type[Model]] = MM1Queue
+    n_objectives: ClassVar[int] = 1
+    n_stochastic_constraints: ClassVar[int] = 0
+    minmax: ClassVar[tuple[int, ...]] = (-1,)
+    constraint_type: ClassVar[ConstraintType] = ConstraintType.BOX
+    variable_type: ClassVar[VariableType] = VariableType.CONTINUOUS
+    gradient_available: ClassVar[bool] = True
+    optimal_value: ClassVar[float | None] = None
+    optimal_solution: tuple | None = None
+    model_default_factors: ClassVar[dict] = {"warmup": 50, "people": 200}
+    model_decision_factors: ClassVar[set[str]] = {"mu"}
 
     @property
-    @override
-    def check_factor_list(self) -> dict[str, Callable]:
-        return {
-            "cost": self._check_cost,
-            "initial_solution": self.check_initial_solution,
-            "budget": self.check_budget,
-        }
-
-    @classproperty
-    @override
-    def dim(cls) -> int:
+    def dim(self) -> int:  # noqa: D102
         return 1
 
-    @classproperty
-    @override
-    def lower_bounds(cls) -> tuple:
-        return (0,) * cls.dim
+    @property
+    def lower_bounds(self) -> tuple:  # noqa: D102
+        return (0,) * self.dim
 
-    @classproperty
-    @override
-    def upper_bounds(cls) -> tuple:
-        return (np.inf,) * cls.dim
+    @property
+    def upper_bounds(self) -> tuple:  # noqa: D102
+        return (np.inf,) * self.dim
 
-    def __init__(
-        self,
-        name: str = "MM1-1",
-        fixed_factors: dict | None = None,
-        model_fixed_factors: dict | None = None,
-    ) -> None:
-        """Initialize the MM1MinMeanSojournTime problem.
-
-        Args:
-            name (str, optional): user-specified name for problem. Defaults to "MM1-1".
-            fixed_factors (dict, optional): fixed factors of the simulation model.
-                Defaults to None.
-            model_fixed_factors (dict, optional): subset of user-specified
-                non-decision factors to pass through to the model. Defaults to None.
-        """
-        # Let the base class handle default arguments.
-        super().__init__(
-            name=name,
-            fixed_factors=fixed_factors,
-            model_fixed_factors=model_fixed_factors,
-            model=MM1Queue,
-        )
-
-    def _check_cost(self) -> None:
-        if self.factors["cost"] <= 0:
-            raise ValueError("cost must be greater than 0.")
-
-    @override
-    def vector_to_factor_dict(self, vector: tuple) -> dict:
+    def vector_to_factor_dict(self, vector: tuple) -> dict:  # noqa: D102
         return {"mu": vector[0]}
 
-    @override
-    def factor_dict_to_vector(self, factor_dict: dict) -> tuple:
+    def factor_dict_to_vector(self, factor_dict: dict) -> tuple:  # noqa: D102
         return (factor_dict["mu"],)
 
-    @override
-    def response_dict_to_objectives(self, response_dict: dict) -> tuple:
-        return (response_dict["avg_sojourn_time"],)
+    def replicate(self, x: tuple) -> RepResult:  # noqa: D102
+        responses, gradients = self.model.replicate()
+        objectives = [
+            Objective(
+                stochastic=responses["avg_sojourn_time"],
+                stochastic_gradients=gradients["avg_sojourn_time"]["mu"],
+                deterministic=self.factors["cost"] * (x[0] ** 2),
+                deterministic_gradients=2 * self.factors["cost"] * x[0],
+            )
+        ]
+        return RepResult(objectives=objectives)
 
-    @override
-    def deterministic_objectives_and_gradients(self, x: tuple) -> tuple[tuple, tuple]:
-        det_objectives = (self.factors["cost"] * (x[0] ** 2),)
-        det_objectives_gradients = ((2 * self.factors["cost"] * x[0],),)
-        return det_objectives, det_objectives_gradients
-
-    @override
-    def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:
+    def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:  # noqa: D102
         # Generate an Exponential(rate = 1/3) r.v.
         return (rand_sol_rng.expovariate(1 / 3),)

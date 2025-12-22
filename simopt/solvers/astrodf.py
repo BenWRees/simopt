@@ -20,149 +20,112 @@ removed from this version as well.
 - It seems for SAN we always use pattern search - why? because the problem is convex and model may be misleading at the beginning
 - Added sufficient reduction for the pattern search
 """  # noqa: E501
+
 # TODO: check if bullet points can be indented and ignore tag removed
 
 from __future__ import annotations
 
 import logging
 from math import ceil, log
-from typing import Callable
+from typing import Annotated, ClassVar, Self
 
 import numpy as np
 from numpy.linalg import LinAlgError, inv, norm, pinv
+from pydantic import Field, model_validator
 from scipy.optimize import NonlinearConstraint, OptimizeResult, minimize
 
 from simopt.base import (
-	ConstraintType,
-	ObjectiveType,
-	Problem,
-	Solution,
-	Solver,
-	VariableType,
+    ConstraintType,
+    ObjectiveType,
+    Problem,
+    Solution,
+    Solver,
+    SolverConfig,
+    VariableType,
 )
-from simopt.utils import classproperty, override
+
+
+class ASTRODFConfig(SolverConfig):
+    """Configuration for ASTRO-DF solver."""
+
+    eta_1: Annotated[
+        float,
+        Field(default=0.1, gt=0, description="threshold for a successful iteration"),
+    ]
+    eta_2: Annotated[
+        float,
+        Field(
+            default=0.8,
+            description="threshold for a very successful iteration",
+        ),
+    ]
+    gamma_1: Annotated[
+        float,
+        Field(
+            default=2.5,
+            gt=1,
+            description="trust-region radius increase rate after successful iteration",
+        ),
+    ]
+    gamma_2: Annotated[
+        float,
+        Field(
+            default=0.5,
+            gt=0,
+            lt=1,
+            description="trust-region radius decrease rate after failed iteration",
+        ),
+    ]
+    lambda_min: Annotated[
+        int, Field(default=5, gt=2, description="minimum sample size")
+    ]
+    easy_solve: Annotated[
+        bool,
+        Field(
+            default=True,
+            description="solve the subproblem approximately with Cauchy point",
+        ),
+    ]
+    reuse_points: Annotated[
+        bool, Field(default=True, description="reuse the previously visited points")
+    ]
+    ps_sufficient_reduction: Annotated[
+        float,
+        Field(
+            default=0.1,
+            ge=0,
+            description=(
+                "use pattern search if with sufficient reduction, "
+                "0 always allows it, large value never does"
+            ),
+        ),
+    ]
+    use_gradients: Annotated[
+        bool,
+        Field(
+            default=True,
+            description="if direct gradient observations are available, use them",
+        ),
+    ]
+
+    @model_validator(mode="after")
+    def _validate_eta_2_greater_than_eta_1(self) -> Self:
+        if self.eta_2 <= self.eta_1:
+            raise ValueError("Eta 2 must be greater than Eta 1.")
+        return self
 
 
 class ASTRODF(Solver):
-	"""The ASTRO-DF solver."""
+    """The ASTRO-DF solver."""
 
-	@classproperty
-	@override
-	def class_name(cls) -> str:
-		return "ASTRO-DF"
-
-	@classproperty
-	@override
-	def objective_type(cls) -> ObjectiveType:
-		return ObjectiveType.SINGLE
-
-	@classproperty
-	@override
-	def constraint_type(cls) -> ConstraintType:
-		return ConstraintType.BOX
-
-	@classproperty
-	@override
-	def variable_type(cls) -> VariableType:
-		return VariableType.CONTINUOUS
-
-	@classproperty
-	@override
-	def gradient_needed(cls) -> bool:
-		return False
-
-	@classproperty
-	@override
-	def specifications(cls) -> dict[str, dict]:
-		return {
-			"crn_across_solns": {
-				"description": "use CRN across solutions",
-				"datatype": bool,
-				"default": True,
-			},
-			"eta_1": {
-				"description": "threshhold for a successful iteration",
-				"datatype": float,
-				"default": 0.1,
-			},
-			"eta_2": {
-				"description": "threshhold for a very successful iteration",
-				"datatype": float,
-				"default": 0.8,
-			},
-			"gamma_1": {
-				"description": (
-					"trust-region radius increase rate after a very successful "
-					"iteration"
-				),
-				"datatype": float,
-				"default": 2.5,
-			},
-			"gamma_2": {
-				"description": (
-					"trust-region radius decrease rate after an unsuccessful iteration"
-				),
-				"datatype": float,
-				"default": 0.5,
-			},
-			"lambda_min": {
-				"description": "minimum sample size",
-				"datatype": int,
-				"default": 5,
-			},
-			"easy_solve": {
-				"description": "solve the subproblem approximately with Cauchy point",
-				"datatype": bool,
-				"default": True,
-			},
-			"reuse_points": {
-				"description": "reuse the previously visited points",
-				"datatype": bool,
-				"default": True,
-			},
-			"ps_sufficient_reduction": {
-				"description": (
-					"use pattern search if with sufficient reduction, "
-					"0 always allows it, large value never does"
-				),
-				"datatype": float,
-				"default": 0.1,
-			},
-			"use_gradients": {
-				"description": (
-					"if direct gradient observations are available, use them"
-				),
-				"datatype": bool,
-				"default": True,
-			},
-		}
-
-	@property
-	@override
-	def check_factor_list(self) -> dict[str, Callable]:
-		return {
-			"crn_across_solns": self.check_crn_across_solns,
-			"eta_1": self._check_eta_1,
-			"eta_2": self._check_eta_2,
-			"gamma_1": self._check_gamma_1,
-			"gamma_2": self._check_gamma_2,
-			"lambda_min": self._check_lambda_min,
-			"ps_sufficient_reduction": self._check_ps_sufficient_reduction,
-		}
-
-	def __init__(
-		self, name: str = "ASTRODF", fixed_factors: dict | None = None
-	) -> None:
-		"""Initialize the ASTRO-DF solver.
-
-		Args:
-			name (str, optional): User-specified name for the solver.
-				Defaults to "ASTRODF".
-			fixed_factors (dict, optional): Fixed factors of the solver.
-				Defaults to None.
-		"""
-		# Let the base class handle default arguments.
-		super().__init__(name, fixed_factors)
+    name: str = "ASTRODF"
+    config_class: ClassVar[type[SolverConfig]] = ASTRODFConfig
+    class_name_abbr: ClassVar[str] = "ASTRODF"
+    class_name: ClassVar[str] = "ASTRO-DF"
+    objective_type: ClassVar[ObjectiveType] = ObjectiveType.SINGLE
+    constraint_type: ClassVar[ConstraintType] = ConstraintType.BOX
+    variable_type: ClassVar[VariableType] = VariableType.CONTINUOUS
+    gradient_needed: ClassVar[bool] = False
 
 	@property
 	def iteration_count(self) -> int:
@@ -194,10 +157,10 @@ class ASTRODF(Solver):
 		"""Set the current delta_max value."""
 		self._delta_max = value
 
-	@property
-	def incumbent_x(self) -> tuple[float, ...]:
-		"""Get the incumbent solution."""
-		return self._incumbent_x
+    @property
+    def incumbent_x(self) -> tuple[float, ...]:
+        """Get the incumbent solution."""
+        return self._incumbent_x
 
 	@incumbent_x.setter
 	def incumbent_x(self, value: tuple[float, ...]) -> None:
@@ -224,37 +187,11 @@ class ASTRODF(Solver):
 		"""Set the Hessian approximation."""
 		self._h_k = value
 
-	def _check_eta_1(self) -> None:
-		if self.factors["eta_1"] <= 0:
-			raise ValueError("Eta 1 must be greater than 0.")
-
-	def _check_eta_2(self) -> None:
-		if self.factors["eta_2"] <= self.factors["eta_1"]:
-			raise ValueError("Eta 2 must be greater than Eta 1.")
-
-	def _check_gamma_1(self) -> None:
-		if self.factors["gamma_1"] <= 1:
-			raise ValueError("Gamma 1 must be greater than 1.")
-
-	def _check_gamma_2(self) -> None:
-		if self.factors["gamma_2"] >= 1 or self.factors["gamma_2"] <= 0:
-			raise ValueError("Gamma 2 must be between 0 and 1.")
-
-	def _check_lambda_min(self) -> None:
-		if self.factors["lambda_min"] <= 2:
-			raise ValueError("The minimum sample size must be greater than 2.")
-
-	def _check_ps_sufficient_reduction(self) -> None:
-		if self.factors["ps_sufficient_reduction"] < 0:
-			raise ValueError(
-				"ps_sufficient reduction must be greater than or equal to 0."
-			)
-
-	def get_coordinate_vector(self, size: int, v_no: int) -> np.ndarray:
-		"""Generate the coordinate vector corresponding to the variable number v_no."""
-		arr = np.zeros(size)
-		arr[v_no] = 1.0
-		return arr
+    def get_coordinate_vector(self, size: int, v_no: int) -> np.ndarray:
+        """Generate the coordinate vector corresponding to the variable number v_no."""
+        arr = np.zeros(size)
+        arr[v_no] = 1.0
+        return arr
 
 	def get_rotated_basis(
 		self, first_basis: np.ndarray, rotate_index: np.ndarray
@@ -318,20 +255,17 @@ class ASTRODF(Solver):
 			kappa (float): Constant in the stopping time denominator.
 				If 0, it defaults to 1.
 
-		Returns:
-			int: The computed sample size, rounded up to the nearest integer.
-		"""
-		if kappa == 0:
-			kappa = 1
-		# lambda_k = max(
-		#     self.factors["lambda_min"], 2 * log(dim + 0.5, 10)
-		# ) * max(log(k + 0.1, 10) ** (1.01), 1)
+        Returns:
+            int: The computed sample size, rounded up to the nearest integer.
+        """
+        if kappa == 0:
+            kappa = 1
 
-		# compute sample size
-		raw_sample_size = pilot_run * max(
-			1.0, sig2 / (kappa**2 * delta**self.delta_power)
-		)
-		return ceil(float(raw_sample_size))
+        # compute sample size
+        raw_sample_size = pilot_run * max(
+            1.0, sig2 / (kappa**2 * delta**self.delta_power)
+        )
+        return ceil(raw_sample_size)
 
 	def select_interpolation_points(
 		self, delta_k: float, f_index: int
@@ -392,21 +326,21 @@ class ASTRODF(Solver):
 						)
 					)
 
-			# construct the interpolation set
-			var_y = self.get_rotated_basis_interpolation_points(
-				np.array(self.incumbent_x),
-				delta_k,
-				self.problem,
-				np.array(rotate_matrix),
-				self.visited_pts_list[f_index].x,
-			)
-			var_z = self.get_rotated_basis_interpolation_points(
-				np.zeros(self.problem.dim),
-				delta_k,
-				self.problem,
-				np.array(rotate_matrix),
-				np.array(self.visited_pts_list[f_index].x) - np.array(self.incumbent_x),
-			)
+            # construct the interpolation set
+            var_y = self.get_rotated_basis_interpolation_points(
+                np.array(self.incumbent_x),
+                delta_k,
+                self.problem,
+                np.array(rotate_matrix),
+                self.visited_pts_list[f_index].x,
+            )
+            var_z = self.get_rotated_basis_interpolation_points(
+                np.zeros(self.problem.dim),
+                delta_k,
+                self.problem,
+                np.array(rotate_matrix),
+                np.array(self.visited_pts_list[f_index].x) - np.array(self.incumbent_x),
+            )
 
 		return var_y, var_z
 
@@ -419,21 +353,21 @@ class ASTRODF(Solver):
 	) -> None:
 		"""Perform adaptive sampling on a solution until the stopping condition is met.
 
-		Args:
-			solution (Solution): The solution object being sampled.
-			pilot_run (int): The number of initial pilot runs.
-			delta_k (float): The current trust-region radius.
-			compute_kappa (bool): Whether or not to compute kappa dynamically (needed in
-				the first iteration).
-		"""
-		sample_size = solution.n_reps if solution.n_reps > 0 else pilot_run
-		lambda_max = self.budget.remaining
+        Args:
+            solution (Solution): The solution object being sampled.
+            pilot_run (int): The number of initial pilot runs.
+            delta_k (float): The current trust-region radius.
+            compute_kappa (bool): Whether or not to compute kappa dynamically (needed in
+                the first iteration).
+        """
+        sample_size = solution.n_reps if solution.n_reps > 0 else pilot_run
+        lambda_max = self.budget.remaining
 
-		# Initial Simulation (only if needed)
-		if solution.n_reps == 0:
-			self.budget.request(pilot_run)
-			self.problem.simulate(solution, pilot_run)
-			sample_size = pilot_run
+        # Initial Simulation (only if needed)
+        if solution.n_reps == 0:
+            self.budget.request(pilot_run)
+            self.problem.simulate(solution, pilot_run)
+            sample_size = pilot_run
 
 		while True:
 			# Compute variance
@@ -441,18 +375,18 @@ class ASTRODF(Solver):
 			if self.delta_power == 0:
 				sig2 = max(sig2, np.trace(solution.objectives_gradients_var))
 
-			# Compute stopping condition
-			kappa = None
-			if compute_kappa:
-				if self.enable_gradient:
-					rhs_for_kappa = norm(solution.objectives_gradients_mean[0])
-				else:
-					rhs_for_kappa = solution.objectives_mean
-				kappa = (
-					rhs_for_kappa
-					* np.sqrt(pilot_run)
-					/ (delta_k ** (self.delta_power / 2))
-				)
+            # Compute stopping condition
+            kappa: float | None = None
+            if compute_kappa:
+                if self.enable_gradient:
+                    rhs_for_kappa = norm(solution.objectives_gradients_mean[0])
+                else:
+                    rhs_for_kappa = solution.objectives_mean
+                kappa = (
+                    rhs_for_kappa
+                    * np.sqrt(pilot_run)
+                    / (delta_k ** (self.delta_power / 2))
+                ).item()
 
 			# Set k to the right kappa
 			if kappa is not None:
@@ -466,16 +400,16 @@ class ASTRODF(Solver):
 			# Compute stopping time
 			stopping = self.get_stopping_time(pilot_run, sig2, delta_k, k)
 
-			# Stop if conditions are met
-			if sample_size >= min(stopping, lambda_max) or self.budget.remaining <= 0:
-				if compute_kappa:
-					self.kappa = kappa  # Update kappa only if needed
-				break
+            # Stop if conditions are met
+            if sample_size >= min(stopping, lambda_max) or self.budget.remaining <= 0:
+                if compute_kappa:
+                    self.kappa = kappa  # Update kappa only if needed
+                break
 
-			# Perform additional simulation
-			self.budget.request(1)
-			self.problem.simulate(solution, 1)
-			sample_size += 1
+            # Perform additional simulation
+            self.budget.request(1)
+            self.problem.simulate(solution, 1)
+            sample_size += 1
 
 	def construct_model(
 		self,
@@ -512,15 +446,15 @@ class ASTRODF(Solver):
 		# skip_criticality = True  # self.factors["skip_criticality"]
 		# Problem and solver factors
 
-		lambda_max = self.budget.remaining
-		# lambda_max = budget / (15 * sqrt(problem.dim))
-		pilot_run = ceil(
-			max(
-				self.lambda_min * log(10 + self.iteration_count, 10) ** 1.1,
-				min(0.5 * self.problem.dim, lambda_max),
-			)
-			- 1
-		)
+        lambda_max = self.budget.remaining
+        # lambda_max = budget / (15 * sqrt(problem.dim))
+        pilot_run = ceil(
+            max(
+                self.lambda_min * log(10 + self.iteration_count, 10) ** 1.1,
+                min(0.5 * self.problem.dim, lambda_max),
+            )
+            - 1
+        )
 
 		delta = self.delta_k
 		model_iterations: int = 0
@@ -528,15 +462,15 @@ class ASTRODF(Solver):
 			delta_k = delta * w**model_iterations
 			model_iterations += 1
 
-			# Calculate the distance between the center point and other design points
-			distance_array: list[float] = []
-			for point in self.visited_pts_list:
-				dist_diff = np.array(point.x) - np.array(self.incumbent_x)
-				distance = norm(dist_diff) - delta_k
-				# If the design point is outside the trust region, we will not reuse it
-				# (distance = -big M)
-				dist_to_append = -delta_k * 10000 if distance > 0 else distance
-				distance_array.append(float(dist_to_append))
+            # Calculate the distance between the center point and other design points
+            distance_array: list[float] = []
+            for point in self.visited_pts_list:
+                dist_diff = np.array(point.x) - np.array(self.incumbent_x)
+                distance = norm(dist_diff) - delta_k
+                # If the design point is outside the trust region, we will not reuse it
+                # (distance = -big M)
+                dist_to_append = -delta_k * 10000 if distance > 0 else distance
+                distance_array.append(float(dist_to_append))
 
 			# Find the index of visited design points list for reusing points
 			# The reused point will be the farthest point from the center point among
@@ -545,33 +479,33 @@ class ASTRODF(Solver):
 
 			var_y, var_z = self.select_interpolation_points(delta_k, f_index)
 
-			# Evaluate the function estimate for the interpolation points
-			fval = []
-			double_dim = 2 * self.problem.dim + 1
-			for i in range(double_dim):
-				# If first iteration, reuse the incumbent solution
-				if i == 0:
-					adapt_soln = self.incumbent_solution
-				# If the second iteration and we can reuse points, reuse the farthest
-				# point from the center point
-				elif (
-					i == 1
-					and self.reuse_points
-					and norm(
-						np.array(self.incumbent_x)
-						- np.array(self.visited_pts_list[f_index].x)
-					)
-					!= 0
-				):
-					adapt_soln = self.visited_pts_list[f_index]
-				# Otherwise, create/initialize a new solution and use that
-				else:
-					decision_vars = tuple(var_y[i][0])
-					new_solution = self.create_new_solution(decision_vars, self.problem)
-					self.visited_pts_list.append(new_solution)
-					self.budget.request(pilot_run)
-					self.problem.simulate(new_solution, pilot_run)
-					adapt_soln = new_solution
+            # Evaluate the function estimate for the interpolation points
+            fval = []
+            double_dim = 2 * self.problem.dim + 1
+            for i in range(double_dim):
+                # If first iteration, reuse the incumbent solution
+                if i == 0:
+                    adapt_soln = self.incumbent_solution
+                # If the second iteration and we can reuse points, reuse the farthest
+                # point from the center point
+                elif (
+                    i == 1
+                    and self.reuse_points
+                    and norm(
+                        np.array(self.incumbent_x)
+                        - np.array(self.visited_pts_list[f_index].x)
+                    )
+                    != 0
+                ):
+                    adapt_soln = self.visited_pts_list[f_index]
+                # Otherwise, create/initialize a new solution and use that
+                else:
+                    decision_vars = tuple(var_y[i][0])
+                    new_solution = self.create_new_solution(decision_vars, self.problem)
+                    self.visited_pts_list.append(new_solution)
+                    self.budget.request(pilot_run)
+                    self.problem.simulate(new_solution, pilot_run)
+                    adapt_soln = new_solution
 
 				# Don't perform adaptive sampling on x_0
 				if not (i == 0 and self.iteration_count == 0):
@@ -667,8 +601,8 @@ class ASTRODF(Solver):
 			coord_vector = self.get_coordinate_vector(num_decision_vars, var_idx)
 			coord_diff = delta * coord_vector
 
-			minus: list[float] = [x - d for x, d in zip(x_k, coord_diff)]
-			plus: list[float] = [x + d for x, d in zip(x_k, coord_diff)]
+            minus: list[float] = [x - d for x, d in zip(x_k, coord_diff, strict=False)]
+            plus: list[float] = [x + d for x, d in zip(x_k, coord_diff, strict=False)]
 
 			if is_block_constraint:
 				minus = [
@@ -790,24 +724,25 @@ class ASTRODF(Solver):
 	def iterate(self) -> None:
 		"""Run one iteration of the ASTRO-DF algorithm.
 
-		Build and solve a local model, update the current incumbent and trust-region
-		radius, and save the data
-		"""
-		self.iteration_count += 1
-		neg_minmax = -self.problem.minmax[0]
-		# determine power of delta in adaptive sampling rule
-		pilot_run = ceil(
-			max(
-				self.lambda_min * log(10 + self.iteration_count, 10) ** 1.1,
-				min(0.5 * self.problem.dim, self.budget.total),
-			)
-			- 1
-		)
-		if self.iteration_count == 1:
-			self.incumbent_solution = self.create_new_solution(
-				self.incumbent_x, self.problem
-			)
-			self.visited_pts_list.append(self.incumbent_solution)
+        Build and solve a local model, update the current incumbent and trust-region
+        radius, and save the data
+        """
+        self.iteration_count += 1
+        neg_minmax = -self.problem.minmax[0]
+
+        # determine power of delta in adaptive sampling rule
+        pilot_run = ceil(
+            max(
+                self.lambda_min * log(10 + self.iteration_count, 10) ** 1.1,
+                min(0.5 * self.problem.dim, self.budget.total),
+            )
+            - 1
+        )
+        if self.iteration_count == 1:
+            self.incumbent_solution = self.create_new_solution(
+                self.incumbent_x, self.problem
+            )
+            self.visited_pts_list.append(self.incumbent_solution)
 
 			self.perform_adaptive_sampling(
 				self.incumbent_solution,
@@ -873,18 +808,18 @@ class ASTRODF(Solver):
 				norm_ratio = norm(grad) ** 3 / (self.delta_k * check_positive_definite)
 				tau = min(1.0, float(norm_ratio))
 
-			grad: np.ndarray = np.reshape(grad, (1, self.problem.dim))[0]
-			grad_norm = norm(grad)
-			# Make sure we don't divide by 0
-			if grad_norm == 0:
-				candidate_x = self.incumbent_x
-			else:
-				product = tau * self.delta_k * grad
-				adjustment = product / float(grad_norm)
-				candidate_x = self.incumbent_x - adjustment
-			# if norm(incumbent_x - candidate_x) > 0:
-			#     logging.debug("incumbent_x " + str(incumbent_x))
-			#     logging.debug("candidate_x " + str(candidate_x))
+            grad: np.ndarray = np.reshape(grad, (1, self.problem.dim))[0]
+            grad_norm = norm(grad)
+            # Make sure we don't divide by 0
+            if grad_norm == 0:
+                candidate_x = self.incumbent_x
+            else:
+                product = tau * self.delta_k * grad
+                adjustment = product / float(grad_norm)
+                candidate_x = self.incumbent_x - adjustment
+            # if norm(incumbent_x - candidate_x) > 0:
+            #     logging.debug("incumbent_x " + str(incumbent_x))
+            #     logging.debug("candidate_x " + str(candidate_x))
 
 		else:
 			# Search engine - solve subproblem
@@ -897,14 +832,14 @@ class ASTRODF(Solver):
 			def con_f(s: np.ndarray) -> float:
 				return float(norm(s))
 
-			nlc = NonlinearConstraint(con_f, 0, self.delta_k)
-			solve_subproblem: OptimizeResult = minimize(  # pyrefly: ignore
-				subproblem,
-				np.zeros(self.problem.dim),
-				method="trust-constr",
-				constraints=nlc,
-			)
-			candidate_x = self.incumbent_x + solve_subproblem.x
+            nlc = NonlinearConstraint(con_f, 0, self.delta_k)
+            solve_subproblem: OptimizeResult = minimize(  # pyrefly: ignore
+                subproblem,
+                np.zeros(self.problem.dim),
+                method="trust-constr",
+                constraints=nlc,
+            )
+            candidate_x = self.incumbent_x + solve_subproblem.x
 
 		# logging.debug("problem.lower_bounds "+str(problem.lower_bounds))
 		# handle the box constraints
@@ -922,14 +857,14 @@ class ASTRODF(Solver):
 		candidate_solution = self.create_new_solution(candidate_x, self.problem)
 		self.visited_pts_list.append(candidate_solution)
 
-		# if we use crn, then the candidate solution has the same sample size as the
-		# incumbent solution
-		if self.factors["crn_across_solns"]:
-			num_sims = self.incumbent_solution.n_reps
-			self.budget.request(num_sims)
-			self.problem.simulate(candidate_solution, num_sims)
-		else:
-			self.perform_adaptive_sampling(candidate_solution, pilot_run, self.delta_k)
+        # if we use crn, then the candidate solution has the same sample size as the
+        # incumbent solution
+        if self.factors["crn_across_solns"]:
+            num_sims = self.incumbent_solution.n_reps
+            self.budget.request(num_sims)
+            self.problem.simulate(candidate_solution, num_sims)
+        else:
+            self.perform_adaptive_sampling(candidate_solution, pilot_run, self.delta_k)
 
 		# TODO: make sure the solution whose estimated objevtive is abrupted bc of
 		# budget is not added to the list of recommended solutions, unless the error
@@ -978,11 +913,11 @@ class ASTRODF(Solver):
 						)
 					) > 0.75
 
-			if condition_met or high_variance:
-				fval_tilde = min_fval
-				min_idx = fval.index(min_fval)
-				candidate_x = y_var[min_idx][0]
-				candidate_solution = interpolation_solns[min_idx]
+            if condition_met or high_variance:
+                fval_tilde = min_fval
+                min_idx = np.argmin(fval)
+                candidate_x = y_var[min_idx][0]
+                candidate_solution = interpolation_solns[min_idx]
 
 		# compute the success ratio rho
 		candidate_x_arr = np.array(candidate_x)
@@ -997,14 +932,14 @@ class ASTRODF(Solver):
 			) - self.evaluate_model(s, q)
 		rho = 0 if model_reduction <= 0 else (fval[0] - fval_tilde) / model_reduction
 
-		successful = rho >= self.eta_1
-		# successful: accept
-		if successful:
-			self.incumbent_x = candidate_x
-			self.incumbent_solution = candidate_solution
-			self.recommended_solns.append(candidate_solution)
-			self.intermediate_budgets.append(self.budget.used)
-			self.delta_k = min(self.delta_k, self.delta_max)
+        successful = rho >= self.eta_1
+        # successful: accept
+        if successful:
+            self.incumbent_x = candidate_x
+            self.incumbent_solution = candidate_solution
+            self.recommended_solns.append(candidate_solution)
+            self.intermediate_budgets.append(self.budget.used)
+            self.delta_k = min(self.delta_k, self.delta_max)
 
 			# very successful: expand
 			if rho >= self.eta_2:
@@ -1020,16 +955,16 @@ class ASTRODF(Solver):
 		# delta_k = min(kappa * norm(grad), self.delta_max)
 		# logging.debug("norm of grad "+str(norm(grad)))
 
-	def _initialize_solving(self) -> None:
-		"""Setup the solver for the first iteration."""
-		self.eta_1: float = self.factors["eta_1"]
-		self.eta_2: float = self.factors["eta_2"]
-		self.gamma_1: float = self.factors["gamma_1"]
-		self.gamma_2: float = self.factors["gamma_2"]
-		self.easy_solve: bool = self.factors["easy_solve"]
-		self.reuse_points: bool = self.factors["reuse_points"]
-		self.lambda_min: int = self.factors["lambda_min"]
-		# self.lambda_max = self.budget
+    def _initialize_solving(self) -> None:
+        """Setup the solver for the first iteration."""
+        self.eta_1: float = self.factors["eta_1"]
+        self.eta_2: float = self.factors["eta_2"]
+        self.gamma_1: float = self.factors["gamma_1"]
+        self.gamma_2: float = self.factors["gamma_2"]
+        self.easy_solve: bool = self.factors["easy_solve"]
+        self.reuse_points: bool = self.factors["reuse_points"]
+        self.lambda_min: int = self.factors["lambda_min"]
+        # self.lambda_max = self.budget
 
 		# Designate random number generator for random sampling
 		rng = self.rng_list[1]
@@ -1077,11 +1012,11 @@ class ASTRODF(Solver):
 			self.problem.gradient_available and self.factors["use_gradients"]
 		)
 
-		if self.factors["crn_across_solns"]:
-			self.delta_power = 0 if self.enable_gradient else 2
-		else:
-			# FIXME: fix type check error
-			self.delta_power = 4  # pyrefly: ignore
+        if self.factors["crn_across_solns"]:
+            self.delta_power = 0 if self.enable_gradient else 2
+        else:
+            # FIXME: fix type check error
+            self.delta_power = 4  # pyrefly: ignore
 
 		# Reset iteration count and data storage
 		self.iteration_count = 0
@@ -1093,10 +1028,9 @@ class ASTRODF(Solver):
 		self.budget_history = []
 		self.kappa = None
 
-	@override
-	def solve(self, problem: Problem) -> None:
-		self.problem = problem
-		self._initialize_solving()
+    def solve(self, problem: Problem) -> None:  # noqa: D102
+        self.problem = problem
+        self._initialize_solving()
 
 		try :
 			while self.budget.remaining > 0:
