@@ -5,12 +5,15 @@ import sys
 from pathlib import Path
 
 import zstandard as zstd
+from colorama import Fore, init
 
 # Append the parent directory (simopt package) to the system path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import simopt.directory as directory
 from simopt.experiment_base import ProblemSolver, post_normalize
+
+init(autoreset=True)
 
 # Workaround for AutoAPI
 problem_directory = directory.problem_directory
@@ -22,6 +25,10 @@ NUM_POSTREPS = 100
 # Setup the SimOpt directory structure
 HOME_DIR = Path(__file__).resolve().parent.parent
 EXPECTED_RESULTS_DIR = HOME_DIR / "test" / "expected_results"
+
+
+def _color_text(text: str, color: str | int) -> str:
+    return color + text  # type: ignore
 
 
 # Based off the similar function in simopt/experiment_base.py
@@ -123,7 +130,7 @@ def main() -> None:
         results_filename = f"{file_problem_name}_{file_solver_name}.pickle.zst"
         # If file exists, skip it
         if results_filename in existing_results:
-            print(f"Test for {pair} already exists")
+            print(_color_text(f"Test for {pair} already exists", Fore.GREEN))
             continue
         # If file doesn't exist, create it
         print(f"Creating test for {pair}")
