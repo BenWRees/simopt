@@ -1,0 +1,108 @@
+{
+  "experiments": [
+    {
+      "name": "subspace_dimensions_san",
+      "factor_type": "subspace",
+      "problem_name": "SAN-1",
+      "problem_dim": 100,
+      "budget": 50000,
+      "n_macroreps": 20,
+      "n_postreps": 100,
+      "subspace_dims": [1,2,3,4,5,6,7,8,9,10,20,30,40,50,60,70,80,90,100],
+      "polynomial_degree": 2,
+      "fixed_basis": "monomial"
+    },
+    {
+      "name": "subspace_dimensions_dynamnews",
+      "factor_type": "subspace",
+      "problem_name": "DYNAMNEWS-1",
+      "problem_dim": 100,
+      "budget": 50000,
+      "n_macroreps": 20,
+      "n_postreps": 100,
+      "subspace_dims": [1,2,3,4,5,6,7,8,9,10,20,30,40,50,60,70,80,90,100],
+      "polynomial_degree": 2,
+      "fixed_basis": "monomial"
+    },
+    {
+      "name": "subspace_dimensions_network",
+      "factor_type": "subspace",
+      "problem_name": "NETWORK-1",
+      "problem_dim": 100,
+      "budget": 50000,
+      "n_macroreps": 20,
+      "n_postreps": 100,
+      "subspace_dims": [1,2,3,4,5,6,7,8,9,10,20,30,40,50,60,70,80,90,100],
+      "polynomial_degree": 2,
+      "fixed_basis": "monomial"
+    },
+    {
+      "name": "subspace_dimensions_rosenbrock",
+      "factor_type": "subspace",
+      "problem_name": "ROSENBROCK-1",
+      "problem_dim": 100,
+      "budget": 50000,
+      "n_macroreps": 20,
+      "n_postreps": 100,
+      "subspace_dims": [1,2,3,4,5,6,7,8,9,10,20,30,40,50,60,70,80,90,100],
+      "polynomial_degree": 2,
+      "fixed_basis": "monomial"
+    },
+    {
+      "name": "poly_basis_san",
+      "factor_type": "basis",
+      "problem_name": "SAN-1",
+      "problem_dim": 100,
+      "budget": 50000,
+      "n_macroreps": 20,
+      "n_postreps": 100,
+      "fixed_subspace_dim": 40,
+      "polynomial_degree": 2,
+      "basis_types": ["hermite", "legendre", "chebyshev", "monomial", "natural", "laguerre", "nfp", "lagrange", "monomial_polynomial"]
+    },
+    {
+      "name": "poly_basis_dynamnews",
+      "factor_type": "basis",
+      "problem_name": "DYNAMNEWS-1",
+      "problem_dim": 100,
+      "budget": 50000,
+      "n_macroreps": 20,
+      "n_postreps": 100,
+      "fixed_subspace_dim": 40,
+      "polynomial_degree": 2,
+      "basis_types": ["hermite", "legendre", "chebyshev", "monomial", "natural", "laguerre", "nfp", "lagrange", "monomial_polynomial"]
+    },
+    {
+      "name": "poly_basis_network",
+      "factor_type": "basis",
+      "problem_name": "NETWORK-1",
+      "problem_dim": 100,
+      "budget": 50000,
+      "n_macroreps": 20,
+      "n_postreps": 100,
+      "fixed_subspace_dim": 40,
+      "polynomial_degree": 2,
+      "basis_types": ["hermite", "legendre", "chebyshev", "monomial", "natural", "laguerre", "nfp", "lagrange", "monomial_polynomial"]
+    },
+    {
+      "name": "poly_basis_rosenbrock",
+      "factor_type": "basis",
+      "problem_name": "ROSENBROCK-1",
+      "problem_dim": 100,
+      "budget": 50000,
+      "n_macroreps": 20,
+      "n_postreps": 100,
+      "fixed_subspace_dim": 40,
+      "polynomial_degree": 2,
+      "basis_types": ["hermite", "legendre", "chebyshev", "monomial", "natural", "laguerre", "nfp", "lagrange", "monomial_polynomial"]
+    }
+    
+  ],
+  "slurm_settings": {
+    "partition": "batch",
+    "time_limit": "60:00:00",
+    "cpus_per_task": 20,
+    "mem_per_cpu": "8G",
+    "mail_user": "B.Rees@soton.ac.uk"
+  }
+}
