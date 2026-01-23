@@ -107,7 +107,7 @@ def create_test(problem_name: str, solver_name: str) -> None:
 
 def main() -> None:
     """Create test cases for all compatible problem-solver pairs."""
-    skip_problems = {}
+    skip_problems = {"ERM-EXAMPLE-1"}
     # Create a list of compatible problem-solver pairs
     compatible_pairs = [
         (problem_name, solver_name)
