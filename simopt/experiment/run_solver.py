@@ -2,6 +2,7 @@
 
 import logging
 import time
+from copy import deepcopy
 
 import pandas as pd
 from joblib import Parallel, delayed
@@ -111,13 +112,17 @@ def run_solver(
     logging.info(f"Running solver {solver.name} on problem {problem.name}.")
     logging.debug("Starting macroreplications")
 
+    # TODO: Long-term fix is to make Solver/Problem immutable (stateless)
+    # so macroreps can share instances safely without deepcopy.
     if n_jobs == 1:
         results: list[tuple] = [
-            _run_mrep(solver, problem, i) for i in range(n_macroreps)
+            _run_mrep(deepcopy(solver), deepcopy(problem), i)
+            for i in range(n_macroreps)
         ]
     else:
         results: list[tuple] = Parallel(n_jobs=n_jobs)(
-            delayed(_run_mrep)(solver, problem, i) for i in range(n_macroreps)
+            delayed(_run_mrep)(deepcopy(solver), deepcopy(problem), i)
+            for i in range(n_macroreps)
         )
 
     dfs = []
