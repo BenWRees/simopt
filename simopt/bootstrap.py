@@ -321,41 +321,45 @@ def functional_of_curves(
                 for curves in solver_1_curves
             ]
         ),
-        PlotType.DIFFERENCE_OF_CDF_SOLVABILITY: lambda: curve_utils.difference_of_curves(  # noqa: E501
-            curve_utils.mean_of_curves(
-                [
-                    curve_utils.cdf_of_curves_crossing_times(
-                        curves, threshold=solve_tol
-                    )
-                    for curves in solver_1_curves
-                ]
-            ),
-            curve_utils.mean_of_curves(
-                [
-                    curve_utils.cdf_of_curves_crossing_times(
-                        curves, threshold=solve_tol
-                    )
-                    for curves in solver_2_curves  # type: ignore
-                ]
-            ),
+        PlotType.DIFFERENCE_OF_CDF_SOLVABILITY: lambda: (
+            curve_utils.difference_of_curves(
+                curve_utils.mean_of_curves(
+                    [
+                        curve_utils.cdf_of_curves_crossing_times(
+                            curves, threshold=solve_tol
+                        )
+                        for curves in solver_1_curves
+                    ]
+                ),
+                curve_utils.mean_of_curves(
+                    [
+                        curve_utils.cdf_of_curves_crossing_times(
+                            curves, threshold=solve_tol
+                        )
+                        for curves in solver_2_curves  # type: ignore
+                    ]
+                ),
+            )
         ),
-        PlotType.DIFFERENCE_OF_QUANTILE_SOLVABILITY: lambda: curve_utils.difference_of_curves(  # noqa: E501
-            curve_utils.mean_of_curves(
-                [
-                    curve_utils.quantile_cross_jump(
-                        curves, threshold=solve_tol, beta=beta
-                    )
-                    for curves in solver_1_curves
-                ]
-            ),
-            curve_utils.mean_of_curves(
-                [
-                    curve_utils.quantile_cross_jump(
-                        curves, threshold=solve_tol, beta=beta
-                    )
-                    for curves in solver_2_curves  # type: ignore
-                ]
-            ),
+        PlotType.DIFFERENCE_OF_QUANTILE_SOLVABILITY: lambda: (
+            curve_utils.difference_of_curves(
+                curve_utils.mean_of_curves(
+                    [
+                        curve_utils.quantile_cross_jump(
+                            curves, threshold=solve_tol, beta=beta
+                        )
+                        for curves in solver_1_curves
+                    ]
+                ),
+                curve_utils.mean_of_curves(
+                    [
+                        curve_utils.quantile_cross_jump(
+                            curves, threshold=solve_tol, beta=beta
+                        )
+                        for curves in solver_2_curves  # type: ignore
+                    ]
+                ),
+            )
         ),
         PlotType.MEAN_FEASIBILITY_PROGRESS: lambda: curve_utils.mean_of_curves(
             single_curves
