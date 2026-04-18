@@ -245,8 +245,9 @@ class AmusementParkMinDepartConfig(BaseModel):
     initial_solution: Annotated[
         tuple[int, ...],
         Field(
-            default_factory=lambda: (PARK_CAPACITY - NUM_ATTRACTIONS + 1,)
-            + (1,) * (NUM_ATTRACTIONS - 1),
+            default_factory=lambda: (
+                (PARK_CAPACITY - NUM_ATTRACTIONS + 1,) + (1,) * (NUM_ATTRACTIONS - 1)
+            ),
             description="Initial solution from which solvers start.",
         ),
     ]
