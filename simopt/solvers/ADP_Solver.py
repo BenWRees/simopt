@@ -58,7 +58,6 @@ from simopt.base import (  # noqa: E402
 )
 
 # from simopt.models.vanryzin_airline_revenue import VanRyzinState
-from simopt.multistage_model import MultistageModel  # noqa: E402
 from simopt.problem import Objective, Problem  # noqa: E402
 from simopt.solver import Budget, BudgetExhaustedError  # noqa: E402
 
@@ -534,7 +533,7 @@ class ADPSolver(Solver):
         # s_2, which we add to the immediate reward r_1 to
         # get our estimate of total revenue.
 
-        model = cast(MultistageModel, problem.model)
+        model = problem.model
         for _ in range(n_reps):
             if hasattr(model, "before_replication"):
                 model.before_replication(solution.rng_list)  # type: ignore[attr-defined]
@@ -1123,7 +1122,7 @@ class ADPSolver(Solver):
             for k in range(n_mc)
         ]
 
-        sim_model = cast(MultistageModel, sim_problem.model)
+        sim_model = sim_problem.model
         scores = np.empty(len(actions))
         for a_idx, action in enumerate(actions):
             is_flat_multistage = (
@@ -1245,7 +1244,7 @@ class ADPSolver(Solver):
                 sim_problem.current_stage = stage
 
                 sim_sol = Solution(tuple(action.tolist()), sim_problem)
-                rollout_model = cast(MultistageModel, sim_problem.model)
+                rollout_model = sim_problem.model
                 sim_rngs = [
                     MRG32k3a(s_ss_sss_index=[0, rep, stage])
                     for _ in range(rollout_model.n_rngs)
@@ -1528,7 +1527,7 @@ class ADPSolver(Solver):
         ]
         eval_sol.attach_rngs(eval_rngs, copy=False)
 
-        model = cast(MultistageModel, problem.model)
+        model = problem.model
         next_caps: list[list[float]] = []
         for _ in range(n_reps):
             if hasattr(model, "before_replication"):
@@ -1577,7 +1576,7 @@ class ADPSolver(Solver):
         ]
         eval_sol.attach_rngs(eval_rngs, copy=False)
 
-        model = cast(MultistageModel, problem.model)
+        model = problem.model
         rewards: list[float] = []
         for _ in range(n_reps):
             if hasattr(model, "before_replication"):
@@ -2123,7 +2122,7 @@ class ADPSolver(Solver):
         # self.budget.request(K)
 
         sim_problem = problem._clone_problem()
-        q_model = cast(MultistageModel, sim_problem.model)
+        q_model = sim_problem.model
         for k in range(K):
             sim_problem.factors["budget"] = 1
             sim_problem._solver_lookahead_enabled = False
