@@ -1,5 +1,6 @@
 """Experiment classes."""
 
+from .dimension_scaling import scale_dimension
 from .multiple import ProblemsSolvers
 from .post_normalize import post_normalize, post_normalize_policy
 from .single import EXPERIMENT_DIR, ProblemSolver
@@ -10,4 +11,5 @@ __all__ = [
     "ProblemsSolvers",
     "post_normalize",
     "post_normalize_policy",
+    "scale_dimension",
 ]
