@@ -77,6 +77,27 @@ def _fn_estimates_to_curves(
     return curves
 
 
+def _get_postrep_fn_estimates(experiment: ProblemSolver) -> list[list[float]]:
+    """Get post-replicated objective estimates by macrorep and iteration.
+
+    Args:
+        experiment: Problem-solver experiment.
+
+    Returns:
+        Post-replicated objective estimates, one sequence per macroreplication.
+
+    Raises:
+        ValueError: If post-replication estimates are unavailable.
+    """
+    all_est_objectives = getattr(experiment, "all_est_objectives", None)
+    if not all_est_objectives:
+        raise ValueError(
+            "plot_fn_estimates requires post-replication data. "
+            "Run post_replicate(...) before plotting function estimates."
+        )
+    return [list(np.asarray(seq, dtype=float)) for seq in all_est_objectives]
+
+
 def _bootstrap_curves_conf_int(
     curves: list[Curve],
     n_bootstraps: int,
@@ -168,7 +189,7 @@ def plot_fn_estimates(
     save_as_pickle: bool = False,
     solver_set_name: str = "SOLVER_SET",
 ) -> list[Path]:
-    """Plots function estimates against iteration number.
+    """Plots post-replicated function estimates against iteration number.
 
     Args:
         experiments (list[ProblemSolver]): Problem-solver pairs for different solvers
@@ -249,9 +270,9 @@ def plot_fn_estimates(
         for exp_idx in range(n_experiments):
             experiment = experiments[exp_idx]
             color_str = "C" + str(exp_idx)
-            # Convert fn_estimates to Curve objects
+            # Convert post-replication estimates to Curve objects
             fn_curves = _fn_estimates_to_curves(
-                experiment.all_fn_estimates, normalize=normalize
+                _get_postrep_fn_estimates(experiment), normalize=normalize
             )
 
             # Optionally normalize y-values to fraction of initial optimality gap
@@ -374,9 +395,9 @@ def plot_fn_estimates(
                 problem_name=experiment.problem.name,
                 budget=experiment.problem.factors["budget"],
             )
-            # Convert fn_estimates to Curve objects
+            # Convert post-replication estimates to Curve objects
             fn_curves = _fn_estimates_to_curves(
-                experiment.all_fn_estimates, normalize=normalize
+                _get_postrep_fn_estimates(experiment), normalize=normalize
             )
 
             if plot_type == PlotType.FN_ESTIMATES_ALL:
