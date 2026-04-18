@@ -6,6 +6,7 @@ import time
 
 import pandas as pd
 from joblib import Parallel, delayed
+from copy import deepcopy
 
 from mrg32k3a.mrg32k3a import MRG32k3a
 from simopt.problem import Problem
@@ -131,11 +132,13 @@ def run_solver(
 
     if n_jobs == 1:
         results: list[tuple] = [
-            _run_mrep(solver, problem, i) for i in range(n_macroreps)
+            _run_mrep(deepcopy(solver), deepcopy(problem), i)
+            for i in range(n_macroreps)
         ]
     else:
         results: list[tuple] = Parallel(n_jobs=n_jobs)(
-            delayed(_run_mrep)(solver, problem, i) for i in range(n_macroreps)
+            delayed(_run_mrep)(deepcopy(solver), deepcopy(problem), i)
+            for i in range(n_macroreps)
         )
 
     solution_dfs = []
