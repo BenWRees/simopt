@@ -1,4 +1,4 @@
-# ---
+# ---  # noqa: D100
 # jupyter:
 #   jupytext:
 #     formats: ipynb,py:percent

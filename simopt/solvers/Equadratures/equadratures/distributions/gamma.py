@@ -17,7 +17,7 @@ class Gamma(Distribution):
     Scale parameter of the gamma distribution.
     """
 
-    def __init__(self, shape=None, scale=None):
+    def __init__(self, shape=None, scale=None) -> None:  # noqa: ANN001, D107
         if shape is None:
             self.shape = 1.0
         else:
@@ -38,7 +38,7 @@ class Gamma(Distribution):
         )
         self.x_range_for_pdf = np.linspace(0, self.scale * 10, RECURRENCE_PDF_SAMPLES)
 
-    def get_description(self):
+    def get_description(self):  # noqa: ANN201
         """A description of the gamma distribution.
 
         :param Gamma self:
@@ -46,16 +46,15 @@ class Gamma(Distribution):
         :return:
             A string describing the gamma distribution.
         """
-        text = (
+        return (
             "is a gamma distribution with a shape parameter of "
             + str(self.shape)
             + ", and a scale parameter of "
             + str(self.scale)
             + "."
         )
-        return text
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """A gamma probability density function.
 
         :param Gamma self:
@@ -71,7 +70,7 @@ class Gamma(Distribution):
             return self.parent.pdf(points)
         raise ValueError("Please digit an input for getPDF method")
 
-    def get_cdf(self, points=None):
+    def get_cdf(self, points=None):  # noqa: ANN001, ANN201
         """A gamma cumulative density function.
 
         :param Gamma self:
@@ -87,30 +86,29 @@ class Gamma(Distribution):
             return self.parent.cdf(points)
         raise ValueError("Please digit an input for getCDF method")
 
-    def get_icdf(self, xx):
+    def get_icdf(self, xx):  # noqa: ANN001, ANN201
         """A gamma inverse cumulative density function.
 
         :param gamma self:
             An instance of Gamma class.
         :param xx:
-            An array of points at which the inverse of cumulative density function needs to be evaluated.
+            An array of points at which the inverse of cumulative density function needs
+            to be evaluated.
         :return:
             Inverse cumulative density function values of the Gamma distribution.
         """
         return self.parent.ppf(xx)
 
-    def get_samples(self, m=None):
+    def get_samples(self, m=None):  # noqa: ANN001, ANN201
         """Generates samples from the Gamma distribution.
 
         :param Gamma self:
             An instance of the Gamma class.
         :param integer m:
-            Number of random samples. If no value is provided, a default of     5e5 is assumed.
+            Number of random samples. If no value is provided, a default of     5e5 is
+            assumed.
         :return:
             A N-by-1 vector that contains the samples.
         """
-        if m is not None:
-            number = m
-        else:
-            number = 500000
+        number = m if m is not None else 500000
         return self.parent.rvs(size=number)

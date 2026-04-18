@@ -1,4 +1,4 @@
-# ---
+# ---  # noqa: D100
 # jupyter:
 #   jupytext:
 #     formats: ipynb,py:percent
@@ -18,14 +18,14 @@
 #
 # This script is intended to help with running a data-farming experiment on a problem.
 #
-# It creates a design of problem factors and runs multiple macroreplications at each version of the problem.
+# It creates a design of problem factors and runs multiple macroreplications at each version of the problem.  # noqa: E501
 #
 # Outputs are printed to a file.
 
 # %% [markdown]
 # ## Append SimOpt Path
 #
-# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.
+# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.  # noqa: E501
 
 # %%
 import sys
@@ -64,7 +64,7 @@ model_cross_design_factors = {}
 # ## Create Problem/Model Design
 
 # %%
-from simopt.experiment_base import create_design
+from simopt.experiment_base import create_design  # noqa: E402
 
 # Create DataFarmingExperiment object for model design
 model_design_list = create_design(
@@ -103,7 +103,7 @@ crn_across_init_opt = True  # Default
 # ## Create Experiment using Specified Configuration
 
 # %%
-from simopt.experiment_base import ProblemsSolvers
+from simopt.experiment_base import ProblemsSolvers  # noqa: E402
 
 # create problem name list
 problem_names = [problem_abbr_name] * len(model_design_list)

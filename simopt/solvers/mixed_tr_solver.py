@@ -139,7 +139,7 @@ class MixedIntTRConfig(SolverConfig):
         Field(
             default=5,
             ge=0,
-            description="perform MADS-like integer poll every N iterations (0 disables)",
+            description="perform MADS-like integer poll every N iterations (0 disables)",  # noqa: E501
         ),
     ]
     max_int_stall: Annotated[
@@ -147,7 +147,7 @@ class MixedIntTRConfig(SolverConfig):
         Field(
             default=4,
             ge=0,
-            description="max consecutive iterations without integer change before forcing shake",
+            description="max consecutive iterations without integer change before forcing shake",  # noqa: E501
         ),
     ]
 
@@ -309,7 +309,7 @@ class MixedIntTRSolver(Solver):
             lb = int(self.problem.lower_bounds[i])
             ub = int(self.problem.upper_bounds[i])
             step = int(rng.choice([-1, 1]))
-            cand = int(round(new[i])) + step
+            cand = round(new[i]) + step
             cand = max(lb, min(ub, cand))
             new[i] = cand
         new = tuple(new)
@@ -353,10 +353,10 @@ class MixedIntTRSolver(Solver):
 
         # Enforce box bounds strictly (but keep integer types as ints)
         for i, (v, lb, ub) in enumerate(
-            zip(vals, problem.lower_bounds, problem.upper_bounds)
+            zip(vals, problem.lower_bounds, problem.upper_bounds, strict=False)
         ):
             if isinstance(lb, int) or isinstance(ub, int):
-                v_i = int(round(float(v)))
+                v_i = round(float(v))
                 if v_i < lb:
                     v_i = lb
                 elif v_i > ub:
@@ -375,14 +375,16 @@ class MixedIntTRSolver(Solver):
         if hasattr(problem, "satisfies_constraints") and callable(
             problem.satisfies_constraints
         ):
-            satisfied = problem.satisfies_constraints(tuple(vals))
+            satisfied = problem.satisfies_constraints(tuple(vals))  # ty: ignore[call-top-callable]
         elif hasattr(problem, "evaluate_constraints") and callable(
             problem.evaluate_constraints
         ):
             try:
-                cons = problem.evaluate_constraints(tuple(vals))
+                cons = problem.evaluate_constraints(tuple(vals))  # ty: ignore[call-top-callable]
                 satisfied = (
-                    True if cons is None else all(c <= 0 for c in np.atleast_1d(cons))
+                    True
+                    if cons is None
+                    else all(c <= 0 for c in np.atleast_1d(np.asarray(cons)))
                 )
             except Exception:
                 satisfied = True
@@ -393,15 +395,19 @@ class MixedIntTRSolver(Solver):
                 5 * problem.dim if getattr(problem, "dim", None) is not None else 50
             )
             attempt = 0
+            changed = False
             rng = np.random.default_rng()
             current = vals.copy()
             while attempt < max_attempts:
                 if hasattr(problem, "satisfies_constraints") and callable(
                     problem.satisfies_constraints
                 ):
-                    if problem.satisfies_constraints(tuple(current)):
+                    if problem.satisfies_constraints(tuple(current)):  # ty: ignore[call-top-callable]
                         break
                     changed = False
+                    i = 0
+                    lb = problem.lower_bounds[0]
+                    ub = problem.upper_bounds[0]
                     for i in range(len(current)):
                         lb = problem.lower_bounds[i]
                         ub = problem.upper_bounds[i]
@@ -412,7 +418,7 @@ class MixedIntTRSolver(Solver):
                             if not (isinstance(lb, float) and np.isinf(lb))
                             else current[i]
                         )
-                        if problem.satisfies_constraints(tuple(trial)):
+                        if problem.satisfies_constraints(tuple(trial)):  # ty: ignore[call-top-callable]
                             current = trial
                             changed = True
                             break
@@ -423,19 +429,19 @@ class MixedIntTRSolver(Solver):
                             if not (isinstance(ub, float) and np.isinf(ub))
                             else current[i]
                         )
-                        if problem.satisfies_constraints(tuple(trial)):
+                        if problem.satisfies_constraints(tuple(trial)):  # ty: ignore[call-top-callable]
                             current = trial
                             changed = True
                             break
                     # try small random perturbation
                     trial = current.copy()
                     if isinstance(lb, int) or isinstance(ub, int):
-                        trial[i] = int(
-                            round(rng.integers(max(lb, int(lb)), min(ub, int(ub)) + 1))
-                        )
+                        int_lb = int(max(lb, int(lb)))
+                        int_ub = int(min(ub, int(ub))) + 1
+                        trial[i] = round(int(rng.integers(int_lb, int_ub)))
                     else:
                         trial[i] = float(rng.uniform(lb, ub))
-                    if problem.satisfies_constraints(tuple(trial)):
+                    if problem.satisfies_constraints(tuple(trial)):  # ty: ignore[call-top-callable]
                         current = trial
                         changed = True
                         break
@@ -446,38 +452,35 @@ class MixedIntTRSolver(Solver):
                             lb = problem.lower_bounds[i]
                             ub = problem.upper_bounds[i]
                             if isinstance(lb, int) or isinstance(ub, int):
-                                trial.append(
-                                    int(
-                                        round(
-                                            rng.integers(
-                                                max(lb, int(lb)), min(ub, int(ub)) + 1
-                                            )
-                                        )
-                                    )
-                                )
+                                int_lb = int(max(lb, int(lb)))
+                                int_ub = int(min(ub, int(ub))) + 1
+                                trial.append(round(int(rng.integers(int_lb, int_ub))))
                             else:
                                 trial.append(float(rng.uniform(lb, ub)))
-                        if problem.satisfies_constraints(tuple(trial)):
+                        if problem.satisfies_constraints(tuple(trial)):  # ty: ignore[call-top-callable]
                             current = trial
                             changed = True
                 attempt += 1
-                if changed:
-                    if hasattr(problem, "satisfies_constraints") and callable(
+                if changed:  # noqa: SIM102
+                    if hasattr(problem, "satisfies_constraints") and callable(  # noqa: SIM102
                         problem.satisfies_constraints
                     ):
-                        if problem.satisfies_constraints(tuple(current)):
+                        if problem.satisfies_constraints(tuple(current)):  # ty: ignore[call-top-callable]
                             break
 
-            if hasattr(problem, "satisfies_constraints") and callable(
-                problem.satisfies_constraints
+            if (
+                hasattr(problem, "satisfies_constraints")
+                and callable(problem.satisfies_constraints)
+                and problem.satisfies_constraints(tuple(current))  # ty: ignore[call-top-callable]
             ):
-                if problem.satisfies_constraints(tuple(current)):
-                    vals = current
+                vals = current
 
         # Final type normalization
-        for i, (lb, ub) in enumerate(zip(problem.lower_bounds, problem.upper_bounds)):
+        for i, (lb, ub) in enumerate(
+            zip(problem.lower_bounds, problem.upper_bounds, strict=False)
+        ):
             if isinstance(lb, int) or isinstance(ub, int):
-                vals[i] = int(round(float(vals[i])))
+                vals[i] = round(float(vals[i]))
             else:
                 vals[i] = float(vals[i])
 
@@ -496,7 +499,7 @@ class MixedIntTRSolver(Solver):
         for i in self.int_indices:
             for step in (-1, 1):
                 cand = list(self.incumbent_x)
-                cand[i] = int(round(cand[i])) + step
+                cand[i] = round(cand[i]) + step
                 lb = int(self.problem.lower_bounds[i])
                 ub = int(self.problem.upper_bounds[i])
                 cand[i] = max(lb, min(ub, cand[i]))
@@ -521,7 +524,7 @@ class MixedIntTRSolver(Solver):
                 self.delta_max,
             )
 
-    # ---------------------- interpolation construction (integer-aware) ----------------------
+    # ---------------------- interpolation construction (integer-aware) ----------------------  # noqa: E501
     def select_interpolation_points(
         self, delta_k: float, f_index: int
     ) -> tuple[list, list]:
@@ -567,7 +570,7 @@ class MixedIntTRSolver(Solver):
                 delta_k,
                 self.problem,
                 rotate_matrix,
-                self.visited_pts_list[f_index].x,
+                np.array(self.visited_pts_list[f_index].x),
             )
             var_z = self.get_rotated_basis_interpolation_points(
                 np.zeros(self.problem.dim),
@@ -596,21 +599,27 @@ class MixedIntTRSolver(Solver):
                 plus = c.copy()
                 minus = c.copy()
                 if i in self.int_indices:
-                    plus[i] = int(round(plus[i])) + 1
-                    minus[i] = int(round(minus[i])) - 1
+                    plus[i] = round(plus[i]) + 1
+                    minus[i] = round(minus[i]) - 1
                 else:
                     plus[i] = plus[i] + delta_k
                     minus[i] = minus[i] - delta_k
                 plus = [
                     max(lb, min(ub, v))
                     for v, lb, ub in zip(
-                        plus, self.problem.lower_bounds, self.problem.upper_bounds
+                        plus,
+                        self.problem.lower_bounds,
+                        self.problem.upper_bounds,
+                        strict=False,
                     )
                 ]
                 minus = [
                     max(lb, min(ub, v))
                     for v, lb, ub in zip(
-                        minus, self.problem.lower_bounds, self.problem.upper_bounds
+                        minus,
+                        self.problem.lower_bounds,
+                        self.problem.upper_bounds,
+                        strict=False,
                     )
                 ]
                 add_points.append([self.convert_types(plus, self.problem)])
@@ -645,15 +654,15 @@ class MixedIntTRSolver(Solver):
             coord_vector = self.get_coordinate_vector(num_decision_vars, var_idx)
             coord_diff = delta * coord_vector
 
-            minus = [x - d for x, d in zip(x_k, coord_diff)]
-            plus = [x + d for x, d in zip(x_k, coord_diff)]
+            minus = [x - d for x, d in zip(x_k, coord_diff, strict=False)]
+            plus = [x + d for x, d in zip(x_k, coord_diff, strict=False)]
 
             # if integer index, ensure movement at least 1 in integer lattice
             if var_idx in self.int_indices:
                 plus = list(x_k)
                 minus = list(x_k)
-                plus[var_idx] = int(round(x_k[var_idx])) + 1
-                minus[var_idx] = int(round(x_k[var_idx])) - 1
+                plus[var_idx] = round(x_k[var_idx]) + 1
+                minus[var_idx] = round(x_k[var_idx]) - 1
 
             if is_block_constraint:
                 minus = [
@@ -695,13 +704,12 @@ class MixedIntTRSolver(Solver):
 
             # enforce integer lattice moves where rotation touches integer dimensions
             for idx in range(num_decision_vars):
-                if idx in self.int_indices:
-                    if i != 0:
-                        if abs(rotate_matrix_delta[idx]) > 0:
-                            plus = np.array(plus, dtype=float)
-                            minus = np.array(minus, dtype=float)
-                            plus[idx] = int(round(x_k[idx])) + 1
-                            minus[idx] = int(round(x_k[idx])) - 1
+                if idx in self.int_indices and i != 0:  # noqa: SIM102
+                    if abs(rotate_matrix_delta[idx]) > 0:
+                        plus = np.array(plus, dtype=float)
+                        minus = np.array(minus, dtype=float)
+                        plus[idx] = round(x_k[idx]) + 1
+                        minus[idx] = round(x_k[idx]) - 1
 
             if is_block_constraint:
                 minus = np.array(
@@ -717,8 +725,8 @@ class MixedIntTRSolver(Solver):
                     ]
                 )
 
-            y_var.append([self.convert_types(plus, self.problem)])
-            y_var.append([self.convert_types(minus, self.problem)])
+            y_var.append([self.convert_types(plus, self.problem)])  # ty: ignore[invalid-argument-type]
+            y_var.append([self.convert_types(minus, self.problem)])  # ty: ignore[invalid-argument-type]
 
         return y_var
 
@@ -1038,7 +1046,7 @@ class MixedIntTRSolver(Solver):
 
         fval_tilde = (
             -1 * self.problem.minmax[0] * candidate_solution.objectives_mean[0]
-            if not isinstance(candidate_solution.objectives_mean, (list, np.ndarray))
+            if not isinstance(candidate_solution.objectives_mean, list | np.ndarray)
             else -1 * self.problem.minmax[0] * candidate_solution.objectives_mean
         )
 
@@ -1086,12 +1094,12 @@ class MixedIntTRSolver(Solver):
         )
         if successful:
             self.successful_iterations.append(candidate_x)
-            previous_integers = tuple(int(round(v)) for v in self.incumbent_x)
+            previous_integers = tuple(round(v) for v in self.incumbent_x)
             self.incumbent_x = candidate_x
             self.incumbent_solution = candidate_solution
             self.recommended_solns.append(candidate_solution)
             self.intermediate_budgets.append(self.budget.used)
-            current_integers = tuple(int(round(v)) for v in self.incumbent_x)
+            current_integers = tuple(round(v) for v in self.incumbent_x)
             if hasattr(self, "int_stall_count") and self.int_indices:
                 if previous_integers == current_integers:
                     self.int_stall_count += 1
@@ -1189,7 +1197,7 @@ class MixedIntTRSolver(Solver):
         self.visited_pts_list: list[Solution] = []
         self.kappa = None
 
-    def solve(self, problem: Problem) -> None:
+    def solve(self, problem: Problem) -> None:  # ty: ignore[invalid-method-override]
         """Run a single macroreplication of the solver on a problem.
 
         Args:
@@ -1209,10 +1217,10 @@ class MixedIntTRSolver(Solver):
         k = 1
         while self.budget.remaining > 0:
             print(
-                f"Starting iteration {k} with budget remaining {self.budget.remaining}..."
+                f"Starting iteration {k} with budget remaining {self.budget.remaining}..."  # noqa: E501
             )
             self.iterate()
-            if self.iteration_count > 1 : 
+            if self.iteration_count > 1:
                 self.iterations.append(self.iteration_count)
                 self.budget_history.append(self.budget.used)
                 self.fn_estimates.append(self.incumbent_solution.objectives_mean.item())
@@ -1222,9 +1230,11 @@ class MixedIntTRSolver(Solver):
         """Convert a candidate (list/tuple/array) into the problem's typed vector."""
         try:
             converted_value = []
-            for val, ub, lb in zip(value, problem.upper_bounds, problem.lower_bounds):
+            for val, ub, lb in zip(
+                value, problem.upper_bounds, problem.lower_bounds, strict=False
+            ):
                 if isinstance(lb, int) or isinstance(ub, int):
-                    val_to_add = int(round(float(val)))
+                    val_to_add = round(float(val))
                     if val_to_add < lb:
                         val_to_add = lb
                     elif val_to_add > ub:

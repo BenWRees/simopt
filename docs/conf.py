@@ -1,8 +1,8 @@
-# If you have added/deleted files/modules, you will need to run the following sphinx commands from simopt/simopt/docs and push to github
+# If you have added/deleted files/modules, you will need to run the following sphinx commands from simopt/simopt/docs and push to github  # noqa: D100, E501
 # for those changes to be reflected on readthedocs
 
-# sphinx-apidoc -o . .. -f     # pushing after running this should be enough for readthedocs to be able to generate documentation
-# make clean                   # this command and the next one are for building the html locally
+# sphinx-apidoc -o . .. -f     # pushing after running this should be enough for readthedocs to be able to generate documentation  # noqa: E501
+# make clean                   # this command and the next one are for building the html locally  # noqa: E501
 # make html
 
 
@@ -20,10 +20,11 @@
 #
 import os
 import sys
+
 from sphinx.ext.apidoc import main
 
-sys.path.insert(0, os.path.abspath("../simopt"))
-sys.path.insert(0, os.path.abspath(".."))
+sys.path.insert(0, os.path.abspath("../simopt"))  # noqa: PTH100
+sys.path.insert(0, os.path.abspath(".."))  # noqa: PTH100
 
 
 # -- Project information -----------------------------------------------------
@@ -94,4 +95,4 @@ latex_engine = "xelatex"
 html_static_path = []
 
 
-main(["-o", os.path.abspath("."), os.path.abspath(".."), "-f"])
+main(["-o", os.path.abspath("."), os.path.abspath(".."), "-f"])  # noqa: PTH100

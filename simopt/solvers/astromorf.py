@@ -39,7 +39,7 @@ from collections.abc import Callable
 from enum import Enum
 from functools import partial
 from math import ceil, log
-from typing import Annotated, ClassVar, Self
+from typing import Annotated, ClassVar, Self, cast
 
 import numpy as np
 import scipy
@@ -64,6 +64,7 @@ from simopt.base import (
     VariableType,
 )
 from simopt.diagnostics import ASTROMoRF_Diagnostics
+from simopt.problem import ProblemLike
 from simopt.solver import BudgetExhaustedError
 from simopt.solvers.active_subspaces.basis import (
     MonomialPolynomialBasis,
@@ -480,36 +481,43 @@ class ASTROMORF(Solver):
         self._basis_adapter = value
 
     @property
-    def model_grad(self) -> Callable[[np.ndarray], np.ndarray]:
+    def model_grad(self) -> Callable[..., np.ndarray]:
         """Get the model gradient function."""
+        assert self._model_grad is not None, "model_grad not yet set"
         return self._model_grad
 
     @model_grad.setter
-    def model_grad(self, value: Callable[[np.ndarray], np.ndarray]) -> None:
+    def model_grad(self, value: Callable[..., np.ndarray] | None) -> None:
         """Set the model gradient function."""
         self._model_grad = value
 
     @property
-    def model_hess(self) -> Callable[[np.ndarray], np.ndarray]:
+    def model_hess(self) -> Callable[..., np.ndarray]:
         """Get the model Hessian function."""
+        assert self._model_hess is not None, "model_hess not yet set"
         return self._model_hess
 
     @model_hess.setter
-    def model_hess(self, value: Callable[[np.ndarray], np.ndarray]) -> None:
+    def model_hess(self, value: Callable[..., np.ndarray] | None) -> None:
         """Set the model Hessian function."""
         self._model_hess = value
 
     @property
     def model(self) -> Callable[[np.ndarray], float]:
         """Get the model function."""
+        assert self._model is not None, "model not yet set"
         return self._model
 
     @model.setter
-    def model(self, value: Callable[[np.ndarray], float]) -> None:
+    def model(self, value: Callable[[np.ndarray], float] | None) -> None:
         """Set the model function."""
         self._model = value
 
-    def _set_basis(self, basis: PolyBasisType, problem: Problem | None = None) -> None:  # noqa: ARG002
+    def _set_basis(
+        self,
+        basis: PolyBasisType,
+        _problem: ProblemLike | None = None,
+    ) -> None:
         """Set the polynomial basis for the local model.
 
         Args:
@@ -530,7 +538,11 @@ class ASTROMORF(Solver):
         self.vander = self.basis_adapter.vander
         self.polyder = self.basis_adapter.deriv
 
-    def set_basis(self, basis: PolyBasisType, problem: Problem | None = None) -> None:
+    def set_basis(
+        self,
+        basis: PolyBasisType,
+        problem: ProblemLike | None = None,
+    ) -> None:
         """Set the polynomial basis for the local model.
 
         Args:
@@ -548,14 +560,19 @@ class ASTROMORF(Solver):
     def _initialize_solving(self) -> None:
         """Setup the solver for the first iteration."""
         # For creating all the class members needed for the run of the algorithm
-        self.d: int = self.factors["initial subspace dimension"]
+        self.d: int = int(
+            max(
+                1, min(self.factors["initial subspace dimension"], self.problem.dim - 1)
+            )
+        )
 
         # Compute optimal polynomial degree based on subspace dimension
         # This ensures well-conditioned interpolation (points/terms ratio >= 0.60)
         self.degree = self.factors["polynomial degree"]
 
         if self.factors["Record Diagnostics"]:
-            self.diagnostics = ASTROMoRF_Diagnostics(self, self.problem)
+            # ASTROMoRF only supports Problem (not MultistageProblem)
+            self.diagnostics = ASTROMoRF_Diagnostics(self, cast(Problem, self.problem))
 
         # Check for potential performance issues with large polynomial basis
         if self.factors["Record Diagnostics"]:
@@ -688,7 +705,112 @@ class ASTROMORF(Solver):
         self.model_grad = None
         self.model_hess = None
 
-    def solve(self, problem: Problem) -> None:
+    def step_iteration(self, d: int) -> dict:
+        """Execute a single solver iteration with the given subspace dimension.
+
+        This method is designed for external controllers (e.g. bandit agents)
+        that choose the subspace dimension ``d`` at each iteration. The caller
+        must first call ``_initialize_solving()`` (with ``self.problem`` and
+        ``self.budget`` already set) before invoking this method.
+
+        Args:
+            d: Subspace dimension to use for this iteration.
+
+        Returns:
+            A dict with keys ``delta_f`` (objective improvement, positive is
+            better), ``cost`` (budget consumed this step), ``done`` (whether
+            the budget is exhausted), ``new_obj``, and ``prev_obj``.
+        """
+        old_d = self.d
+        self.d = max(1, min(int(d), self.problem.dim - 1))
+        if self.d != old_d:
+            self.set_basis(self.factors["polynomial basis"], self.problem)
+
+        prev_obj = (
+            self.incumbent_solution.objectives_mean.item()
+            if self.incumbent_solution is not None
+            and self.incumbent_solution.objectives_mean is not None
+            else 0.0
+        )
+        budget_before = self.budget.used
+
+        try:
+            self.initial_evaluation()
+
+            U, fval, interpolation_solns, X, _fX = self.construct_model()  # noqa: N806
+            self.prev_U = U.copy()
+
+            candidate_solution = self.solve_subproblem(U)
+            candidate_solution, fval_tilde = self.simulate_candidate_soln(
+                candidate_solution, self.delta
+            )
+            self.compute_relative_error(candidate_solution, fval_tilde)
+            self.evaluate_candidate_solution(
+                fval, fval_tilde, interpolation_solns, candidate_solution, X
+            )
+
+            try:
+                if self.incumbent_solution is not None:
+                    current_objective = self.incumbent_solution.objectives_mean.item()
+                    self.record_objective_for_plateau_detection(current_objective)
+            except Exception:
+                pass
+
+            if (
+                self.delta >= self.delta_initial / 2
+                and self.d > self.problem.dim * 0.6
+                and self.degree != 2
+            ):
+                self.degree = 2
+            else:
+                self.degree = self.factors["polynomial degree"]
+
+            if self.iteration_count > 1:
+                self.iterations.append(self.iteration_count)
+                self.budget_history.append(self.budget.used)
+                if self.locked_incumbent_objective is not None:
+                    self.fn_estimates.append(self.locked_incumbent_objective)
+                else:
+                    self.fn_estimates.append(
+                        self.incumbent_solution.objectives_mean.item()
+                    )
+                self.record_update += 1
+            self.iteration_count += 1
+
+            new_obj = (
+                self.incumbent_solution.objectives_mean.item()
+                if self.incumbent_solution is not None
+                and self.incumbent_solution.objectives_mean is not None
+                else prev_obj
+            )
+            cost = self.budget.used - budget_before
+            done = self.budget.remaining <= 0
+
+            return {
+                "delta_f": new_obj - prev_obj,
+                "cost": float(cost),
+                "done": done,
+                "new_obj": new_obj,
+                "prev_obj": prev_obj,
+            }
+
+        except BudgetExhaustedError:
+            new_obj = (
+                self.incumbent_solution.objectives_mean.item()
+                if self.incumbent_solution is not None
+                and self.incumbent_solution.objectives_mean is not None
+                else prev_obj
+            )
+            cost = self.budget.used - budget_before
+            return {
+                "delta_f": new_obj - prev_obj,
+                "cost": float(cost),
+                "done": True,
+                "new_obj": new_obj,
+                "prev_obj": prev_obj,
+            }
+
+    def solve(self, problem: ProblemLike) -> None:
         """Run a single macroreplication of the solver on a problem.
 
         Args:
@@ -1030,7 +1152,7 @@ class ASTROMORF(Solver):
         distance = norm(x_current - x_previous)
         tol = 0.2
         # Trust-regions intersect if center distance <= sum of radii (+ small tolerance)
-        return distance <= (radius_to_check + self.delta + tol)
+        return bool(distance <= (radius_to_check + self.delta + tol))
 
     def intersection_amount(self, model_info: dict) -> float:
         """Compute the amount of intersection between the trust-region defined by.
@@ -1160,8 +1282,8 @@ class ASTROMORF(Solver):
         optimal_d = (
             np.searchsorted(cumulative_variance, self.variance_explained_threshold) + 1
         )
-        return min(
-            optimal_d, self.problem.dim - 1
+        return int(
+            min(optimal_d, self.problem.dim - 1)
         )  # ensure not exceeding problem.dim -1
 
     def evaluate_and_score_candidate_dimensions(self) -> dict:
@@ -1350,7 +1472,7 @@ class ASTROMORF(Solver):
             results[d]["is_sufficient"] = d in self._last_sufficient_candidates
         return results
 
-    def compute_optimal_subspace_dimension(self) -> None:
+    def compute_optimal_subspace_dimension(self) -> int | None:
         """Compute the optimal subspace dimension for the current iteration based on.
 
         previous model information.
@@ -1590,7 +1712,7 @@ class ASTROMORF(Solver):
         avg_d_pred_errors = {d: np.mean(errors) for d, errors in d_pred_errors.items()}
         # select dimension with lowest average prediction error
         if avg_d_pred_errors:
-            best_d = min(avg_d_pred_errors, key=avg_d_pred_errors.get)
+            best_d = min(avg_d_pred_errors, key=lambda k: avg_d_pred_errors[k])
             candidate_dimensions.append(best_d)
 
         # 3. The dimension that aligns with the current trust-region size (smaller
@@ -1724,7 +1846,7 @@ class ASTROMORF(Solver):
                         continue
                 scores[candidate] = score
             # Select candidate with highest score
-            optimal_d = max(scores, key=scores.get)
+            optimal_d = max(scores, key=lambda k: scores[k])
         return optimal_d
 
     def record_gradient_eigenvalues(self, gradients: np.ndarray) -> None:
@@ -1912,7 +2034,10 @@ class ASTROMORF(Solver):
 
     # === TRUST-REGION METHODS ===
 
-    def compute_trust_region(self, U: np.ndarray) -> tuple[callable, np.ndarray]:  # noqa: N803
+    def compute_trust_region(
+        self,
+        U: np.ndarray,  # noqa: N803
+    ) -> tuple[Callable[..., float], np.ndarray]:
         """Constructs the ellipsoidal trust-region based on the Hessian of the previous.
 
         model.
@@ -1928,7 +2053,11 @@ class ASTROMORF(Solver):
                 - The regularized Hessian matrix H used for the ellipsoid
 
         """
-        if hasattr(self, "prev_H") and self.factors["elliptical trust region"]:
+        if (
+            hasattr(self, "prev_H")
+            and self.prev_H is not None
+            and self.factors["elliptical trust region"]
+        ):
             hess_matrix = self.prev_H.copy()  #! Project to full space
         else:
             hess_matrix = np.eye(self.problem.dim)
@@ -2053,7 +2182,7 @@ class ASTROMORF(Solver):
             # The step is z, as we are optimizing from the origin in the reduced space
             if not np.isfinite(val):
                 # If constraint blows up, fall back to spherical TR
-                return float(z.T @ z).flatten().item()
+                return (z.T @ z).flatten().item()
             return val
 
         cons = NonlinearConstraint(ellipsoid_constraint_fn, 0, self.delta**2)
@@ -2103,6 +2232,7 @@ class ASTROMORF(Solver):
         s_new = np.array(s_new).flatten()
 
         candidate_solution = self.create_new_solution(tuple(s_new), self.problem)
+        assert self.visited_points is not None
         self.visited_points.append(candidate_solution)
         return candidate_solution
 
@@ -2410,6 +2540,7 @@ class ASTROMORF(Solver):
             self.incumbent_solution = self.create_new_solution(
                 self.incumbent_x, self.problem
             )
+            assert self.visited_points is not None
             self.visited_points.append(self.incumbent_solution)
             self.incumbent_solution = self.perform_adaptive_sampling(
                 self.incumbent_solution, self.pilot_run, self.delta, compute_kappa=True
@@ -2457,6 +2588,8 @@ class ASTROMORF(Solver):
         fX = []  # noqa: N806
         interpolation_solutions = []
         pilot_run = self.calculate_pilot_run(construct_model=True)
+        assert pilot_run is not None
+        assert self.visited_points is not None
         no_pts_sampled = 1
         for idx in range(X.shape[0]):
             # If first iteration, reuse the incumbent solution
@@ -2517,6 +2650,7 @@ class ASTROMORF(Solver):
             self.problem.simulate(candidate_solution, num_sims)
         else:
             pilot_run = self.calculate_pilot_run(construct_model=True)
+            assert pilot_run is not None
             candidate_solution = self.perform_adaptive_sampling(
                 candidate_solution, pilot_run, delta
             )
@@ -2711,7 +2845,7 @@ class ASTROMORF(Solver):
 
         H = (  # noqa: N806
             self.prev_H
-            if self.factors["elliptical trust region"]
+            if self.factors["elliptical trust region"] and self.prev_H is not None
             else np.eye(self.problem.dim)
         )
 
@@ -2981,7 +3115,7 @@ class ASTROMORF(Solver):
     def construct_interpolation_set(
         self,
         U: np.ndarray,  # noqa: N803
-    ) -> tuple[list[np.ndarray], int]:
+    ) -> tuple[np.ndarray, int]:
         """Constructs the interpolation set either by reusing one design point from the.
 
         visited points list or not reusing any design points.
@@ -3010,6 +3144,7 @@ class ASTROMORF(Solver):
 
         # Else if we will reuse one design point
         else:
+            assert self.visited_points is not None
             reused_pt = np.array(self.visited_points[f_index].x).reshape(-1, 1)
             diff_array = U.T @ (reused_pt - x_k)  # has shape (d,1)
             A_k1 = (diff_array) / norm(diff_array)  # has shape (d,1)  # noqa: N806
@@ -3050,6 +3185,7 @@ class ASTROMORF(Solver):
         Returns:
             tuple[int, bool]: (index of best candidate, whether reuse is possible)
         """
+        assert self.visited_points is not None
         if len(self.visited_points) == 0:
             return 0, False
 
@@ -3058,7 +3194,7 @@ class ASTROMORF(Solver):
         # Use ellipsoidal or spherical trust region in full space
         H_full = (  # noqa: N806
             self.prev_H
-            if self.factors["elliptical trust region"]
+            if self.factors["elliptical trust region"] and self.prev_H is not None
             else np.eye(self.problem.dim).reshape(self.problem.dim, self.problem.dim)
         )
         H_full = 0.5 * (H_full + H_full.T)  # Ensure symmetry  # noqa: N806
@@ -3157,7 +3293,7 @@ class ASTROMORF(Solver):
 
     def get_scale(
         self,
-        dirn: list[float],
+        dirn: np.ndarray | list[float],
         lower: np.ndarray,
         upper: np.ndarray,
         scale: float | None = None,
@@ -3289,7 +3425,7 @@ class ASTROMORF(Solver):
         U: np.ndarray,  # noqa: N803
         X: np.ndarray,  # noqa: N803
         fX: np.ndarray,  # noqa: N803
-        interpolation_solutions: list[int],
+        interpolation_solutions: list[Solution],
     ) -> tuple[np.ndarray, np.ndarray, list[Solution]]:
         """Improves the geometry of the interpolation set by generating a sample set.
 
@@ -3521,6 +3657,8 @@ class ASTROMORF(Solver):
             # If there are still points to choose from, find if points meet criterion.
             # If so, use the index to choose
             # point with given index to be next point in regression/interpolation set
+            index: int = 0
+            M: np.ndarray = np.zeros(1)  # noqa: N806
             if fX_improved.size > 0:
                 Phi_X_improved = np.vstack(  # noqa: N806
                     [
@@ -3529,7 +3667,7 @@ class ASTROMORF(Solver):
                     ]
                 )
                 M = np.absolute(Phi_X_improved @ v)  # noqa: N806
-                index = np.argmax(M)
+                index = int(np.argmax(M))
                 # Pivot acceptance: use psi_1 normally; require psi_2 for the last pivot
                 # (k == q-1)
                 if M[index] < psi_1 or (k == q - 1 and M[index] < psi_2):
@@ -3581,6 +3719,10 @@ class ASTROMORF(Solver):
                             random_dir = random_dir / norm(random_dir) * delta * 0.95
                             x = x_k.flatten() + random_dir.flatten()
 
+                # Fallback if x is still None after all attempts
+                if x is None:
+                    x = x_k.flatten()
+
                 # ensure new point is within trust-region -> if not, use existing point
                 # if available
                 if norm(x.reshape(-1, 1) - x_k, ord=2) > delta:  # noqa: SIM102
@@ -3605,11 +3747,13 @@ class ASTROMORF(Solver):
                         x_proj = x_projected_k + direction * scale
                         x = (U @ x_proj).ravel()
 
+                    assert x is not None
                     X[k, :] = x
                     soln_at_x = self.create_new_solution(tuple(x.ravel()), self.problem)
                     # Sample the newly generated interpolation point without
                     # re-evaluating the full design set
                     pilot_run = self.calculate_pilot_run(construct_model=True)
+                    assert pilot_run is not None
                     soln_at_x = self.perform_adaptive_sampling(
                         soln_at_x, pilot_run, delta
                     )
@@ -3617,6 +3761,7 @@ class ASTROMORF(Solver):
                         -1 * self.problem.minmax[0] * soln_at_x.objectives_mean.item()
                     )
                     fX[k, 0] = f_value
+                    assert self.visited_points is not None
                     if all(
                         tuple(pt.x) != tuple(soln_at_x.x) for pt in self.visited_points
                     ):
@@ -3652,6 +3797,7 @@ class ASTROMORF(Solver):
                             tuple(s.ravel()), self.problem
                         )
                         pilot_run = self.calculate_pilot_run(construct_model=True)
+                        assert pilot_run is not None
                         soln_at_s = self.perform_adaptive_sampling(
                             soln_at_s, pilot_run, delta
                         )
@@ -3661,6 +3807,7 @@ class ASTROMORF(Solver):
                             * soln_at_s.objectives_mean.item()
                         )
                         fX[k, 0] = f_value
+                        assert self.visited_points is not None
                         if all(
                             tuple(pt.x) != tuple(soln_at_s.x)
                             for pt in self.visited_points
@@ -3699,6 +3846,7 @@ class ASTROMORF(Solver):
                     X[k, :] = x
                     soln_at_x = self.create_new_solution(tuple(x.ravel()), self.problem)
                     pilot_run = self.calculate_pilot_run(construct_model=True)
+                    assert pilot_run is not None
                     soln_at_x = self.perform_adaptive_sampling(
                         soln_at_x, pilot_run, delta
                     )
@@ -3706,6 +3854,7 @@ class ASTROMORF(Solver):
                         -1 * self.problem.minmax[0] * soln_at_x.objectives_mean.item()
                     )
                     fX[k, 0] = f_value
+                    assert self.visited_points is not None
                     if all(
                         tuple(pt.x) != tuple(soln_at_x.x) for pt in self.visited_points
                     ):
@@ -3727,8 +3876,8 @@ class ASTROMORF(Solver):
                 np.ndarray: The total order basis of shape (L, dimensions) where L is
                 the cardinality
         """
+        I = np.zeros((1, max(1, dimensions)))  # noqa: E741, N806
         if dimensions == 1:
-            I = np.zeros((1, 1))  # noqa: E741, N806
             I[0, 0] = highest_order
         else:
             for j in range(0, highest_order + 1):
@@ -3785,7 +3934,7 @@ class ASTROMORF(Solver):
         self,
         U: np.ndarray,  # noqa: N803
         delta: float,
-    ) -> tuple[callable, callable]:
+    ) -> tuple[Callable[..., np.ndarray], Callable[..., np.ndarray]]:
         """Generates the phi function and its derivative for the given sample set.
 
         Args:
@@ -3848,8 +3997,8 @@ class ASTROMORF(Solver):
         self,
         delta: float,
         v: np.ndarray,
-        phi_function: callable,
-        phi_function_deriv: callable,
+        phi_function: Callable[..., np.ndarray],
+        phi_function_deriv: Callable[..., np.ndarray],
     ) -> np.ndarray:
         """Finds a new point in the trust region that maximizes the absolute value of.
 
@@ -3974,7 +4123,7 @@ class ASTROMORF(Solver):
         self,
         delta: float,
         v: np.ndarray,
-        phi_function: callable,
+        phi_function: Callable[..., np.ndarray],
         X: np.ndarray,  # noqa: N803
         U: np.ndarray,  # noqa: N803
     ) -> np.ndarray:
@@ -4101,15 +4250,7 @@ class ASTROMORF(Solver):
 
     def construct_model(
         self,
-    ) -> tuple[
-        callable,
-        callable,
-        np.ndarray,
-        list[float],
-        list[Solution],
-        np.ndarray,
-        np.ndarray,
-    ]:
+    ) -> tuple[np.ndarray, list[float], list[Solution], np.ndarray, np.ndarray]:
         """Builds a local approximation of the response surface within the current.
 
         trust.
@@ -4123,19 +4264,18 @@ class ASTROMORF(Solver):
 
         Returns:
                 tuple[callable, callable, np.ndarray, list[float], list[Solution]]:
-                        - The local model as a function that takes a numpy vector of
-                        shape (n,1) and returns a float
-                        - The local model gradient as a function that takes a numpy
-                        vector of shape (n,1) and returns gradient
-                        - The final computed active subspace of the iteration of shape
-                        (n,d)
-                        - A list of the function estimates of the objective function at
-                        each of the final design points  # noqa: D417
-                        - The list of solutions of the final design points
+                        - The active subspace of shape (n,d)
+                        - The flattened function estimates of the objective function at
+                        each of the final design points as a list of floats
+                        - The design points as solution objects
+                        - The design set after going through fitting of shape (M,n)
+                        - The function estimates of the objective function
+                        at each of the final design points of shape (M,1)
         """
         # Reset scaling parameters for this new model construction
-        if hasattr(self.basis_adapter, "reset_scaling"):
-            self.basis_adapter.reset_scaling()
+        reset_fn = getattr(self.basis_adapter, "reset_scaling", None)
+        if reset_fn is not None:
+            reset_fn()
 
         # Use warm starting: if previous active subspace exists, use it as initial guess
         if self.prev_U is not None and self.prev_U.shape == (self.problem.dim, self.d):
@@ -4198,7 +4338,7 @@ class ASTROMORF(Solver):
         fX: np.ndarray,  # noqa: N803
         interpolation_solutions: list[Solution],
         U0: np.ndarray,  # noqa: N803
-    ) -> tuple[np.ndarray, callable, callable, np.ndarray, np.ndarray, list[Solution]]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[Solution]]:
         """Fits the design set and evaluated points to a local model with recovered.
 
         active subspace.
@@ -4218,16 +4358,9 @@ class ASTROMORF(Solver):
                 (n,d).
 
         Returns:
-                tuple[np.ndarray, callable, callable, np.ndarray, np.ndarray,
-                list[Solution]]:
+                tuple[np.ndarray, np.ndarray, np.ndarray, list[Solution]]:
                         - The final computed active subspace of the iteration of shape
                         (n,d)
-                        - The local model as a function that takes a numpy vector of
-                        shape (n,1) and returns a float (this is given as model = lambda
-                        x : self.model_evaluate(x,coef, U))
-                        - The local model gradient as a function that takes a numpy
-                        vector of shape (n,1) and returns a float (this is given as
-                        model_grad = lambda x : self.model_evaluate(x,U))
                         - The design set after going through fitting of shape (M,n)
                         - The function estimates of the objective function at each of
                         the final design points of shape (M,1)
@@ -4361,8 +4494,8 @@ class ASTROMORF(Solver):
             logging.debug(f"Validation-by-d computation failed: {e}")
 
         if self.delta != model_delta:
-            self.delta = min(
-                max(self.delta, beta * norm(self.grad(X, coef, U))), model_delta
+            self.delta = float(
+                min(max(self.delta, beta * norm(self.grad(X, coef, U))), model_delta)
             )
 
         return U, X, fX, interpolation_solutions
@@ -4415,12 +4548,12 @@ class ASTROMORF(Solver):
                     X, fX, interpolation_solutions = self.improve_geometry(  # noqa: N806
                         model_delta, U, X, fX, interpolation_solutions
                     )
-                    model_delta = self.delta * w**fitting_iter
+                    model_delta = float(self.delta * w**fitting_iter)
                     fitting_iter += 1
 
             elif model_delta > max(self.mu * gnorm, 1e-12):
-                model_delta = min(
-                    model_delta, max(self.delta_min, self.mu * gnorm, 1e-12)
+                model_delta = float(
+                    min(model_delta, max(self.delta_min, self.mu * gnorm, 1e-12))
                 )
                 X, fX, interpolation_solutions = self.improve_geometry(  # noqa: N806
                     model_delta, U, X, fX, interpolation_solutions
@@ -4429,7 +4562,7 @@ class ASTROMORF(Solver):
             else:
                 break
 
-        return coef, model_delta, X, fX, interpolation_solutions
+        return coef, float(model_delta), X, fX, interpolation_solutions
 
     def converged_subspace_check(
         self,
@@ -4755,6 +4888,7 @@ class ASTROMORF(Solver):
         except Exception as e:
             logging.warning("SVD failed in Jacobian computation with error: %s", e)
             #! Need to add fallback that isn't svd
+            Y, sig, ZT = scipy.linalg.svd(V_matrix, full_matrices=False)  # noqa: N806
 
         # s = np.array([np.inf if x == 0.0 else x for x in s])
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -4877,10 +5011,10 @@ class ASTROMORF(Solver):
 
     def gauss_newton_solver(
         self,
-        residual: callable,
-        jacobian: callable,
+        residual: Callable[..., np.ndarray],
+        jacobian: Callable[..., np.ndarray],
         U: np.ndarray,  # noqa: N803
-        gn_solver: callable,
+        gn_solver: Callable[..., np.ndarray],
     ) -> np.ndarray:
         """Solves the Gauss_newton problem on the Grassmann manifold:.
 
@@ -4956,7 +5090,7 @@ class ASTROMORF(Solver):
 
     def backtracking(
         self,
-        residual: callable,
+        residual: Callable[..., np.ndarray],
         Grad: np.ndarray,  # noqa: N803
         delta: np.ndarray,
         U: np.ndarray,  # noqa: N803
@@ -5071,6 +5205,7 @@ class ASTROMORF(Solver):
             except Exception as e:
                 logging.warning("SVD failed with error: %s", e)
                 #! need to add fallback that isn't svd
+                Ur = np.eye(U.shape[1])  # noqa: N806
 
             U = U @ Ur  # noqa: N806
 
@@ -5204,6 +5339,7 @@ class ASTROMORF(Solver):
         # Check if using PolynomialBasis class adapter
         if isinstance(self.basis_adapter, PolynomialBasisClassAdapter):
             # Use the PolynomialBasis class's V method directly
+            assert self.basis_adapter.basis_instance is not None
             return self.basis_adapter.basis_instance.V(X)
 
         # Otherwise, use TensorBasis approach (original implementation)
@@ -5247,6 +5383,7 @@ class ASTROMORF(Solver):
         # Check if using PolynomialBasis class adapter
         if isinstance(self.basis_adapter, PolynomialBasisClassAdapter):
             # Use the PolynomialBasis class's DV method directly
+            assert self.basis_adapter.basis_instance is not None
             return self.basis_adapter.basis_instance.DV(X)
 
         # Otherwise, use TensorBasis approach (original implementation)
@@ -5419,7 +5556,9 @@ class ASTROMORF(Solver):
 
     # Module-level caches for index sets (class-level to persist across instances)
     _full_index_cache: ClassVar[dict[tuple[int, int], np.ndarray]] = {}
-    _index_cache: ClassVar[dict[tuple[int, int], np.ndarray]] = {}
+    _index_cache: ClassVar[
+        dict[tuple[int, ...] | tuple[str, int, int], np.ndarray]
+    ] = {}
 
     def full_index_set(self, n: int, d: int) -> np.ndarray:
         """Enumerate multi-indices for a total degree of exactly `n` in `d` variables.
@@ -5579,25 +5718,31 @@ def clamp_with_epsilon(
     return val
 
 
-def duplication_check(x: np.ndarray, X: np.ndarray, tol: float = 1e-8) -> bool:  # noqa: N803
+def duplication_check(
+    x: np.ndarray | list,
+    x_set: np.ndarray | list,
+    tol: float = 1e-8,
+) -> bool:
     """Check if a point x is a duplicate of any point in the set X within a given.
 
     tolerance.
 
     Args:
             x (np.ndarray): The point to check, shape (n,).
-            X (np.ndarray): The set of existing points, shape (M,n).
+            x_set (np.ndarray): The set of existing points, shape (M,n).
             tol (float, optional): Tolerance for considering two points as duplicates.
                     Defaults to 1e-8.
 
     Returns:
-            bool: True if x is a duplicate of any point in X, False otherwise.
+            bool: True if x is a duplicate of any point in x_set, False otherwise.
     """
-    return any(np.linalg.norm(x - xi) < tol for xi in X)
+    return any(np.linalg.norm(x - xi) < tol for xi in x_set)
 
 
 def degeneration_check(
-    x_new: np.ndarray, incumbent_sol: np.ndarray, tol: float = 1e-8
+    x_new: np.ndarray | list | tuple,
+    incumbent_sol: np.ndarray | list | tuple,
+    tol: float = 1e-8,
 ) -> bool:
     """Check if a new point x_new is too close to the incumbent solution.
 
@@ -5610,15 +5755,15 @@ def degeneration_check(
     Returns:
             bool: True if x_new is too close to incumbent_sol, False otherwise.
     """
-    return np.linalg.norm(x_new - incumbent_sol) < tol
+    return bool(np.linalg.norm(np.asarray(x_new) - np.asarray(incumbent_sol)) < tol)
 
 
 def backoff_step(
-    incumbent_sol: np.ndarray,
+    incumbent_sol: np.ndarray | list | tuple,
     direction: np.ndarray,
     alpha: float,
-    lb: np.ndarray,
-    ub: np.ndarray,
+    lb: np.ndarray | list | tuple,
+    ub: np.ndarray | list | tuple,
     shrink: float = 0.5,
     min_alpha: float = 1e-8,
 ) -> np.ndarray | None:

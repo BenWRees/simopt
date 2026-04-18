@@ -1,4 +1,4 @@
-"""Sequential Linear Program"""
+"""Sequential Linear Program."""
 
 import warnings
 
@@ -11,36 +11,36 @@ from simopt.base import Problem
 from .gauss_newton import trajectory_linear
 
 
-class InfeasibleException(Exception):
+class InfeasibleException(Exception):  # noqa: D101, N818
     pass
 
 
-class UnboundedException(Exception):
+class UnboundedException(Exception):  # noqa: D101, N818
     pass
 
 
-def sequential_lp(
-    fun,
-    problem,
-    x0,
-    jac,
-    search_constraints=None,
-    norm=2,
-    trajectory=trajectory_linear,
-    obj_lb=None,
-    obj_ub=None,
-    constraints=None,
-    constraint_grads=None,
-    constraints_lb=None,
-    constraints_ub=None,
-    maxiter=100,
-    bt_maxiter=50,
-    tol_dx=1e-10,
-    tol_obj=1e-10,
-    verbose=False,
-    **kwargs,
+def sequential_lp(  # noqa: ANN201
+    fun,  # noqa: ANN001
+    problem,  # noqa: ANN001
+    x0,  # noqa: ANN001
+    jac,  # noqa: ANN001
+    search_constraints=None,  # noqa: ANN001
+    norm=2,  # noqa: ANN001
+    trajectory=trajectory_linear,  # noqa: ANN001
+    obj_lb=None,  # noqa: ANN001
+    obj_ub=None,  # noqa: ANN001
+    constraints=None,  # noqa: ANN001
+    constraint_grads=None,  # noqa: ANN001
+    constraints_lb=None,  # noqa: ANN001
+    constraints_ub=None,  # noqa: ANN001
+    maxiter=100,  # noqa: ANN001
+    bt_maxiter=50,  # noqa: ANN001
+    tol_dx=1e-10,  # noqa: ANN001
+    tol_obj=1e-10,  # noqa: ANN001
+    verbose=False,  # noqa: ANN001
+    **kwargs,  # noqa: ANN003
 ):
-    r"""Solves a nonlinear optimization problem by a sequence of linear programs
+    r"""Solves a nonlinear optimization problem by a sequence of linear programs.
 
     Given the optimization problem
 
@@ -69,7 +69,9 @@ def sequential_lp(
     assert norm in [1, 2, np.inf, None, "hinge"], "Invalid norm specified."
 
     if search_constraints is None:
-        search_constraints = lambda x, p: []
+
+        def search_constraints(x, p):  # noqa: ANN001, ANN202, ARG001
+            return []
 
     # if domain is None:
     # 	domain = UnboundedDomain(len(x0)) #TODO: change behaviour
@@ -94,14 +96,20 @@ def sequential_lp(
         kwargs["solver"] = "ECOS"
 
     if norm in [1, 2, np.inf]:
-        objfun = lambda fx: np.linalg.norm(fx, ord=norm)
+
+        def objfun(fx):  # noqa: ANN001, ANN202
+            return np.linalg.norm(fx, ord=norm)
     elif norm == "hinge":
-        objfun = lambda fx: np.sum(np.maximum(fx, 0))
+
+        def objfun(fx):  # noqa: ANN001, ANN202
+            return np.sum(np.maximum(fx, 0))
     else:
-        objfun = lambda fx: float(fx)
+
+        def objfun(fx):  # noqa: ANN001, ANN202
+            return float(fx)
 
     # evalutate KKT norm
-    def kkt_norm(fx, jacx):
+    def kkt_norm(fx, jacx):  # noqa: ANN001, ANN202
         kkt_norm = np.nan
         if norm == np.inf:
             # TODO: allow other constraints into the solution
@@ -116,8 +124,8 @@ def sequential_lp(
             con_grad[len(fx) :, -1] = -1.0
 
             # Find the active constraints (which have non-zero Lagrange multipliers)
-            I = np.abs(con) < 1e-10
-            lam, kkt_norm = scipy.optimize.nnls(con_grad[I, :].T, -obj_grad)
+            I = np.abs(con) < 1e-10  # noqa: E741, N806
+            lam, kkt_norm = scipy.optimize.nnls(con_grad[I, :].T, -obj_grad)  # noqa: RUF059
         elif norm == 1:
             t = np.abs(fx)
             obj_grad = np.zeros(len(x) + len(fx))
@@ -128,8 +136,8 @@ def sequential_lp(
             con_grad[: len(fx), len(x) :] = -1.0
             con_grad[len(fx) :, : len(x)] = -jacx
             con_grad[len(fx) :, len(x) :] = -1.0
-            I = np.abs(con) == 0.0
-            lam, kkt_norm = scipy.optimize.nnls(con_grad[I, :].T, -obj_grad)
+            I = np.abs(con) == 0.0  # noqa: E741, N806
+            _lam, kkt_norm = scipy.optimize.nnls(con_grad[I, :].T, -obj_grad)
 
         elif norm == 2:
             kkt_norm = np.linalg.norm(jacx.T.dot(fx))
@@ -163,11 +171,11 @@ def sequential_lp(
             "-----|-------------------|----------|-----------|----------|-----------|"
         )
         print(
-            "%4d | %+14.10e |          |           | %8.2e |           |"
+            "%4d | %+14.10e |          |           | %8.2e |           |"  # noqa: UP031
             % (0, objval, kkt_norm(fx, jacx))
         )
 
-    Delta = 1.0
+    Delta = 1.0  # noqa: N806
 
     px = np.zeros(x.shape)
     constraint_violation = 0
@@ -186,7 +194,7 @@ def sequential_lp(
             obj = cp.norm_inf(f_lin)
         elif norm == "hinge":
             obj = cp.sum(cp.pos(f_lin))
-        elif norm == None:
+        elif norm is None:
             obj = f_lin
         else:
             raise NotImplementedError
@@ -201,7 +209,7 @@ def sequential_lp(
 
         # Next, we add other nonlinear constraints
         for con, congrad, con_lb, con_ub in zip(
-            constraints, constraint_grads, constraints_lb, constraints_ub
+            constraints, constraint_grads, constraints_lb, constraints_ub, strict=False
         ):
             conx = con(x)
             congradx = congrad(x)
@@ -236,10 +244,7 @@ def sequential_lp(
                     prob.solve(**kwargs)
                     status = prob.status
                 except cp.SolverError:
-                    if it2 == 0:
-                        status = "unbounded"
-                    else:
-                        status = cp.SolverError
+                    status = "unbounded" if it2 == 0 else cp.SolverError
 
             if (status == "unbounded" or status == "unbounded_inaccurate") and it2 == 0:
                 # On the first step, the trust region is off, allowing a potentially unbounded domain
@@ -266,10 +271,10 @@ def sequential_lp(
 
                 constraint_violation = 0.0
                 if obj_lb is not None:
-                    I = ~(obj_lb <= fx_new)
+                    I = ~(obj_lb <= fx_new)  # noqa: E741, N806
                     constraint_violation += np.linalg.norm((fx_new - obj_lb)[I], 1)
                 if obj_ub is not None:
-                    I = ~(fx_new <= obj_ub)
+                    I = ~(fx_new <= obj_ub)  # noqa: E741, N806
                     constraint_violation += np.linalg.norm((fx_new - obj_ub)[I], 1)
 
                 if objval_new < objval and np.isclose(
@@ -281,15 +286,15 @@ def sequential_lp(
                     if np.abs(objval_new - objval) < tol_obj:
                         stop = True
                     objval = objval_new
-                    Delta = max(1.0, np.linalg.norm(px))
+                    Delta = max(1.0, np.linalg.norm(px))  # noqa: N806
                     break
 
-                Delta *= 0.5
+                Delta *= 0.5  # noqa: N806
 
             else:
                 warnings.warn(
-                    "Could not find acceptible step; stopping prematurely; %s"
-                    % (status,)
+                    f"Could not find acceptible step; stopping prematurely; {status}",
+                    stacklevel=2,
                 )
                 stop = True
                 px = np.zeros(x.shape)
@@ -312,7 +317,7 @@ def sequential_lp(
 
         if verbose:
             print(
-                "%4d | %+14.10e | %8.2e |  %8.2e | %8.2e |  %8.2e |"
+                "%4d | %+14.10e | %8.2e |  %8.2e | %8.2e |  %8.2e |"  # noqa: UP031
                 % (
                     it + 1,
                     objval,
@@ -329,7 +334,7 @@ def sequential_lp(
 
 
 def build_constraints(x: np.ndarray, problem: Problem) -> list[np.ndarray]:
-    """Build the constraints corresponding to a given vector x
+    """Build the constraints corresponding to a given vector x.
 
     Args:
             x (np.ndarray): the candidate solution being check
@@ -344,18 +349,20 @@ def build_constraints(x: np.ndarray, problem: Problem) -> list[np.ndarray]:
     upper_bound = np.array(problem.upper_bounds)
 
     if constraint_type.name == "BOX":
-        I = np.isfinite(lower_bound)
+        I = np.isfinite(lower_bound)  # noqa: E741, N806
         if np.sum(I) > 0:
             constraints.append(lower_bound[I] <= x[I])
 
-        I = np.isfinite(upper_bound)
+        I = np.isfinite(upper_bound)  # noqa: E741, N806
         if np.sum(I) > 0:
             constraints.append(x[I] <= upper_bound[I])
 
     elif constraint_type.name == "UNCONSTRAINED":
         pass
 
-    elif constraint_type.name == "DETERMINISTIC" or constraint_type.name == "STOCHASTIC":
+    elif (
+        constraint_type.name == "DETERMINISTIC" or constraint_type.name == "STOCHASTIC"
+    ):
         pass  # Not implemented yet
 
     return constraints

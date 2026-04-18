@@ -12,14 +12,17 @@ from equadratures.poly import Poly, evaluate_model, evaluate_model_gradients
 
 
 class Correlations:
-    """The class defines methods for polynomial approximations with correlated inputs, including the Nataf transform and Gram-Schmidt process.
+    """The class defines methods for polynomial approximations with correlated inputs,.
+
+    including the Nataf transform and Gram-Schmidt process.
 
     Parameters
     ----------
     correlation_matrix : numpy.ndarray
         The correlation matrix associated with the joint distribution.
     poly : Poly, optional
-        Polynomial defined with parameters with marginal distributions in uncorrelated space.
+        Polynomial defined with parameters with marginal distributions in uncorrelated
+        space.
     parameters : list, optional
         List of parameters with marginal distributions.
     method : str, optional
@@ -34,7 +37,8 @@ class Correlations:
     >>>     s2 = s[1]
     >>>     return s1**2 - s2**3 - 2. * s1 - 0.5 * s2
     >>>
-    >>> parameters = [Parameter(distribution='beta', shape_parameter_A=5.0, shape_parameter_B=2.0, lower=0.0, upper=1.0, order=15) for _ in range(2)]
+    >>> parameters = [Parameter(distribution='beta', shape_parameter_A=5.0,
+    shape_parameter_B=2.0, lower=0.0, upper=1.0, order=15) for _ in range(2)]
     >>> basis = Basis('total-order')
     >>> uncorr_poly = Poly(parameters, basis, method='least-squares',
     >>>                     sampling_args={'mesh': 'monte-carlo',
@@ -50,20 +54,27 @@ class Correlations:
 
     References:
     ----------
-    1. Melchers, R. E., (1945) Structural Reliability Analysis and Predictions. John Wiley and Sons, second edition.
-    2. Jakeman, J. D. et al., (2019) Polynomial chaos expansions for dependent random variables.
+    1. Melchers, R. E., (1945) Structural Reliability Analysis and Predictions. John
+    Wiley and Sons, second edition.
+    2. Jakeman, J. D. et al., (2019) Polynomial chaos expansions for dependent random
+    variables.
     """
 
-    def __init__(
-        self, correlation_matrix, poly=None, parameters=None, method=None, verbose=False
-    ):
+    def __init__(  # noqa: D107
+        self,
+        correlation_matrix,  # noqa: ANN001
+        poly=None,  # noqa: ANN001
+        parameters=None,  # noqa: ANN001
+        method=None,  # noqa: ANN001
+        verbose=False,  # noqa: ANN001
+    ) -> None:
         if (poly is None) and (method is not None):
             raise ValueError("Need to specify poly for probability transform.")
         if poly is not None:
             self.poly = poly
-            D = self.poly.get_parameters()
+            D = self.poly.get_parameters()  # noqa: N806
         elif parameters is not None:
-            D = parameters
+            D = parameters  # noqa: N806
         else:
             raise ValueError("Need to specify either poly or parameters.")
         self.D = D
@@ -74,15 +85,15 @@ class Correlations:
         inf_lim = -8.0
         sup_lim = -inf_lim
         p1 = Parameter(distribution="uniform", lower=inf_lim, upper=sup_lim, order=31)
-        myBasis = Basis("tensor-grid")
+        myBasis = Basis("tensor-grid")  # noqa: N806
         self.Pols = Poly([p1, p1], myBasis, method="numerical-integration")
-        Pols = self.Pols
+        Pols = self.Pols  # noqa: N806
         p = Pols.get_points()
         # w = Pols.get_weights()
         w = Pols.get_weights() * (sup_lim - inf_lim) ** 2
         p1 = p[:, 0]
         p2 = p[:, 1]
-        R0 = np.eye(len(self.D))
+        R0 = np.eye(len(self.D))  # noqa: N806
         for i in range(len(self.D)):
             for j in range(i + 1, len(self.D), 1):
                 if self.R[i, j] == 0:
@@ -94,10 +105,10 @@ class Correlations:
                     tp11 = (z1 - self.D[i].mean) / np.sqrt(self.D[i].variance)
                     tp22 = (z2 - self.D[j].mean) / np.sqrt(self.D[j].variance)
 
-                    coefficientsIntegral = np.flipud(tp11 * tp22 * w)
+                    coefficientsIntegral = np.flipud(tp11 * tp22 * w)  # noqa: N806
 
-                    def check_difference(rho_ij):
-                        bivariateNormalPDF = (
+                    def check_difference(rho_ij):  # noqa: ANN001, ANN202
+                        bivariateNormalPDF = (  # noqa: N806
                             1.0
                             / (2.0 * np.pi * np.sqrt(1.0 - rho_ij**2))
                             * np.exp(
@@ -106,8 +117,8 @@ class Correlations:
                                 * (p1**2 - 2.0 * rho_ij * p1 * p2 + p2**2)
                             )
                         )
-                        diff = np.dot(coefficientsIntegral, bivariateNormalPDF)
-                        return diff - self.R[i, j]
+                        diff = np.dot(coefficientsIntegral, bivariateNormalPDF)  # noqa: B023
+                        return diff - self.R[i, j]  # noqa: B023
 
                     # if (self.D[i].name!='custom') or (self.D[j].name!='custom'):
                     rho = optimize.newton(check_difference, self.R[i, j], maxiter=50)
@@ -153,14 +164,14 @@ class Correlations:
             basis_card = poly.basis.cardinality
             oversampling = 10
 
-            N_Psi = oversampling * basis_card
-            S_samples = self.get_correlated_samples(N=N_Psi)
+            N_Psi = oversampling * basis_card  # noqa: N806
+            S_samples = self.get_correlated_samples(N=N_Psi)  # noqa: N806
             w_weights = 1.0 / N_Psi * np.ones(N_Psi)
-            Psi = poly.get_poly(S_samples).T
-            WPsi = np.diag(np.sqrt(w_weights)) @ Psi
+            Psi = poly.get_poly(S_samples).T  # noqa: N806
+            WPsi = np.diag(np.sqrt(w_weights)) @ Psi  # noqa: N806
             self.WPsi = WPsi
 
-            R_Psi = np.linalg.qr(WPsi)[1]
+            R_Psi = np.linalg.qr(WPsi)[1]  # noqa: N806
 
             self.R_Psi = R_Psi
             self.R_Psi[0, :] *= np.sign(self.R_Psi[0, 0])
@@ -169,9 +180,9 @@ class Correlations:
             self.corrected_poly.corr = self
             self.corrected_poly._set_points_and_weights()
 
-            P = self.corrected_poly.get_poly(self.corrected_poly._quadrature_points)
-            W = np.asmatrix(np.diag(np.sqrt(self.corrected_poly._quadrature_weights)))
-            A = W * P.T
+            P = self.corrected_poly.get_poly(self.corrected_poly._quadrature_points)  # noqa: N806
+            W = np.asmatrix(np.diag(np.sqrt(self.corrected_poly._quadrature_weights)))  # noqa: N806
+            A = W * P.T  # noqa: N806
             self.corrected_poly.A = A
             self.corrected_poly.P = P
 
@@ -181,7 +192,7 @@ class Correlations:
         else:
             raise ValueError("Invalid method for correlations.")
 
-    def get_points(self):
+    def get_points(self):  # noqa: ANN201
         """Returns the quadrature points accounting for correlations.
 
         For Nataf transform, returns points in the correlated standard normal space.
@@ -195,23 +206,25 @@ class Correlations:
         """
         return self._points
 
-    def set_model(self, model=None, model_grads=None):
-        """Computes the coefficients of transformed polynomial (equivalent to calling ``self.get_transformed_poly().set_model(...)``)
+    def set_model(self, model=None, model_grads=None) -> None:  # noqa: ANN001
+        """Computes the coefficients of transformed polynomial (equivalent to calling.
+
+        ``self.get_transformed_poly().set_model(...)``).
 
         Parameters
         ----------
         model : ~collections.abc.Callable,numpy.ndarray, optional
-            The function that needs to be approximated. In the absence of a callable function, the input can be the function evaluated at the quadrature points.
+            The function that needs to be approximated. In the absence of a callable
+            function, the input can be the function evaluated at the quadrature points.
         model_grads : ~collections.abc.Callable,numpy.ndarray, optional
-            The gradient of the function that needs to be approximated. In the absence of a callable gradient function, the input can be a matrix of gradient evaluations at the quadrature points.
+            The gradient of the function that needs to be approximated. In the absence
+            of a callable gradient function, the input can be a matrix of gradient
+            evaluations at the quadrature points.
         """
         # Need to account for the nataf transform here?
         model_values = None
         model_grads_values = None
-        if callable(model):
-            model_values = evaluate_model(self._points, model)
-        else:
-            model_values = model
+        model_values = evaluate_model(self._points, model) if callable(model) else model
         if model_grads is not None:
             if callable(model_grads):
                 model_grads_values = evaluate_model_gradients(self._points, model_grads)
@@ -219,7 +232,7 @@ class Correlations:
                 model_grads_values = model_grads
         self.corrected_poly.set_model(model_values, model_grads_values)
 
-    def get_transformed_poly(self):
+    def get_transformed_poly(self):  # noqa: ANN201
         """Returns the transformed polynomial.
 
         Returns:
@@ -229,7 +242,7 @@ class Correlations:
         """
         return self.corrected_poly
 
-    def get_correlated_samples(self, N=None, X=None):
+    def get_correlated_samples(self, N=None, X=None):  # noqa: ANN001, ANN201, N803
         """Method for generating correlated samples.
 
         Parameters
@@ -249,20 +262,20 @@ class Correlations:
         if X is None:
             if N is None:
                 raise ValueError("Need to specify number of points to generate.")
-            X = np.random.multivariate_normal(np.zeros(d), np.eye(d), size=N)
+            X = np.random.multivariate_normal(np.zeros(d), np.eye(d), size=N)  # noqa: N806
 
-        X_test = X @ self.A.T
+        X_test = X @ self.A.T  # noqa: N806
 
-        U_test = np.zeros(X_test.shape)
+        U_test = np.zeros(X_test.shape)  # noqa: N806
         for i in range(d):
             U_test[:, i] = self.std.get_cdf(X_test[:, i])
 
-        Z_test = np.zeros(U_test.shape)
+        Z_test = np.zeros(U_test.shape)  # noqa: N806
         for i in range(d):
             Z_test[:, i] = self.D[i].get_icdf(U_test[:, i])
         return Z_test
 
-    def get_pdf(self, X):
+    def get_pdf(self, X):  # noqa: ANN001, ANN201, N803
         """Evaluate PDF at the sample points.
 
         Parameters
@@ -277,10 +290,10 @@ class Correlations:
         """
         parameters = self.D
         if len(X.shape) == 1:
-            X = X.reshape(-1, 1)
+            X = X.reshape(-1, 1)  # noqa: N806
         d = X.shape[1]
 
-        U = np.zeros(X.shape)
+        U = np.zeros(X.shape)  # noqa: N806
         for i in range(d):
             U[:, i] = norm.ppf(parameters[i].get_cdf(X[:, i]))
         cop_num = multivariate_normal(mean=np.zeros(d), cov=self.R0).pdf(U)

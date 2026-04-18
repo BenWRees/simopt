@@ -1,5 +1,6 @@
 """Terminal scatter plot."""
 
+import contextlib
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -13,7 +14,7 @@ from .utils import save_plot, setup_plot
 
 def plot_terminal_scatterplots(
     experiments: list[list[ProblemSolver]],
-    all_in_one: float = True,
+    all_in_one: bool = True,
     plot_title: str | None = None,
     legend_loc: str | None = None,
     ext: str = ".png",
@@ -84,12 +85,12 @@ def plot_terminal_scatterplots(
                     marker=marker_str,
                 )
             solver_curve_handles.append(handle)
-        leg = plt.legend(handles=solver_curve_handles, labels=solver_names, loc=legend_loc)
+        leg = plt.legend(
+            handles=solver_curve_handles, labels=solver_names, loc=legend_loc
+        )
         if leg is not None:
-            try:
+            with contextlib.suppress(Exception):
                 leg.get_frame().set_alpha(0.4)
-            except Exception:
-                pass
         file_list.append(
             save_plot(
                 solver_name=solver_set_name,

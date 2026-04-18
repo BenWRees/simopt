@@ -7,17 +7,21 @@ from scipy.linalg import cholesky, lstsq, lu, qr, svd
 
 
 class Subsampling:
-    """Returns subsampling methods for pruning down the number of quadrature points. Choices include:
+    """Returns subsampling methods for pruning down the number of quadrature points.
+
+    Choices include:
+
      - `qr`: QR column pivoting.
      - `svd`: QR column pivoting on right singular vectors.
      - `newton`: Determinant maximization.
      - `lu`: LU row pivoting.
      - `random`: Randomly subsample.
 
-    :param string subsampling_algorithm: Choose between `qr`, `svd`, `newton`, `lu`, `random`.
+    :param string subsampling_algorithm: Choose between `qr`, `svd`, `newton`, `lu`,
+    `random`.
     """
 
-    def __init__(self, subsampling_algorithm):
+    def __init__(self, subsampling_algorithm) -> None:  # noqa: ANN001, D107
         self.subsampling_algorithm = subsampling_algorithm
         if self.subsampling_algorithm is None:
             self.algorithm = _get_all_pivots
@@ -33,51 +37,57 @@ class Subsampling:
             # Is this a placeholder?
             self.algorithm = 0  # np.random.choice(int(m), m_refined, replace=False)
 
-    def get_subsampling_method(self):
+    def get_subsampling_method(self):  # noqa: ANN201, D102
         return self.algorithm
 
 
-def _get_all_pivots(Ao, number_of_subsamples):
+def _get_all_pivots(Ao, number_of_subsamples):  # noqa: ANN001, ANN202, ARG001, N803
     """A dummy case where we return all the subsamples."""
     return np.arange(1, len(number_of_subsamples))
 
 
-def get_qr_column_pivoting(Ao, number_of_subsamples):
-    """Pivoted QR factorization, where the pivots are used as a heuristic for subsampling."""
-    A = deepcopy(Ao)
+def get_qr_column_pivoting(Ao, number_of_subsamples):  # noqa: ANN001, ANN201, N803
+    """Pivoted QR factorization, where the pivots are used as a heuristic for.
+
+    subsampling.
+    """
+    A = deepcopy(Ao)  # noqa: N806
     _, _, pvec = qr(A.T, pivoting=True)
-    z = pvec[0:number_of_subsamples]
-    return z
+    return pvec[0:number_of_subsamples]
 
 
-def get_svd_subset_selection(Ao, number_of_subsamples):
-    """Singular value decomposition and pivoted QR factorization, where the pivots
+def get_svd_subset_selection(Ao, number_of_subsamples):  # noqa: ANN001, ANN201, N803
+    """Singular value decomposition and pivoted QR factorization, where the pivots.
+
     are used as a heuristic for subsampling.
     """
-    A = deepcopy(Ao)
-    _, _, V = svd(A.T)
+    A = deepcopy(Ao)  # noqa: N806
+    _, _, V = svd(A.T)  # noqa: N806
     _, _, pvec = qr(V[:, 0:number_of_subsamples].T, pivoting=True)
-    z = pvec[0:number_of_subsamples]
-    return z
+    return pvec[0:number_of_subsamples]
 
 
-def get_lu_row_pivoting(Ao, number_of_subsamples):
+def get_lu_row_pivoting(Ao, number_of_subsamples):  # noqa: ANN001, ANN201, N803
     """Retain rows with largest pivots in LU factorisation. AKA Leja sequence."""
-    A = Ao.copy()
-    P = lu(A)[0]
-    z = np.where(P == 1)[1][:number_of_subsamples]
-    return z
+    A = Ao.copy()  # noqa: N806
+    P = lu(A)[0]  # noqa: N806
+    return np.where(P == 1)[1][:number_of_subsamples]
 
 
-def get_newton_determinant_maximization(Ao, number_of_subsamples):
-    """A convex relaxation technique for determinant maximization---akin to optimal experiment of
+def get_newton_determinant_maximization(Ao, number_of_subsamples):  # noqa: ANN001, ANN201, N803
+    """A convex relaxation technique for determinant maximization---akin to optimal.
+
+    experiment of.
+
     design (D). Based on the work of Joshi and Boyd [1].
 
     **References**
-        1. Joshi, S., Boyd, S., (2009) Sensor Selection via Convex Optimization. IEEE Transactions on Signal Processing, 57(2). `Paper <https://ieeexplore.ieee.org/document/4663892>`__
+        1. Joshi, S., Boyd, S., (2009) Sensor Selection via Convex Optimization. IEEE
+        Transactions on Signal Processing, 57(2). `Paper
+        <https://ieeexplore.ieee.org/document/4663892>`__
 
     """
-    A = deepcopy(Ao)
+    A = deepcopy(Ao)  # noqa: N806
     maxiter = 50
     n_tol = 1e-12
     gap = 1.005
@@ -99,16 +109,16 @@ def get_newton_determinant_maximization(Ao, number_of_subsamples):
     kappa = np.log(gap) * n / m
 
     # Objective function
-    Z = _diag(z)
+    Z = _diag(z)  # noqa: N806
     fz = -np.log(np.linalg.det(A.T * Z * A)) - kappa * np.sum(
         np.log(z) + np.log(1.0 - z)
     )
 
     # Optimization loop!
-    for i in range(0, maxiter):
-        Z = _diag(z)
-        W = np.linalg.inv(A.T * Z * A)
-        V = A * W * A.T
+    for _i in range(0, maxiter):
+        Z = _diag(z)  # noqa: N806
+        W = np.linalg.inv(A.T * Z * A)  # noqa: N806
+        V = A * W * A.T  # noqa: N806
         vo = np.matrix(np.diag(V))
         vo = vo.T
 
@@ -118,16 +128,16 @@ def get_newton_determinant_maximization(Ao, number_of_subsamples):
         one_by_z2 = ones_m / z**2
         one_by_one_minus_z2 = ones_m / (ones_m - z) ** 2
         g = -vo - kappa * (one_by_z - one_by_one_minus_z)
-        H = np.multiply(V, V) + kappa * _diag(one_by_z2 + one_by_one_minus_z2)
+        H = np.multiply(V, V) + kappa * _diag(one_by_z2 + one_by_one_minus_z2)  # noqa: N806
 
         # Textbook Newton's method -- compute inverse of Hessian
-        R = np.matrix(cholesky(H))
+        R = np.matrix(cholesky(H))  # noqa: N806
         u = lstsq(R.T, g)
-        Hinvg = lstsq(R, u[0])
-        Hinvg = Hinvg[0]
+        Hinvg = lstsq(R, u[0])  # noqa: N806
+        Hinvg = Hinvg[0]  # noqa: N806
         v = lstsq(R.T, ones_m)
-        Hinv1 = lstsq(R, v[0])
-        Hinv1 = Hinv1[0]
+        Hinv1 = lstsq(R, v[0])  # noqa: N806
+        Hinv1 = Hinv1[0]  # noqa: N806
         dz = (
             -Hinvg
             + (np.dot(ones_m_transpose, Hinvg) / np.dot(ones_m_transpose, Hinv1))
@@ -143,7 +153,7 @@ def get_newton_determinant_maximization(Ao, number_of_subsamples):
 
         while flag == 1:
             zp = z + s * dz
-            Zp = _diag(zp)
+            Zp = _diag(zp)  # noqa: N806
             fzp = -np.log(np.linalg.det(A.T * Zp * A)) - kappa * np.sum(
                 np.log(zp) + np.log(1 - zp)
             )
@@ -159,43 +169,41 @@ def get_newton_determinant_maximization(Ao, number_of_subsamples):
             break
         zsort = np.sort(z, axis=0)
         thres = zsort[m - number_of_subsamples - 1]
-        zhat, not_used = _find(z, thres)
+        zhat, not_used = _find(z, thres)  # noqa: RUF059
 
     zsort = np.sort(z, axis=0)
     thres = zsort[m - number_of_subsamples - 1]
-    zhat, not_used = _find(z, thres)
-    p, q = zhat.shape
-    Zhat = _diag(zhat)
-    L = np.log(np.linalg.det(A.T * Zhat * A))
-    ztilde = z
-    Utilde = np.log(np.linalg.det(A.T * _diag(z) * A)) + 2 * m * kappa
-    z = _binary2indices(zhat)
-    return z
+    zhat, _not_used = _find(z, thres)
+    _p, _q = zhat.shape
+    Zhat = _diag(zhat)  # noqa: N806
+    np.log(np.linalg.det(A.T * Zhat * A))
+    np.log(np.linalg.det(A.T * _diag(z) * A)) + 2 * m * kappa
+    return _binary2indices(zhat)
 
 
-def _binary2indices(zhat):
+def _binary2indices(zhat):  # noqa: ANN001, ANN202
     """Simple utility that converts a binary array into one with indices!"""
     pvec = []
-    m, n = zhat.shape
+    m, _n = zhat.shape
     for i in range(0, m):
         if zhat[i, 0] == 1:
             pvec.append(i)
     return pvec
 
 
-def _indices(a, func):
+def _indices(a, func):  # noqa: ANN001, ANN202
     return [i for (i, val) in enumerate(a) if func(val)]
 
 
-def _diag(vec):
+def _diag(vec):  # noqa: ANN001, ANN202
     m = len(vec)
-    D = np.zeros((m, m))
+    D = np.zeros((m, m))  # noqa: N806
     for i in range(0, m):
         D[i, i] = vec[i, 0]
     return D
 
 
-def _find(vec, thres):
+def _find(vec, thres):  # noqa: ANN001, ANN202
     t = []
     vec_new = []
     for i in range(0, len(vec)):

@@ -1,10 +1,11 @@
 """Function estimates plot."""
 
+import contextlib
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
 import numpy as np
+from matplotlib.ticker import MaxNLocator
 
 import simopt.curve_utils as curve_utils
 from mrg32k3a.mrg32k3a import MRG32k3a
@@ -13,7 +14,6 @@ from simopt.experiment import ProblemSolver
 from simopt.plot_type import PlotType
 
 from .utils import (
-    check_common_problem_and_reference,
     plot_bootstrap_conf_ints,
     save_plot,
     setup_plot,
@@ -72,10 +72,7 @@ def _fn_estimates_to_curves(
     curves = []
     for fn_estimates in fn_estimates_list:
         n_iters = len(fn_estimates)
-        if normalize:
-            x_vals = list(np.linspace(0, 1, n_iters))
-        else:
-            x_vals = list(range(n_iters))
+        x_vals = list(np.linspace(0, 1, n_iters)) if normalize else list(range(n_iters))
         curves.append(Curve(x_vals=x_vals, y_vals=fn_estimates))
     return curves
 
@@ -132,12 +129,8 @@ def _bootstrap_curves_conf_int(
 
         # Bias correction factor
         bs_std = np.std(bs_vals)
-        if bs_std > 0:
-            z0 = (np.percentile(bs_vals, 50) - original_val) / bs_std
-        else:
-            z0 = 0
-
-        # Adjusted percentiles (BC method)
+        z0 = (np.percentile(bs_vals, 50) - original_val) / bs_std if bs_std > 0 else 0
+        
         alpha = 1 - conf_level
         z_alpha_lower = stats.norm.ppf(alpha / 2)
         z_alpha_upper = stats.norm.ppf(1 - alpha / 2)
@@ -199,6 +192,10 @@ def plot_fn_estimates(
             Defaults to True.
         print_max_hw (bool, optional): If True, print max half-width in caption.
             Defaults to True.
+        log_y (bool, optional): If True, use logarithmic scale for y-axis.
+            Defaults to False.
+        y_limits (tuple[float, float], optional): If provided, set y-axis limits
+            to (ymin, ymax). Defaults to None.
         plot_title (str, optional): Custom title for the plot
             (used only if `all_in_one=True`).
         legend_loc (str, optional): Location of legend (e.g., "best", "lower right").
@@ -264,7 +261,10 @@ def plot_fn_estimates(
                     f_star = float(np.mean(experiment.xstar_postreps))
                 except Exception:
                     # Fallback: use minimum observed value across curves
-                    f_star = min((min(c.y_vals) for c in fn_curves if len(c.y_vals) > 0), default=0.0)
+                    f_star = min(
+                        (min(c.y_vals) for c in fn_curves if len(c.y_vals) > 0),
+                        default=0.0,
+                    )
 
                 # Determine initial value f0 as mean of first observations
                 first_vals = [c.y_vals[0] for c in fn_curves if len(c.y_vals) > 0]
@@ -278,7 +278,9 @@ def plot_fn_estimates(
                         new_y = [(y - f_star) / denom for y in c.y_vals]
                     else:
                         new_y = [y - f_star for y in c.y_vals]
-                    transformed_curves.append(Curve(x_vals=list(c.x_vals), y_vals=new_y))
+                    transformed_curves.append(
+                        Curve(x_vals=list(c.x_vals), y_vals=new_y)
+                    )
                 fn_curves = transformed_curves
 
             if plot_type == PlotType.FN_ESTIMATES_ALL:
@@ -322,7 +324,7 @@ def plot_fn_estimates(
             try:
                 leg.get_frame().set_alpha(0.4)
             except Exception:
-                pass
+                contextlib.suppress(Exception)
         # X-axis label
         if normalize:
             plt.xlabel("Percentage of the run")

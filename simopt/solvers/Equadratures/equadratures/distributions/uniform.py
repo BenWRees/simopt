@@ -1,4 +1,4 @@
-"""Please add a file description here"""
+"""Please add a file description here."""
 
 import numpy as np
 from scipy.stats import uniform
@@ -18,7 +18,7 @@ class Uniform(Distribution):
     Variance of the Gaussian distribution.
     """
 
-    def __init__(self, lower, upper):
+    def __init__(self, lower, upper) -> None:  # noqa: ANN001, D107
         if lower is None:
             self.lower = 0.0
         else:
@@ -39,7 +39,7 @@ class Uniform(Distribution):
             self.lower, self.upper, RECURRENCE_PDF_SAMPLES
         )
 
-    def get_description(self):
+    def get_description(self):  # noqa: ANN201
         """A description of the Gaussian.
 
         :param Gaussian self:
@@ -47,17 +47,17 @@ class Uniform(Distribution):
         :return:
             A string describing the Gaussian.
         """
-        text = (
+        return (
             "is a uniform distribution over the support "
             + str(self.lower)
             + " to "
             + str(self.upper)
             + "."
         )
-        return text
 
-    def get_cdf(self, points=None):
+    def get_cdf(self, points=None):  # noqa: ANN001, ANN201
         """A uniform cumulative density function.
+
         :param points:
                 Matrix of points which have to be evaluated
         :param double lower:
@@ -73,8 +73,9 @@ class Uniform(Distribution):
             return self.parent.cdf(points)
         raise ValueError("Please digit an input for getCDF method")
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """A uniform probability distribution.
+
         :param points:
             Matrix of points which have to be evaluated
         :param double lower:
@@ -90,7 +91,7 @@ class Uniform(Distribution):
             return self.parent.pdf(points)
         raise ValueError("Please digit an input for get_pdf method")
 
-    def get_recurrence_coefficients(self, order):
+    def get_recurrence_coefficients(self, order):  # noqa: ANN001, ANN201
         """Recurrence coefficients for the uniform distribution.
 
         :param Uniform self:
@@ -100,39 +101,37 @@ class Uniform(Distribution):
         :return:
             Recurrence coefficients associated with the uniform distribution.
         """
-        ab = jacobi_recurrence_coefficients(
+        return jacobi_recurrence_coefficients(
             self.shape_parameter_A,
             self.shape_parameter_B,
             self.lower,
             self.upper,
             order,
         )
-        return ab
 
-    def get_icdf(self, xx):
+    def get_icdf(self, xx):  # noqa: ANN001, ANN201
         """A Uniform inverse cumulative density function.
 
         :param: Uniform self:
             An instance of Uniform class
         :param array xx:
-            Points at which the inverse cumulative density function need to be evaluated.
+            Points at which the inverse cumulative density function need to be
+            evaluated.
         :return:
             Inverse cumulative density function values of the Uniform distribution.
         """
         return self.parent.ppf(xx)
 
-    def get_samples(self, m=None):
+    def get_samples(self, m=None):  # noqa: ANN001, ANN201
         """Generates samples from the Uniform distribution.
 
         :param: uniform self:
             An instance of Uniform class
         :param: integer m:
-            NUmber of random samples. If no provided, a default number of 5e5 is assumed.
+            NUmber of random samples. If no provided, a default number of 5e5 is
+            assumed.
         :return:
             A N-by-1 vector that contains the samples.
         """
-        if m is not None:
-            number = m
-        else:
-            number = 500000
+        number = m if m is not None else 500000
         return self.parent.rvs(size=number)

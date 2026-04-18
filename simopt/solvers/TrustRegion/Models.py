@@ -1,4 +1,4 @@
-# type: ignore
+# type: ignore  # noqa: D100, N999
 # TODO:
 # ?	- Implement the acquisition function in GPModel
 # ?  - Fix the optimisation bottleneck in the _fit function for GPModel
@@ -9,21 +9,21 @@ import numpy as np
 from numpy.linalg import norm, pinv
 
 warnings.filterwarnings("ignore")
-import copy
+import copy  # noqa: E402
 
-from simopt.base import (
+from simopt.base import (  # noqa: E402
     Solution,
 )
 
-from ..active_subspaces.basis import *
-from .Geometry import *
-from .Sampling import *
+from ..active_subspaces.basis import *  # noqa: E402, F403
+from .Geometry import *  # noqa: E402, F403
+from .Sampling import *  # noqa: E402, F403
 
 __all__ = ["RandomModel"]
 
 
 class RandomModel:
-    """Class for a stochastic interpolation model. This is currently the best surrogate model to use in stochastic trust-region algorithms
+    """Class for a stochastic interpolation model. This is currently the best surrogate model to use in stochastic trust-region algorithms.
 
     Attributes:
             coefficients ([np.array]): a list of values containing the coefficients of the model, along with the Jacobian matrix and the Hessian matrix
@@ -37,15 +37,15 @@ class RandomModel:
             sample_size (int): number of times to sample
     """
 
-    def __init__(
+    def __init__(  # noqa: D107
         self,
-        geometry_instance,
-        tr_instance,
-        poly_basis,
-        problem,
-        sampling_instance,
-        model_construction_parameters,
-    ):
+        geometry_instance,  # noqa: ANN001
+        tr_instance,  # noqa: ANN001
+        poly_basis,  # noqa: ANN001
+        problem,  # noqa: ANN001
+        sampling_instance,  # noqa: ANN001
+        model_construction_parameters,  # noqa: ANN001
+    ) -> None:
         self.coefficients = []
         self.geometry_instance = geometry_instance
         self.tr_instance = tr_instance
@@ -61,13 +61,12 @@ class RandomModel:
     # nice way to allow for different types of random models
 
     # Constructs the model
-    def construct_model(
-        self, current_solution, delta, k, visited_pts_list
+    def construct_model(  # noqa: D102
+        self, current_solution, delta, k, visited_pts_list  # noqa: ANN001
     ) -> tuple[Solution, float, int, list[Solution], list[Solution], int]:
         interpolation_solns = []
         j = 0
         # interpolation_sets = self.geometry_type_instantiation()(self.problem, current_solution.x)
-        d = self.problem.dim
 
         while True:
             fval = []
@@ -77,8 +76,8 @@ class RandomModel:
             # construct the interpolation set
             empty_geometry = copy.deepcopy(self.geometry_instance)
 
-            Z = empty_geometry.interpolation_points(np.zeros(self.problem.dim), delta_k)
-            Y = self.geometry_instance.interpolation_points(
+            Z = empty_geometry.interpolation_points(np.zeros(self.problem.dim), delta_k)  # noqa: N806
+            Y = self.geometry_instance.interpolation_points(  # noqa: N806
                 np.array(current_solution.x), delta_k
             )
 
@@ -111,9 +110,9 @@ class RandomModel:
                     interpolation_solns.append(interpolation_pt_solution)
 
             # construct the model and get the model coefficients
-            q, grad, Hessian = self.coefficient(Z, fval)
+            q, grad, Hessian = self.coefficient(Z, fval)  # noqa: N806
 
-            if not self.model_construction_parameters["skip_criticality"]:
+            if not self.model_construction_parameters["skip_criticality"]:  # noqa: SIM102
                 # check the condition and break
                 if (
                     norm(grad)
@@ -133,12 +132,12 @@ class RandomModel:
         return current_solution, delta_k, interpolation_solns, visited_pts_list
 
     # Calculate the Model coefficients
-    def coefficient(
-        self, Y: list[np.ndarray], fval: list[float]
+    def coefficient(  # noqa: D102
+        self, Y: list[np.ndarray], fval: list[float]  # noqa: N803
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         d = self.problem.dim
-        Y = np.vstack(Y)  # reshape Y to be a matrix of (M,d)
-        M = self.poly_basis.V(
+        Y = np.vstack(Y)  # reshape Y to be a matrix of (M,d)  # noqa: N806
+        M = self.poly_basis.V(  # noqa: N806
             Y, d
         )  # now constructs M based on the polynomial basis being used
         q = np.matmul(pinv(M), fval)
@@ -147,10 +146,10 @@ class RandomModel:
         grad = np.reshape(grad, d)
 
         if self.poly_basis.degree > 1:
-            Hessian = q[d + 1 : 2 * d + 1]
-            Hessian = np.reshape(Hessian, d)
+            Hessian = q[d + 1 : 2 * d + 1]  # noqa: N806
+            Hessian = np.reshape(Hessian, d)  # noqa: N806
         else:
-            Hessian = np.zeros(
+            Hessian = np.zeros(  # noqa: N806
                 d,
             )
 
@@ -158,7 +157,7 @@ class RandomModel:
         return q, grad, Hessian
 
     def local_model_evaluate(self, x_k: list[float]) -> float:
-        """Calculate the solution of the local model at the point x_k
+        """Calculate the solution of the local model at the point x_k.
 
         Args:
                 x_k ([float]): the current iteration's solution value
@@ -167,9 +166,8 @@ class RandomModel:
         q = self.coefficients[0]
         interpolation_set = x_k.reshape((1, len(x_k)))
         # interpolation_set = np.row_stack(interpolation_set)
-        X = self.poly_basis.V(interpolation_set, d)[0]
-        evaluation = np.dot(X, q)
-        return evaluation
+        X = self.poly_basis.V(interpolation_set, d)[0]  # noqa: N806
+        return np.dot(X, q)
 
 
 # class RandomModelReuse(RandomModel) :

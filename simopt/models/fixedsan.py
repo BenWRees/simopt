@@ -194,9 +194,7 @@ class FixedSAN(Model):
             time_deriv[target_node_idx, :] = time_deriv[best_prev, :].copy()
             time_deriv[target_node_idx, best_arc] += arcs[best_arc] / thetas[best_arc]
 
-
-        #*Rewritten logic for updating nodes for arbitrary number of arcs and nodes 
-
+        # *Rewritten logic for updating nodes for arbitrary number of arcs and nodes
 
         # node 1 = node 0 + arc 0
         update_node(1, [(0, 0)])

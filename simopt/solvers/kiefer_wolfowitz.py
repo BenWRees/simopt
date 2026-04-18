@@ -141,7 +141,7 @@ class KieferWolfowitz(Solver):
         """
         return self.factors["stepsize_c_coeff"] / (n ** (1 / 3))
 
-    def solve(self, problem: Problem) -> None:
+    def solve(self, problem: Problem) -> None:  # ty: ignore[invalid-method-override]
         """Run a single macroreplication of the solver on a problem.
 
         Args:
@@ -164,11 +164,11 @@ class KieferWolfowitz(Solver):
 
         # simulate incumbent solution to get a first estimate
         self.problem.simulate(self.incumbent_solution, 10)
-        self.current_fn_estimate = (self.incumbent_solution.objectives_mean.item())
+        self.current_fn_estimate = self.incumbent_solution.objectives_mean.item()
 
         self.recommended_solns.append(self.incumbent_solution)
         self.intermediate_budgets.append(self.budget.used)
-        self.budget_history.append(self.budget.used)   
+        self.budget_history.append(self.budget.used)
         self.fn_estimates.append(self.current_fn_estimate)
         self.iterations.append(self.iteration_count)
 
@@ -184,7 +184,6 @@ class KieferWolfowitz(Solver):
         upper_bound = np.array(self.problem.upper_bounds)
 
         while self.budget.remaining > 0:
-
             # Check proximity to bounds for finite difference direction
             # Check variable bounds.
             forward = np.isclose(
@@ -198,7 +197,14 @@ class KieferWolfowitz(Solver):
 
             # Calculate finite difference gradient approximation
             # diff = self.finite_diff(self.incumbent_solution, bounds_check)
-            diff = finite_diff(self, self.incumbent_solution, bounds_check, problem, self.stepsize_c(self.iteration_count), 1)
+            diff = finite_diff(
+                self,
+                self.incumbent_solution,
+                bounds_check,
+                problem,
+                self.stepsize_c(self.iteration_count),
+                1,
+            )
             self.budget.request(2 * self.problem.dim)
 
             # Apply gradient clipping if enabled
@@ -227,7 +233,7 @@ class KieferWolfowitz(Solver):
             )
 
             self.problem.simulate(self.incumbent_solution, 10)
-            self.current_fn_estimate = (self.incumbent_solution.objectives_mean.item())
+            self.current_fn_estimate = self.incumbent_solution.objectives_mean.item()
 
             self.iteration_count += 1
 

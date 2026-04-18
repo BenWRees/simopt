@@ -17,7 +17,7 @@ class Weibull(Distribution):
     Upper bound of the support of the Weibull distribution.
     """
 
-    def __init__(self, scale=None, shape=None):
+    def __init__(self, scale=None, shape=None) -> None:  # noqa: ANN001, D107
         if shape is None:
             self.shape = 1.0
         else:
@@ -38,7 +38,7 @@ class Weibull(Distribution):
         )
         self.x_range_for_pdf = np.linspace(0, self.scale * 10, RECURRENCE_PDF_SAMPLES)
 
-    def get_description(self):
+    def get_description(self):  # noqa: ANN201
         """A description of the Weibull distribution.
 
         :param Weibull self:
@@ -46,15 +46,14 @@ class Weibull(Distribution):
         :return:
             A string describing the Weibull distribution.
         """
-        text = (
+        return (
             "is a Weibull distribution with a shape parameter of "
             + str(self.shape)
             + " and a scale parameter of "
             + str(self.scale)
         )
-        return text
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """A Weibull probability density function.
 
         :param Weibull self:
@@ -68,7 +67,7 @@ class Weibull(Distribution):
             return self.parent.pdf(points)
         raise ValueError("Please digit an input for getCDF method")
 
-    def get_icdf(self, xx):
+    def get_icdf(self, xx):  # noqa: ANN001, ANN201
         """An inverse Weibull cumulative density function.
 
         :param Weibull self:
@@ -81,7 +80,7 @@ class Weibull(Distribution):
         # return self.scale * (-np.log(1.0 - xx))**(1.0/self.shape)
         return self.parent.ppf(xx)
 
-    def get_cdf(self, points=None):
+    def get_cdf(self, points=None):  # noqa: ANN001, ANN201
         """A Weibull cumulative density function.
 
         :param Weibull self:

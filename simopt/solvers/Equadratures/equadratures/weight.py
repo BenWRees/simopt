@@ -1,4 +1,4 @@
-import numpy as np
+import numpy as np  # noqa: D100
 from scipy import stats
 
 from equadratures.basis import Basis
@@ -11,21 +11,29 @@ QUADRATURE_ORDER_INCREMENT = 80
 
 
 class Weight:
-    """The class offers a template to input bespoke weight (probability density) functions. The resulting weight function can be given to :class:`~equadratures.parameter.Parameter` to create a bespoke analytical or data-driven parameter.
+    """The class offers a template to input bespoke weight (probability density).
+
+    functions. The resulting weight function can be given to
+    :class:`~equadratures.parameter.Parameter` to create a bespoke analytical or
+    data-driven parameter.
 
     Parameters
     ----------
     weight_function : ~collections.abc.Callable,numpy.ndarray
         A callable function or an array of data representing the weights.
     support : list, optional
-        Lower and upper bounds of the weight respectively. Values such as ``-inf`` or ``inf`` are not acceptable.
+        Lower and upper bounds of the weight respectively. Values such as ``-inf`` or
+        ``inf`` are not acceptable.
     pdf : bool, optional
-        If set to ``True``, then the weight_function is assumed to be normalised to integrate to unity. Otherwise,
+        If set to ``True``, then the weight_function is assumed to be normalised to
+        integrate to unity. Otherwise,
         the integration constant is computed and used to normalise weight_function.
     mean : float, optional
-        User-defined mean for distribution. When provided, the code does not compute the mean of the weight_function over its support.
+        User-defined mean for distribution. When provided, the code does not compute the
+        mean of the weight_function over its support.
     variance : float, optional
-        User-defined variance for distribution. When provided, the code does not compute the variance of the weight_function over its support.
+        User-defined variance for distribution. When provided, the code does not compute
+        the variance of the weight_function over its support.
 
     Example:
     -------
@@ -49,7 +57,8 @@ class Weight:
         >>> param = Parameter(distribution='analytical', weight_function=pdf_2, order=2)
 
     Data driven weight functions
-        >>> # Constructing a kde based on given data, using Rilverman's rule for bandwidth selection
+        >>> # Constructing a kde based on given data, using Rilverman's rule for
+        bandwidth selection
         >>> pdf_2 = Weight( stats.gaussian_kde(data, bw_method='silverman'),
         >>>        support=[-3, 3.2])
         >>>
@@ -58,12 +67,20 @@ class Weight:
 
     """
 
-    def __init__(
-        self, weight_function, support=None, pdf=False, mean=None, variance=None
-    ):
+    def __init__(  # noqa: D107
+        self,
+        weight_function,  # noqa: ANN001
+        support=None,  # noqa: ANN001
+        pdf=False,  # noqa: ANN001
+        mean=None,  # noqa: ANN001
+        variance=None,  # noqa: ANN001
+    ) -> None:
         self.weight_function = weight_function
         self.flag = "function"
-        tmp = lambda: 0
+
+        def tmp() -> int:
+            return 0
+
         if not isinstance(self.weight_function, type(tmp)):
             self.weight_function = stats.gaussian_kde(
                 weight_function, bw_method="silverman"
@@ -96,14 +113,14 @@ class Weight:
         if self.variance is None:
             self._set_variance()
 
-    def _evaluate_pdf(self, x):
+    def _evaluate_pdf(self, x):  # noqa: ANN001, ANN202
         x = np.array(x)
         pdf_values = np.zeros(x.shape[0])
         for i in range(0, x.shape[0]):
             pdf_values[i] = self.weight_function(x[i])
         return pdf_values
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """Returns the pdf associated with the distribution.
 
         Parameters
@@ -121,14 +138,14 @@ class Weight:
             return self._evaluate_pdf(self.x_range_for_pdf) * self.integration_constant
         return self._evaluate_pdf(points) * self.integration_constant
 
-    def _verify_probability_density(self):
+    def _verify_probability_density(self) -> None:
         integral, _ = self._iterative_quadrature_computation(self.weight_function)
         if (np.abs(integral - 1.0) >= 1e-2) or (self.pdf is False):
             self.integration_constant = 1.0 / integral
         elif (np.abs(integral - 1.0) < 1e-2) or (self.pdf is True):
             self.integration_constant = 1.0
 
-    def _get_quadrature_points_and_weights(self, order):
+    def _get_quadrature_points_and_weights(self, order):  # noqa: ANN001, ANN202
         param = Parameter(
             distribution="uniform", lower=self.lower, upper=self.upper, order=order
         )
@@ -137,17 +154,19 @@ class Weight:
         points, weights = poly.get_points_and_weights()
         return points, weights * (self.upper - self.lower)
 
-    def _set_mean(self):
+    def _set_mean(self) -> None:
         # Modified integrand for estimating the mean
-        mean_integrand = (
-            lambda x: x * self.weight_function(x) * self.integration_constant
-        )
+        def mean_integrand(x):  # noqa: ANN001, ANN202
+            return x * self.weight_function(x) * self.integration_constant
+
         self.mean, self._mean_quadrature_order = self._iterative_quadrature_computation(
             mean_integrand
         )
 
-    def _iterative_quadrature_computation(
-        self, integrand, quadrature_order_output=True
+    def _iterative_quadrature_computation(  # noqa: ANN202
+        self,
+        integrand,  # noqa: ANN001
+        quadrature_order_output=True,  # noqa: ANN001
     ):
         # Keep increasing the order till we reach ORDER_LIMIT
         quadrature_error = 500.0
@@ -172,13 +191,15 @@ class Weight:
             return integral, quadrature_order
         return integral
 
-    def _set_variance(self):
+    def _set_variance(self) -> None:
         # Modified integrand for estimating the mean
-        variance_integrand = (
-            lambda x: (x - self.mean) ** 2
-            * self.weight_function(x)
-            * self.integration_constant
-        )
+        def variance_integrand(x):  # noqa: ANN001, ANN202
+            return (
+                (x - self.mean) ** 2
+                * self.weight_function(x)
+                * self.integration_constant
+            )
+
         self.variance, self._variance_quadrature_order = (
             self._iterative_quadrature_computation(variance_integrand)
         )

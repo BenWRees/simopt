@@ -6,19 +6,19 @@ implements a local scoring function that supports nonlinear cost shapes and an
 alpha exponent on the budget multiplier.
 """
 
-import math
 import random
-from pathlib import Path
-import sys
-sys.path.append(str(Path(__file__).resolve().parent))
-
-import numpy as np
 from collections import Counter
 
-from eval_adaptive_d import DummyProblem, make_spectrum, make_validation_from_spectrum
+import numpy as np
+
+from demo.eval_adaptive_d import (
+    DummyProblem,
+    make_spectrum,
+    make_validation_from_spectrum,
+)
 
 
-def score_candidates(solver, cp=0.1, power=1.0, alpha=1.0):
+def score_candidates(solver, cp=0.1, power=1.0, alpha=1.0):  # noqa: ANN001, ANN201, D103
     # Reimplemented minimal scoring logic to support `power` and `alpha` parameters.
     results = {}
     max_test_d = min(solver.max_d, solver.problem.dim - 1)
@@ -42,9 +42,12 @@ def score_candidates(solver, cp=0.1, power=1.0, alpha=1.0):
         ]
         if spectra:
             maxlen = max(s.shape[0] for s in spectra)
-            padded = np.vstack([
-                np.pad(s, (0, maxlen - s.shape[0]), constant_values=0.0) for s in spectra
-            ])
+            padded = np.vstack(
+                [
+                    np.pad(s, (0, maxlen - s.shape[0]), constant_values=0.0)
+                    for s in spectra
+                ]
+            )
             eig_source = np.mean(padded, axis=0)
 
     if eig_source is None or eig_source.size == 0:
@@ -109,7 +112,9 @@ def score_candidates(solver, cp=0.1, power=1.0, alpha=1.0):
             if max_val is None or max_val - min_val < 1e-12:
                 s_val = 0.8
             else:
-                s_val = 1.0 - (metrics["val_err"] - min_val) / max(1e-12, (max_val - min_val))
+                s_val = 1.0 - (metrics["val_err"] - min_val) / max(
+                    1e-12, (max_val - min_val)
+                )
 
         s_proj = 1.0 - metrics["proj_resid"]
         s_succ = metrics["success_rate"]
@@ -128,8 +133,8 @@ def score_candidates(solver, cp=0.1, power=1.0, alpha=1.0):
     return results
 
 
-class LocalSolver:
-    def __init__(self, problem: DummyProblem):
+class LocalSolver:  # noqa: D101
+    def __init__(self, problem: DummyProblem) -> None:  # noqa: D107
         self.problem = problem
         self.max_d = max(1, problem.dim - 1)
         self.previous_model_information = []
@@ -137,8 +142,14 @@ class LocalSolver:
         self.last_validation_by_d = None
 
 
-def run_tuning(n_trials=200, dim=100, budgets=(100, 500, 1000, 5000),
-               cps=(0.05, 0.1, 0.2), powers=(1.0, 2.0), alphas=(0.5, 1.0, 1.5, 2.0)):
+def run_tuning(  # noqa: ANN201, D103
+    n_trials=200,  # noqa: ANN001
+    dim=100,  # noqa: ANN001
+    budgets=(100, 500, 1000, 5000),  # noqa: ANN001
+    cps=(0.05, 0.1, 0.2),  # noqa: ANN001
+    powers=(1.0, 2.0),  # noqa: ANN001
+    alphas=(0.5, 1.0, 1.5, 2.0),  # noqa: ANN001
+):
     random.seed(1)
     np.random.seed(1)
 
@@ -155,7 +166,7 @@ def run_tuning(n_trials=200, dim=100, budgets=(100, 500, 1000, 5000),
 
                     solver = LocalSolver(DummyProblem(dim=dim, budget=budget))
 
-                    for t in range(n_trials):
+                    for _t in range(n_trials):
                         kind = random.choice(["dominant", "exp", "flat"])
                         if kind == "dominant":
                             k = random.randint(1, min(4, dim - 1))
@@ -166,7 +177,9 @@ def run_tuning(n_trials=200, dim=100, budgets=(100, 500, 1000, 5000),
                         else:
                             eig = make_spectrum(dim, kind="flat")
 
-                        val_by_d = make_validation_from_spectrum(eig, noise=0.02, base=0.02, alpha=1.0)
+                        val_by_d = make_validation_from_spectrum(
+                            eig, noise=0.02, base=0.02, alpha=1.0
+                        )
 
                         oracle_d = min(val_by_d.items(), key=lambda kv: kv[1])[0]
 
@@ -174,7 +187,9 @@ def run_tuning(n_trials=200, dim=100, budgets=(100, 500, 1000, 5000),
                         solver.last_validation_by_d = val_by_d
                         solver.previous_model_information = []
 
-                        scores = score_candidates(solver, cp=cp, power=power, alpha=alpha)
+                        scores = score_candidates(
+                            solver, cp=cp, power=power, alpha=alpha
+                        )
                         chosen_d = max(scores.items(), key=lambda kv: kv[1]["score"])[0]
 
                         chosen_hist[chosen_d] += 1
@@ -199,12 +214,14 @@ def run_tuning(n_trials=200, dim=100, budgets=(100, 500, 1000, 5000),
                         "top_chosen": chosen_hist.most_common(5),
                     }
                     results.append(res)
-                    print(f"budget={budget} cp={cp} power={power} alpha={alpha} "
-                          f"exact={exact}/{n_trials} within1={within1}/{n_trials} mean_regret={res['mean_regret']:.5f}")
+                    print(
+                        f"budget={budget} cp={cp} power={power} alpha={alpha} "
+                        f"exact={exact}/{n_trials} within1={within1}/{n_trials} mean_regret={res['mean_regret']:.5f}"  # noqa: E501
+                    )
 
     return results
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # quick default run
     run_tuning(n_trials=200, dim=100)

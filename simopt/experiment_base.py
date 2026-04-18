@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import importlib
+import inspect
 import itertools
 import pickle
+import pkgutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-import importlib
-import pkgutil
-import inspect
 
 import pandas as pd
 
@@ -24,15 +24,15 @@ from simopt.experiment import (
 from simopt.plot_type import PlotType  # noqa: F401
 from simopt.plots import (
     plot_area_scatterplots,  # noqa: F401
+    plot_budget_history,  # noqa: F401
     plot_feasibility_progress,  # noqa: F401
+    plot_fn_estimates,  # noqa: F401
     plot_progress_curves,  # noqa: F401
     plot_solvability_cdfs,  # noqa: F401
     plot_solvability_profiles,  # noqa: F401
     plot_terminal_feasibility,  # noqa: F401
     plot_terminal_progress,  # noqa: F401
     plot_terminal_scatterplots,  # noqa: F401
-    plot_budget_history,  # noqa: F401
-    plot_fn_estimates,  # noqa: F401
 )
 from simopt.utils import resolve_file_path
 
@@ -51,65 +51,78 @@ if TYPE_CHECKING:
     from pandas import DataFrame as DataFrame
 
 
-def instantiate_solver(solver_name: str, fixed_factors: dict | None = None, solver_rename: str | None = None) -> Solver:
-	"""
-		Instantiate a solver class based on class_name_abbr, scanning all submodules of a string module path.
-	"""
-	try: 
-		module_path = "simopt.solvers"
-		base_module = importlib.import_module(module_path)
+def instantiate_solver(
+    solver_name: str,
+    fixed_factors: dict | None = None,
+    solver_rename: str | None = None,
+) -> Solver:
+    """Instantiate a solver class based on class_name_abbr, scanning all submodules of.
 
-		for finder, name, ispkg in pkgutil.walk_packages(base_module.__path__, prefix=module_path + "."):
-			try:
-				submodule = importlib.import_module(name)
-			except ModuleNotFoundError:
-				continue  # skip any bad submodules
+    a string module path.
+    """
+    try:
+        module_path = "simopt.solvers"
+        base_module = importlib.import_module(module_path)
 
-			for _, cls in inspect.getmembers(submodule, inspect.isclass):
-				if cls.__module__ == name and hasattr(cls, 'class_name_abbr'):
-					if getattr(cls, 'class_name_abbr') == solver_name:
-						if solver_rename is not None:
-							return cls(
-								name=solver_rename, 
-								fixed_factors=fixed_factors)
-						else:
-							return cls(
-								name=solver_name, 
-								fixed_factors=fixed_factors)
+        for _finder, name, _ispkg in pkgutil.walk_packages(
+            base_module.__path__, prefix=module_path + "."
+        ):
+            try:
+                submodule = importlib.import_module(name)
+            except ModuleNotFoundError:
+                continue  # skip any bad submodules
 
-		raise ValueError(f"No class with class_name_abbr == '{solver_name}' found in submodules of '{module_path}'.")
-		
-	except ModuleNotFoundError:
-		print(f"Module {module_path} not found.")
-	
-	
-def instantiate_problem(problem_name: str, problem_fixed_factors: dict | None = None, model_fixed_factors: dict | None = None) -> Problem:
-	"""
-		Instantiate a problem class based on class_name_abbr, scanning all submodules of a string module path.
-	"""
-	try: 
-		module_path = "simopt.models"
-		base_module = importlib.import_module(module_path)
+            for _, cls in inspect.getmembers(submodule, inspect.isclass):
+                if cls.__module__ == name and hasattr(cls, "class_name_abbr"):  # noqa: SIM102
+                    if cls.class_name_abbr == solver_name:
+                        if solver_rename is not None:
+                            return cls(name=solver_rename, fixed_factors=fixed_factors)
+                        return cls(name=solver_name, fixed_factors=fixed_factors)
 
-		for finder, name, ispkg in pkgutil.walk_packages(base_module.__path__, prefix=module_path + "."):
-			try:
-				submodule = importlib.import_module(name)
-			except ModuleNotFoundError:
-				continue  # skip any bad submodules
+        raise ValueError(
+            f"No class with class_name_abbr == '{solver_name}' found in submodules of '{module_path}'."  # noqa: E501
+        )
 
-			for _, cls in inspect.getmembers(submodule, inspect.isclass):
-				if cls.__module__ == name and hasattr(cls, 'class_name_abbr'):
-					if getattr(cls, 'class_name_abbr') == problem_name:
-						return cls(
-							name=problem_name,
-							fixed_factors=problem_fixed_factors,
-							model_fixed_factors=model_fixed_factors,
-							)
+    except ModuleNotFoundError:
+        print(f"Module {module_path} not found.")
 
-		raise ValueError(f"No class with class_name_abbr == '{problem_name}' found in submodules of '{module_path}'.")
-	
-	except ModuleNotFoundError:
-		print(f"Module {module_path} not found.")
+
+def instantiate_problem(
+    problem_name: str,
+    problem_fixed_factors: dict | None = None,
+    model_fixed_factors: dict | None = None,
+) -> Problem:
+    """Instantiate a problem class based on class_name_abbr, scanning all submodules of.
+
+    a string module path.
+    """
+    try:
+        module_path = "simopt.models"
+        base_module = importlib.import_module(module_path)
+
+        for _finder, name, _ispkg in pkgutil.walk_packages(
+            base_module.__path__, prefix=module_path + "."
+        ):
+            try:
+                submodule = importlib.import_module(name)
+            except ModuleNotFoundError:
+                continue  # skip any bad submodules
+
+            for _, cls in inspect.getmembers(submodule, inspect.isclass):
+                if cls.__module__ == name and hasattr(cls, "class_name_abbr"):  # noqa: SIM102
+                    if cls.class_name_abbr == problem_name:
+                        return cls(
+                            name=problem_name,
+                            fixed_factors=problem_fixed_factors,
+                            model_fixed_factors=model_fixed_factors,
+                        )
+
+        raise ValueError(
+            f"No class with class_name_abbr == '{problem_name}' found in submodules of '{module_path}'."  # noqa: E501
+        )
+
+    except ModuleNotFoundError:
+        print(f"Module {module_path} not found.")
 
 
 def read_experiment_results(file_name_path: Path | str) -> ProblemSolver:

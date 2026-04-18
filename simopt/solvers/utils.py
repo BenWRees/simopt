@@ -7,7 +7,7 @@ from collections.abc import Iterable
 import numpy as np
 
 from simopt.base import (
-    Problem,
+    ProblemLike,
     Solution,
     Solver,
 )
@@ -17,7 +17,7 @@ def finite_diff(
     solver: Solver,
     new_solution: Solution,
     bounds_check: np.ndarray,
-    problem: Problem,
+    problem: ProblemLike,
     stepsize: float,
     r: int,
 ) -> np.ndarray:
@@ -90,7 +90,9 @@ def finite_diff(
     fn_diff = np.zeros(problem.dim)
     if np.any(central_mask):
         # fn_diff[central_mask] = function_diff[:, 0] - function_diff[:, 1]
-        fn_diff[central_mask] = function_diff[central_mask, 0] - function_diff[central_mask, 1]
+        fn_diff[central_mask] = (
+            function_diff[central_mask, 0] - function_diff[central_mask, 1]
+        )
     if np.any(forward_mask):
         fn_diff[forward_mask] = function_diff[forward_mask, 0] - fn
     if np.any(backward_mask):
@@ -103,7 +105,7 @@ def bfgs_hessian_approx(
     solver: Solver,
     new_solution: Solution,
     bounds_check: np.ndarray,
-    problem: Problem,
+    problem: ProblemLike,
     r: int,
 ) -> np.ndarray:
     """Approximate Hessian using BFGS.

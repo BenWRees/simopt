@@ -1,11 +1,11 @@
 """Budget history plot."""
 
-#Todo: Change iterations to be normalized so that all solvers can be compared on same x-axis
+# Todo: Change iterations to be normalized so that all solvers can be compared on same x-axis  # noqa: E501
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
 import numpy as np
+from matplotlib.ticker import MaxNLocator
 
 import simopt.curve_utils as curve_utils
 from mrg32k3a.mrg32k3a import MRG32k3a
@@ -14,7 +14,6 @@ from simopt.experiment import ProblemSolver
 from simopt.plot_type import PlotType
 
 from .utils import (
-    check_common_problem_and_reference,
     plot_bootstrap_conf_ints,
     save_plot,
     setup_plot,
@@ -73,10 +72,7 @@ def _budget_history_to_curves(
     curves = []
     for budget_history in budget_histories:
         n_iters = len(budget_history)
-        if normalize:
-            x_vals = list(np.linspace(0, 1, n_iters))
-        else:
-            x_vals = list(range(n_iters))
+        x_vals = list(np.linspace(0, 1, n_iters)) if normalize else list(range(n_iters))
         curves.append(Curve(x_vals=x_vals, y_vals=budget_history))
     return curves
 
@@ -133,10 +129,7 @@ def _bootstrap_curves_conf_int(
 
         # Bias correction factor
         bs_std = np.std(bs_vals)
-        if bs_std > 0:
-            z0 = (np.percentile(bs_vals, 50) - original_val) / bs_std
-        else:
-            z0 = 0
+        z0 = (np.percentile(bs_vals, 50) - original_val) / bs_std if bs_std > 0 else 0
 
         # Adjusted percentiles (BC method)
         alpha = 1 - conf_level
@@ -177,10 +170,7 @@ def _bootstrap_curves_conf_int(
 
         # Bias correction factor
         bs_std = np.std(bs_vals)
-        if bs_std > 0:
-            z0 = (np.percentile(bs_vals, 50) - original_val) / bs_std
-        else:
-            z0 = 0
+        z0 = (np.percentile(bs_vals, 50) - original_val) / bs_std if bs_std > 0 else 0
 
         # Adjusted percentiles (BC method)
         alpha = 1 - conf_level

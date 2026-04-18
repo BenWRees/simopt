@@ -132,8 +132,8 @@ class ParameterEstimation(Model):
             - y2
             + (x[0] * y2 - 1) * np.log(y1)
             + (x[1] - 1) * np.log(y2)
-            - np.log(math.gamma(x[0] * y2))
-            - np.log(math.gamma(x[1]))
+            - math.lgamma(x[0] * y2)
+            - math.lgamma(x[1])
         )
         # Compose responses and gradients.
         responses = {"loglik": loglik}

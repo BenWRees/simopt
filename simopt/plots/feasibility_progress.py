@@ -1,5 +1,6 @@
 """Feasibility progress plot."""
 
+import contextlib
 from typing import Literal
 
 import matplotlib.pyplot as plt
@@ -178,8 +179,8 @@ def plot_feasibility_progress(
                         feasibility_norm_degree=norm_degree,
                     )
                     if plot_conf_ints:
-                        if isinstance(bs_conf_int_lb_curve, (int, float)) or isinstance(
-                            bs_conf_int_ub_curve, (int, float)
+                        if isinstance(bs_conf_int_lb_curve, int | float) or isinstance(
+                            bs_conf_int_ub_curve, int | float
                         ):
                             error_msg = (
                                 "Bootstrap confidence intervals are not available "
@@ -209,10 +210,8 @@ def plot_feasibility_progress(
                 loc=legend_loc,
             )
             if leg is not None:
-                try:
+                with contextlib.suppress(Exception):
                     leg.get_frame().set_alpha(0.4)
-                except Exception:
-                    pass
             file_list.append(
                 save_plot(
                     solver_name=solver_set_name,
@@ -276,8 +275,8 @@ def plot_feasibility_progress(
                         feasibility_norm_degree=norm_degree,
                     )
                     if plot_conf_ints:
-                        if isinstance(bs_conf_int_lb_curve, (int, float)) or isinstance(
-                            bs_conf_int_ub_curve, (int, float)
+                        if isinstance(bs_conf_int_lb_curve, int | float) or isinstance(
+                            bs_conf_int_ub_curve, int | float
                         ):
                             error_msg = (
                                 "Bootstrap confidence intervals are not available "

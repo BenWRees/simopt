@@ -47,10 +47,10 @@ class RandomSearch(Solver):
     variable_type: ClassVar[VariableType] = VariableType.MIXED
     gradient_needed: ClassVar[bool] = False
 
-    def solve(self, problem: Problem) -> None:  # noqa: D102
+    def solve(self, problem: Problem) -> None:  # noqa: D102  # ty: ignore[invalid-method-override]
         # Designate random number generator for random sampling.
         find_next_soln_rng = self.rng_list[1]
-        self.iteration_count = 1 
+        self.iteration_count = 1
         self.record_count = 1
         # Start at initial solution and record as best.
         new_x = problem.factors["initial_solution"]
@@ -64,7 +64,7 @@ class RandomSearch(Solver):
         stoch_constraint_range = range(problem.n_stochastic_constraints)
 
         # Sequentially generate random solutions and simulate them.
-        try :
+        try:
             while True:
                 # Request budget first, then simulate new solution.
                 self.budget.request(sample_size)
@@ -74,8 +74,6 @@ class RandomSearch(Solver):
                 self.budget_history.append(self.budget.used)
                 self.iterations.append(self.iteration_count)
                 self.record_count += 1
-
-
 
                 # Check for improvement relative to incumbent best solution.
                 # Also check for feasibility w.r.t. stochastic constraints.
@@ -95,10 +93,8 @@ class RandomSearch(Solver):
 
                 self.iteration_count += 1
         except BudgetExhaustedError:
-            if self.record_count < self.iteration_count :
-                # Final record at budget exhaustion 
-                self.fn_estimates.append(
-                    self.incumbent_solution.objectives_mean.item()
-                )
+            if self.record_count < self.iteration_count:
+                # Final record at budget exhaustion
+                self.fn_estimates.append(self.incumbent_solution.objectives_mean.item())  # ty: ignore[unresolved-attribute]
                 self.budget_history.append(self.budget.used)
                 self.iterations.append(self.iteration_count)

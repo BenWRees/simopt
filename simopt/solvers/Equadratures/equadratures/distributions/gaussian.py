@@ -17,7 +17,7 @@ class Gaussian(Distribution):
     Variance of the Gaussian distribution.
     """
 
-    def __init__(self, mean, variance):
+    def __init__(self, mean, variance) -> None:  # noqa: ANN001, D107
         if mean is None:
             self.mean = 0.0
         else:
@@ -42,7 +42,7 @@ class Gaussian(Distribution):
         self.kurtosis = 0.0
         self.bounds = np.array([-np.inf, np.inf])
 
-    def get_description(self):
+    def get_description(self):  # noqa: ANN201
         """A description of the Gaussian.
 
         :param Gaussian self:
@@ -50,31 +50,29 @@ class Gaussian(Distribution):
         :return:
             A string describing the Gaussian.
         """
-        text = (
+        return (
             "is a Gaussian distribution with a mean of "
             + str(self.mean)
             + " and a variance of "
             + str(self.variance)
             + "."
         )
-        return text
 
-    def get_samples(self, m=None):
+    def get_samples(self, m=None):  # noqa: ANN001, ANN201
         """Generates samples from the Gaussian distribution.
+
         :param Gaussian self:
             An instance of the Gaussian class.
         :param integer m:
-            Number of random samples. If no value is provided, a default of 5e5 is assumed.
+            Number of random samples. If no value is provided, a default of 5e5 is
+            assumed.
         :return:
             A N-by-1 vector that contains the samples.
         """
-        if m is not None:
-            number = m
-        else:
-            number = 500000
+        number = m if m is not None else 500000
         return self.parent.rvs(size=number)
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """A Gaussian probability distribution.
 
         :param Gaussian self:
@@ -86,7 +84,7 @@ class Gaussian(Distribution):
         """
         return self.parent.pdf(points)
 
-    def get_cdf(self, points=None):
+    def get_cdf(self, points=None):  # noqa: ANN001, ANN201
         """A Gaussian cumulative density function.
 
         :param Gaussian self:
@@ -98,7 +96,7 @@ class Gaussian(Distribution):
         """
         return self.parent.cdf(points)
 
-    def get_icdf(self, xx):
+    def get_icdf(self, xx):  # noqa: ANN001, ANN201
         """An inverse Gaussian cumulative density function.
 
         :param Gaussian self:

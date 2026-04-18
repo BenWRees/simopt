@@ -1,4 +1,4 @@
-import os.path as o
+import os.path as o  # noqa: D100
 import random
 import sys
 
@@ -10,11 +10,14 @@ from simopt.solvers.active_subspaces.compute_optimal_dim import (
     find_best_subspace_dimension,
 )
 
-sys.path.append(o.abspath(o.join(o.dirname(sys.modules[__name__].__file__), "..")))
+sys.path.append(o.abspath(o.join(o.dirname(sys.modules[__name__].__file__), "..")))  # noqa: PTH100, PTH118, PTH120
 
 
-def update_model_factors_dimensions(problem_name: str, new_dim: int) -> dict:
-    """Find the model associated with model_name and update the dimension of the factor values to the new_dim.
+def update_model_factors_dimensions(problem_name: str, new_dim: int) -> dict:  # noqa: D417
+    """Find the model associated with model_name and update the dimension of the factor.
+
+    values to the new_dim.
+
             Return the updated model factors.
 
     Args:
@@ -34,7 +37,7 @@ def update_model_factors_dimensions(problem_name: str, new_dim: int) -> dict:
             "cost": [5] * new_dim,
         }
     elif problem_name == "FACSIZE-1" or problem_name == "FACSIZE-2":
-        A = np.random.rand(new_dim, new_dim)
+        A = np.random.rand(new_dim, new_dim)  # noqa: N806
         new_factors = {
             "mean_vec": [500] * new_dim,
             "cov": (np.dot(A, A.T) * 100).tolist(),
@@ -82,10 +85,11 @@ def update_model_factors_dimensions(problem_name: str, new_dim: int) -> dict:
     return new_factors
 
 
-def update_problem_factor_dimensions(
+def update_problem_factor_dimensions(  # noqa: D417
     problem_name: str, new_dim: int, budget: int
 ) -> dict:
     """Update the dimension of the factor values in problem_factors to the new_dim.
+
             Return the updated problem factors.
 
     Args:
@@ -141,12 +145,12 @@ def update_problem_factor_dimensions(
     return new_factors
 
 
-def main(
+def main(  # noqa: D103
     problem_name: str,
     n_macroreps: int = 5,
     budget: int = 1000,
     new_dim: int | None = None,
-):
+) -> None:
     # Update problem and model factors based on new_dim
     if new_dim is not None:
         problem_factors = update_problem_factor_dimensions(

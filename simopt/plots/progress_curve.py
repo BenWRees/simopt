@@ -1,10 +1,11 @@
 """Progress curve plot."""
 
+import contextlib
+import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-import logging
 
 import simopt.curve_utils as curve_utils
 from simopt.bootstrap import bootstrap_procedure
@@ -175,8 +176,8 @@ def plot_progress_curves(
                     normalize=normalize,
                 )
                 if plot_conf_ints:
-                    if isinstance(bs_conf_int_lb_curve, (int, float)) or isinstance(
-                        bs_conf_int_ub_curve, (int, float)
+                    if isinstance(bs_conf_int_lb_curve, int | float) or isinstance(
+                        bs_conf_int_ub_curve, int | float
                     ):
                         error_msg = (
                             "Bootstrap confidence intervals are not available "
@@ -196,10 +197,8 @@ def plot_progress_curves(
             loc=legend_loc,
         )
         if leg is not None:
-            try:
+            with contextlib.suppress(Exception):
                 leg.get_frame().set_alpha(0.4)
-            except Exception:
-                pass
         if print_max_hw and plot_type != PlotType.ALL:
             report_max_halfwidth(
                 curve_pairs=curve_pairs,
@@ -267,8 +266,8 @@ def plot_progress_curves(
                     normalize=normalize,
                 )
                 if plot_conf_ints:
-                    if isinstance(bs_conf_int_lb_curve, (int, float)) or isinstance(
-                        bs_conf_int_ub_curve, (int, float)
+                    if isinstance(bs_conf_int_lb_curve, int | float) or isinstance(
+                        bs_conf_int_ub_curve, int | float
                     ):
                         error_msg = (
                             "Bootstrap confidence intervals are not available "
@@ -277,8 +276,8 @@ def plot_progress_curves(
                         raise ValueError(error_msg)
                     plot_bootstrap_conf_ints(bs_conf_int_lb_curve, bs_conf_int_ub_curve)
                 if print_max_hw:
-                    if isinstance(bs_conf_int_lb_curve, (int, float)) or isinstance(
-                        bs_conf_int_ub_curve, (int, float)
+                    if isinstance(bs_conf_int_lb_curve, int | float) or isinstance(
+                        bs_conf_int_ub_curve, int | float
                     ):
                         error_msg = (
                             "Max halfwidth is not available for scalar estimators."

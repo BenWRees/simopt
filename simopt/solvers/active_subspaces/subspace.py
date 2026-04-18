@@ -1,4 +1,4 @@
-# Subspace based dimension reduction techniques
+# Subspace based dimension reduction techniques  # noqa: D100
 
 import os
 
@@ -20,7 +20,7 @@ from matplotlib.path import Path
 
 from simopt.base import Problem, Solution
 
-from ..active_subspaces.polyridge import *
+from ..active_subspaces.polyridge import *  # noqa: F403
 
 __all__ = [
     "ActiveSubspace",
@@ -32,22 +32,22 @@ __all__ = [
 """
 
 
-def merge(x, y):
+def merge(x, y):  # noqa: ANN001, ANN202
     z = x.copy()
     z.update(y)
     return z
 
 
-def check_sample_inputs(X, fX, grads):
+def check_sample_inputs(X, fX, grads):  # noqa: ANN001, ANN202, N803
     if X is not None and fX is not None:
-        X = np.array(X)
-        fX = np.array(fX).flatten()
+        X = np.array(X)  # noqa: N806
+        fX = np.array(fX).flatten()  # noqa: N806
         assert len(X) == len(fX), (
             "Number of samples doesn't match number of evaluations"
         )
     else:
-        X = None
-        fX = None
+        X = None  # noqa: N806
+        fX = None  # noqa: N806
 
     if grads is not None:
         grads = np.array(grads)
@@ -57,8 +57,8 @@ def check_sample_inputs(X, fX, grads):
             )
 
     if X is None:
-        X = np.zeros((0, grads.shape[1]))
-        fX = np.zeros((0,))
+        X = np.zeros((0, grads.shape[1]))  # noqa: N806
+        fX = np.zeros((0,))  # noqa: N806
     if grads is None:
         grads = np.zeros((0, X.shape[1]))
     return X, fX, grads
@@ -68,26 +68,26 @@ def check_sample_inputs(X, fX, grads):
 
 
 class PGF:
-    def __init__(self):
+    def __init__(self) -> None:
         self.column_names = []
         self.columns = []
 
-    def add(self, name, column):
+    def add(self, name, column) -> None:  # noqa: ANN001
         if len(self.columns) > 1:
             assert len(self.columns[0]) == len(column)
 
         self.columns.append(deepcopy(column))
         self.column_names.append(name)
 
-    def keys(self):
+    def keys(self):  # noqa: ANN202
         return self.column_names
 
-    def __getitem__(self, key):
+    def __getitem__(self, key):  # noqa: ANN001, ANN204
         i = self.column_names.index(key)
         return self.columns[i]
 
-    def write(self, filename):
-        f = open(filename, "w")
+    def write(self, filename) -> None:  # noqa: ANN001
+        f = open(filename, "w")  # noqa: PTH123, SIM115
 
         for name in self.column_names:
             f.write(name + "\t")
@@ -100,8 +100,8 @@ class PGF:
 
         f.close()
 
-    def read(self, filename):
-        with open(filename) as f:
+    def read(self, filename) -> None:  # noqa: ANN001
+        with open(filename) as f:  # noqa: PTH123
             for i, line in enumerate(f):
                 # Remove the newline and trailing tab if present
                 line = line.replace("\t\n", "").replace("\n", "")
@@ -114,22 +114,22 @@ class PGF:
                         self.columns[j].append(float(col))
 
 
-def save_contour(fname, cs, fmt="matlab", simplify=1e-3, **kwargs):
-    """Save a contour plot to a file for pgfplots
+def save_contour(fname, cs, fmt="matlab", simplify=1e-3, **kwargs) -> None:  # noqa: ANN001, ANN003, ARG001
+    """Save a contour plot to a file for pgfplots.
 
     Additional arguments are passed to iter_segements
     Important, simplify = True will remove invisible points
     """
 
-    def write_path_matlab(fout, x_vec, y_vec, z):
+    def write_path_matlab(fout, x_vec, y_vec, z) -> None:  # noqa: ANN001
         # Now dump this data back out
         # Header is level followed by number of rows
-        fout.write("%15.15e\t%15d\n" % (z, len(x_vec)))
-        for x, y in zip(x_vec, y_vec):
-            fout.write("%15.15e\t%15.15e\n" % (x, y))
+        fout.write("%15.15e\t%15d\n" % (z, len(x_vec)))  # noqa: UP031
+        for x, y in zip(x_vec, y_vec, strict=False):
+            fout.write(f"{x:15.15e}\t{y:15.15e}\n")
 
-    def write_path_prepared(fout, x_vec, y_vec, z):
-        fout.write("%15.15e\t%15.15e\t%15.15e\n" % (x_vec, y_vec, z))
+    def write_path_prepared(fout, x_vec, y_vec, z) -> None:  # noqa: ANN001
+        fout.write(f"{x_vec:15.15e}\t{y_vec:15.15e}\t{z:15.15e}\n")
         fout.write("\t\t\t\n")
 
     if fmt == "matlab":
@@ -139,13 +139,13 @@ def save_contour(fname, cs, fmt="matlab", simplify=1e-3, **kwargs):
     else:
         raise NotImplementedError
 
-    with open(fname, "w") as fout:
-        for col, z in zip(cs.collections, cs.levels):
+    with open(fname, "w") as fout:  # noqa: PTH123
+        for col, z in zip(cs.collections, cs.levels, strict=False):
             for path in col.get_paths():
                 path.simplify_threshold = simplify
                 x_vec = []
                 y_vec = []
-                for i, ((x, y), code) in enumerate(path.iter_segments(simplify=True)):
+                for _i, ((x, y), code) in enumerate(path.iter_segments(simplify=True)):
                     if code == Path.MOVETO:
                         if len(x_vec) != 0:
                             write_path(fout, x_vec, y_vec, z)
@@ -168,7 +168,7 @@ def save_contour(fname, cs, fmt="matlab", simplify=1e-3, **kwargs):
 
 
 class SubspaceBasedDimensionReduction:
-    r"""Abstract base class for Subspace-Based Dimension Reduction
+    r"""Abstract base class for Subspace-Based Dimension Reduction.
 
     Given a function :math:`f : \mathcal{D} \to \mathbb{R}`,
     subspace-based dimension reduction identifies a subspace,
@@ -178,19 +178,20 @@ class SubspaceBasedDimensionReduction:
     """
 
     @property
-    def U(self):
-        """A matrix defining the 'important' directions
+    def U(self):  # noqa: ANN201, N802
+        """A matrix defining the 'important' directions.
 
         Returns:
         -------
         np.ndarray (m, n):
-                Matrix with orthonormal columns defining the important directions in decreasing order
+                Matrix with orthonormal columns defining the important directions in
+                decreasing order
                 of precidence.
         """
         raise NotImplementedError
 
-    def shadow_plot(self, X=None, fX=None, dim=1, U=None, ax="auto", pgfname=None):
-        r"""Draw a shadow plot
+    def shadow_plot(self, X=None, fX=None, dim=1, U=None, ax="auto", pgfname=None):  # noqa: ANN001, ANN201, N803
+        r"""Draw a shadow plot.
 
         Parameters
         ----------
@@ -201,7 +202,8 @@ class SubspaceBasedDimensionReduction:
         dim: int, [1,2]
                 Dimension of shadow plot
         U: array-like (?,m); optional
-                Subspace onto which to project the data; defaults to the subspace identifed by this class
+                Subspace onto which to project the data; defaults to the subspace
+                identifed by this class
         ax: 'auto', matplotlib.pyplot.axis, or None
                 Axis on which to draw the shadow plot
 
@@ -212,23 +214,23 @@ class SubspaceBasedDimensionReduction:
         """
         if ax == "auto":
             if dim == 1:
-                fig, ax = plt.subplots(figsize=(6, 6))
+                fig, ax = plt.subplots(figsize=(6, 6))  # noqa: RUF059
             else:
                 # Hack so that plot is approximately square after adding colorbar
-                fig, ax = plt.subplots(figsize=(7.5, 6))
+                _fig, ax = plt.subplots(figsize=(7.5, 6))
 
         if X is None:
-            X = self.X
+            X = self.X  # noqa: N806
 
         # Check dimensions
-        X = np.atleast_2d(X)
+        X = np.atleast_2d(X)  # noqa: N806
         assert X.shape[1] == len(self), "Samples do not match dimension of space"
 
         if U is None:
-            U = self.U
+            U = self.U  # noqa: N806
         else:
             if len(U.shape) == 1:
-                U = U.reshape(len(self), 1)
+                U = U.reshape(len(self), 1)  # noqa: N806
             else:
                 assert U.shape[0] == len(self), "Dimensions do not match"
 
@@ -245,7 +247,7 @@ class SubspaceBasedDimensionReduction:
                 pgf.write(pgfname)
 
         elif dim == 2:
-            Y = U[:, 0:2].T.dot(X.T).T
+            Y = U[:, 0:2].T.dot(X.T).T  # noqa: N806
 
             if ax is not None and fX is not None and isinstance(ax, Axes):
                 sc = ax.scatter(Y[:, 0], Y[:, 1], c=fX.flatten(), s=3)
@@ -266,10 +268,18 @@ class SubspaceBasedDimensionReduction:
 
         return ax
 
-    def shadow_envelope(
-        self, X, fX, ax=None, ngrid=None, pgfname=None, verbose=True, U=None, **kwargs
+    def shadow_envelope(  # noqa: ANN201
+        self,
+        X,  # noqa: ANN001, N803
+        fX,  # noqa: ANN001, N803
+        ax=None,  # noqa: ANN001
+        ngrid=None,  # noqa: ANN001
+        pgfname=None,  # noqa: ANN001
+        verbose=True,  # noqa: ANN001
+        U=None,  # noqa: ANN001, N803
+        **kwargs,  # noqa: ANN003
     ):
-        r"""Draw a 1-d shadow plot of a large number of function samples
+        r"""Draw a 1-d shadow plot of a large number of function samples.
 
         Returns:
         -------
@@ -281,10 +291,10 @@ class SubspaceBasedDimensionReduction:
                 piecewise linear upper bound values
         """
         if U is None:
-            U = self.U[:, 0]
+            U = self.U[:, 0]  # noqa: N806
         else:
             if len(U.shape) > 1:
-                U = U[:, 0]
+                U = U[:, 0]  # noqa: N806
 
         # Since this is for plotting purposes, we reduce accuracy to 3 digits
         solver_kwargs = {
@@ -294,11 +304,11 @@ class SubspaceBasedDimensionReduction:
             "eps_rel": 1e-3,
         }
 
-        X = np.array(X)
-        fX = np.array(fX)
+        X = np.array(X)  # noqa: N806
+        fX = np.array(fX)  # noqa: N806
         assert len(X) == len(fX), "Number of inputs did not match number of outputs"
         if len(fX.shape) > 1:
-            fX = fX.flatten()
+            fX = fX.flatten()  # noqa: N806
             assert len(fX) == len(X), "Expected fX to be a vector"
 
         y = X.dot(U)
@@ -334,13 +344,13 @@ class SubspaceBasedDimensionReduction:
         val += (((yy[0] + (j + 1) * h) - y) / h).tolist()
 
         # Points not at the right endpoint
-        I = j != len(yy) - 1
+        I = j != len(yy) - 1  # noqa: E741, N806
         row += np.argwhere(I).flatten().tolist()
         col += (j[I] + 1).tolist()
         val += ((y[I] - (yy[0] + j[I] * h)) / h).tolist()
 
-        A = scipy.sparse.coo_matrix((val, (row, col)), shape=(len(y), len(yy)))
-        A = cp.Constant(A)
+        A = scipy.sparse.coo_matrix((val, (row, col)), shape=(len(y), len(yy)))  # noqa: N806
+        A = cp.Constant(A)  # noqa: N806
         ub = cp.Variable(len(yy))
         # ub0 = [ max(max(fX[j == i]), max(fX[j== i+1]))  for i in np.arange(0,ngrid-1)] +[max(fX[j == ngrid - 1])]
         # ub.value = np.array(ub0).flatten()
@@ -367,7 +377,7 @@ class SubspaceBasedDimensionReduction:
 
         return y, lb, ub
 
-    def _init_dim(self, X=None, grads=None):
+    def _init_dim(self, X=None, grads=None) -> None:  # noqa: ANN001, N803
         if X is not None and len(X) > 0:
             self._dimension = len(X[0])
         elif grads is not None:
@@ -375,34 +385,36 @@ class SubspaceBasedDimensionReduction:
         else:
             raise Exception("Could not determine dimension of ambient space")
 
-    def __len__(self):
+    def __len__(self) -> int:  # noqa: D105
         return self._dimension
 
     @property
-    def X(self):
+    def X(self):  # noqa: ANN201, D102, N802
         return np.zeros((0, len(self)))
 
     @property
-    def fX(self):
+    def fX(self):  # noqa: ANN201, D102, N802
         return np.zeros((0, len(self)))
 
     @property
-    def grads(self):
+    def grads(self):  # noqa: ANN201, D102
         return np.zeros((0, len(self)))
 
-    def _fix_subspace_signs(self, U, X=None, fX=None, grads=None):
-        r"""Orient the subspace so that the average slope is positive
+    def _fix_subspace_signs(self, U, X=None, fX=None, grads=None):  # noqa: ANN001, ANN202, N803
+        r"""Orient the subspace so that the average slope is positive.
 
         Since subspaces have no associated direction (they are invariant to a sign flip)
-        here we fix the sign such that the function is increasing on average along the direction
-        u_i.  This approach uses either gradient or sample information, with a preference for
+        here we fix the sign such that the function is increasing on average along the
+        direction
+        u_i.  This approach uses either gradient or sample information, with a
+        preference for
         gradient information if it is availible.
         """
         if grads is not None and len(grads) > 0:
             return self._fix_subspace_signs_grads(U, grads)
         return self._fix_subspace_signs_samps(U, X, fX)
 
-    def _fix_subspace_signs_samps(self, U, X, fX):
+    def _fix_subspace_signs_samps(self, U, X, fX):  # noqa: ANN001, ANN202, N803
         sgn = np.zeros(len(U[0]))
         for k in range(len(U[0])):
             for i in range(len(X)):
@@ -415,16 +427,16 @@ class SubspaceBasedDimensionReduction:
         sgn[sgn == 0] = 1
         return U.dot(np.diag(np.sign(sgn)))
 
-    def _fix_subspace_signs_grads(self, U, grads):
+    def _fix_subspace_signs_grads(self, U, grads):  # noqa: ANN001, ANN202, N803
         return U.dot(np.diag(np.sign(np.mean(grads.dot(U), axis=0))))
 
-    def approximate_lipschitz(self, X=None, fX=None, grads=None, dim=None):
-        r"""Approximate the Lipschitz matrix on the low-dimensional subspace"""
+    def approximate_lipschitz(self, X=None, fX=None, grads=None, dim=None):  # noqa: ANN001, ANN201, N803
+        r"""Approximate the Lipschitz matrix on the low-dimensional subspace."""
         raise NotImplementedError
 
 
 class ActiveSubspace(SubspaceBasedDimensionReduction):
-    r"""Computes the active subspace gradient samples
+    r"""Computes the active subspace gradient samples.
 
     Given the function :math:`f:\mathcal{D} \to \mathbb{R}`,
     the active subspace is defined as the eigenvectors corresponding to the
@@ -432,45 +444,51 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
 
     .. math::
 
-            \mathbf{C} := \int_{\mathbf{x}\in \mathcal{D}} \nabla f(\mathbf{x}) \nabla f(\mathbf{x})^\top \  \mathrm{d}\mathbf{x}
+            \mathbf{C} := \int_{\mathbf{x}\in \mathcal{D}} \nabla f(\mathbf{x}) \nabla
+            f(\mathbf{x})^\top \  \mathrm{d}\mathbf{x}
             \in \mathbb{R}^{m\times m}.
 
     By default, this class assumes that we are provided with gradients
-    evaluated at random samples over the domain and estimates the matrix :math:`\mathbf{C}`
-    using Monte-Carlo integration. However, if provided a weight corresponding to a quadrature rule,
+    evaluated at random samples over the domain and estimates the matrix
+    :math:`\mathbf{C}`
+    using Monte-Carlo integration. However, if provided a weight corresponding to a
+    quadrature rule,
     this will be used instead to approximate this matrix; i.e.,
 
     .. math::
 
-            \mathbf{C} \approx \sum_{i=1}^N w_i \nabla f(\mathbf{x}_i) \nabla f(\mathbf{x}_i)^\top.
+            \mathbf{C} \approx \sum_{i=1}^N w_i \nabla f(\mathbf{x}_i) \nabla
+            f(\mathbf{x}_i)^\top.
 
     """
 
-    def __init__(self):
+    def __init__(self) -> None:  # noqa: D107
         self._U = None
         self._s = None
 
-    def fit(self, grads, weights=None):
-        r"""Find the active subspace
+    def fit(self, grads, weights=None) -> None:  # noqa: ANN001
+        r"""Find the active subspace.
 
         Parameters
         ----------
         grads: array-like (N,m)
-                Gradient samples of function (tacitly assumed to be uniform on the domain
+                Gradient samples of function (tacitly assumed to be uniform on the
+                domain
                 or from a quadrature rule with corresponding weight).
         weights: array-like (N,), optional
-                Weights corresponding to a quadrature rule associated with the samples of the gradient.
+                Weights corresponding to a quadrature rule associated with the samples
+                of the gradient.
 
         """
         self._init_dim(grads=grads)
 
         self._grads = np.array(grads).reshape(-1, len(self))
-        N = len(self._grads)
+        N = len(self._grads)  # noqa: N806
         if weights is None:
             weights = np.ones(N) / N
 
         self._weights = np.array(weights)
-        self._U, self._s, VT = scipy.linalg.svd(
+        self._U, self._s, _VT = scipy.linalg.svd(  # noqa: N806
             np.sqrt(self._weights) * self._grads.T, full_matrices=False
         )  # Added full_matrices
         # Pad s with zeros if we don't have as many gradient samples as dimension of the space
@@ -482,12 +500,14 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
         # Fix +/- scaling so average gradient is positive
         self._U = self._fix_subspace_signs_grads(self._U, self._grads)
 
-    def fit(self, grads: np.ndarray, subspace_dimension: int) -> None:
-        """Calculate the active subspace matrix by
+    def fit(self, grads: np.ndarray, subspace_dimension: int) -> None:  # noqa: D417, F811
+        """Calculate the active subspace matrix by.
 
         Args:
-                X (np.ndarray): of shape (M,n) that represents M n-dimensional sample points
-                fX (np.ndarray): The function values of the M sample points in the shape (M,1)
+                X (np.ndarray): of shape (M,n) that represents M n-dimensional sample
+                points
+                fX (np.ndarray): The function values of the M sample points in the shape
+                (M,1)
                 subspace_dimension (int): The dimension of the subspace
 
         Sets the matrix self._U which will be a (n,subspace_dimension) numpy matrix
@@ -497,15 +517,15 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
         self._dimension = subspace_dimension
 
         # take the eigendecomposition of the covariance matrix
-        _, W = np.linalg.eigh(cov_matrix)
+        _, W = np.linalg.eigh(cov_matrix)  # noqa: N806
         # sort the eigenvalues from increasing size with the eigenvectors
         # * Doesn't need sorting, we just take elements from the back
-        W = W[::-1]
+        W = W[::-1]  # noqa: N806
         # take the first subspace_dimension eiegenvectors from the sorted list and stack them as columns
         self._U = W[:, :subspace_dimension]
 
     def _covariance_matrix(self, grads: np.ndarray) -> np.ndarray:
-        """Construct a covariance matrix using interpolation
+        """Construct a covariance matrix using interpolation.
 
         Args:
                 grads (np.ndarray): (N,m) matrix of N grad evaluations of the function
@@ -513,14 +533,14 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
         Returns:
                 np.ndarray: The (m,m) covariance matrix
         """
-        M = grads.shape[0]
+        M = grads.shape[0]  # noqa: N806
         return (grads.T @ grads) / M
 
     # TODO: This function needs rewriting to instead sample the simopt problem:
     # - pass a simopt problem and a matrix of sample points as an argument instead
     # 	- sample the problem at different
-    def fit_function(self, problem, delta, current_solution, N_gradients):
-        r"""Automatically estimate active subspace using a quadrature rule
+    def fit_function(self, problem, delta, current_solution, N_gradients):  # noqa: ANN001, ANN201, N803
+        r"""Automatically estimate active subspace using a quadrature rule.
 
         Parameters
         ----------
@@ -535,16 +555,20 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
 
         """
         # X, w = fun.domain.quadrature_rule(N_gradients)
-        X = self.samples(delta, problem, current_solution, N_gradients)
+        X = self.samples(delta, problem, current_solution, N_gradients)  # noqa: N806
         grads, expended_budget = self.grad(problem, X)
         self.fit(grads)
 
         return expended_budget
 
     def samples(
-        self, delta: float, problem: Problem, current_solution: Solution, N_samples: int
+        self,
+        delta: float,
+        problem: Problem,
+        current_solution: Solution,
+        N_samples: int,  # noqa: N803
     ) -> list[Solution]:
-        """Samples N_samples from the trust_region_radius
+        """Samples N_samples from the trust_region_radius.
 
         Args:
                 delta (float): The current Trust-Region Radius
@@ -553,12 +577,13 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
                 N_samples (int): The number of samples being taken
 
         Returns:
-                list: a list of length N_samples of different solutions in the trust_region
+                list: a list of length N_samples of different solutions in the
+                trust_region
         """
         x_k = current_solution.x
         n = len(x_k)
         init_col = np.array(x_k).reshape((n, 1))
-        Y = [current_solution]
+        Y = [current_solution]  # noqa: N806
         for _ in range(N_samples - 1):
             # uniformly sample a vector a of shape (n,1) that has |a-x_k|<delta
             while True:
@@ -572,11 +597,12 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
         return Y
 
     def grad(self, problem: Problem, samples: list[Solution]) -> tuple[np.ndarray, int]:
-        """Get grads at locations of different samples
+        """Get grads at locations of different samples.
 
         Args:
                 problem (simopt.Problem): The problem being worked on
-                samples (list[Solution]): A list of N_sample solutions at different points in the trust-region
+                samples (list[Solution]): A list of N_sample solutions at different
+                points in the trust-region
 
         Returns:
                 np.ndarray: A (d,n) matrix of samples where d is the problem.dim
@@ -597,14 +623,15 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
         return grads, expended_budget
 
     def finite_diff(self, solution: Solution, problem: Problem) -> np.ndarray:
-        """Solve a Finite Difference Approximation
+        """Solve a Finite Difference Approximation.
 
         Args:
                 solution (np.ndarray): current solution value being approximated
                 problem (Problem): The current sim-opt problem being solved
 
         Returns:
-                np.ndarray: A (d,1) matrix of the gradient approximation of the problem at the solution.
+                np.ndarray: A (d,1) matrix of the gradient approximation of the problem
+                at the solution.
         """
         alpha = 1e-2
         lower_bound = problem.lower_bounds
@@ -613,7 +640,7 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
         problem.simulate(solution, 1)
 
         new_x = solution.x
-        FnPlusMinus = np.zeros((problem.dim, 3))
+        FnPlusMinus = np.zeros((problem.dim, 3))  # noqa: N806
         grad = np.zeros(problem.dim)
         for i in range(problem.dim):
             # Initialization.
@@ -655,19 +682,19 @@ class ActiveSubspace(SubspaceBasedDimensionReduction):
         return grad
 
     @property
-    def U(self):
+    def U(self):  # noqa: ANN201, D102, N802
         # return np.copy(self._U)
         return self._U  # this should still return a shallow copy
 
-    def set_U(self, U):
+    def set_U(self, U) -> None:  # noqa: ANN001, D102, N802, N803
         self._U = U
 
     @property
-    def C(self):
+    def C(self):  # noqa: ANN201, D102, N802
         return self._C
 
     @property
-    def singvals(self):
+    def singvals(self):  # noqa: ANN201, D102
         return self._s
 
     # TODO: Plot of eigenvalues (with optional boostrapped estimate)

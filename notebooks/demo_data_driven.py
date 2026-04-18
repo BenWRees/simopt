@@ -1,4 +1,4 @@
-# ---
+# ---  # noqa: D100
 # jupyter:
 #   jupytext:
 #     formats: ipynb,py:percent
@@ -34,41 +34,41 @@ from simopt.input_models import InputModel
 
 
 # %%
-class DemandInputModel(InputModel):
-    def set_rng(self, rng: random.Random) -> None:
+class DemandInputModel(InputModel):  # noqa: D101
+    def set_rng(self, rng: random.Random) -> None:  # noqa: D102
         self.rng = rng
 
-    def unset_rng(self) -> None:
+    def unset_rng(self) -> None:  # noqa: D102
         self.rng = None
 
-    def random(self, burr_c: float, burr_k: float) -> float:
+    def random(self, burr_c: float, burr_k: float) -> float:  # noqa: ARG002, D102
         mean = 10
         std = 0.5
         return self.rng.normalvariate(mean, std)
 
 
 # %%
-class FileInputModel(InputModel):
-    def __init__(self, filename):
+class FileInputModel(InputModel):  # noqa: D101
+    def __init__(self, filename) -> None:  # noqa: ANN001, D107
         self.data = np.load(filename)
 
-    def set_rng(self, rng: random.Random) -> None:
+    def set_rng(self, rng: random.Random) -> None:  # noqa: D102
         self.rng = rng
 
-    def unset_rng(self) -> None:
+    def unset_rng(self) -> None:  # noqa: D102
         self.rng = None
 
-    def random(self, burr_c: float, burr_k: float) -> float:
+    def random(self, burr_c: float, burr_k: float) -> float:  # noqa: ARG002, D102
         return np.random.choice(self.data, size=1, replace=True)[0]
 
 
 # %%
-class Experiment(ProblemSolver):
-    def model_created(self, model):
+class Experiment(ProblemSolver):  # noqa: D101
+    def model_created(self, model) -> None:  # noqa: ANN001, D102
         # model.demand_model = DemandInputModel()
         model.demand_model = FileInputModel("demand.npy")
 
-    def before_replicate(self, model, rng_list):
+    def before_replicate(self, model, rng_list) -> None:  # noqa: ANN001, D102
         model.demand_model.set_rng(rng_list[0])
 
 

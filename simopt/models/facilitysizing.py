@@ -209,7 +209,7 @@ class DemandInputModel(InputModel):
 
     def set_cholesky(self, cov: np.ndarray) -> None:
         """Pre-compute and cache the Cholesky decomposition of the covariance matrix.
-        
+
         This should be called once before replications to avoid O(n³) computation
         on every replication.
         """
@@ -227,7 +227,7 @@ class DemandInputModel(InputModel):
         observations = [self.rng.normalvariate(0, 1) for _ in range(n)]
         return np.dot(self._cached_chol, observations).transpose() + mean_vec
 
-    def random(self, mean: np.ndarray) -> np.ndarray:  # noqa: D102
+    def random(self, mean: np.ndarray) -> np.ndarray:
         """Generate non-negative multivariate normal demand using rejection sampling."""
         while True:
             demand = np.array(self._mvnormalvariate(mean))
@@ -279,13 +279,20 @@ class FacilitySize(Model):
         Returns:
             tuple: A tuple containing:
                 - dict: The responses dictionary, with keys:
-                    - "stockout_flag" (bool): True if at least one facility failed to satisfy demand;
+                    - "stockout_flag" (bool): True if at least one facility failed to
+                    satisfy demand;
                         False otherwise.
-                    - "n_fac_stockout" (int): Number of facilities that could not satisfy demand.
-                    - "n_cut" (int): Total number of demand units that could not be satisfied.
+                    - "n_fac_stockout" (int): Number of facilities that could not
+                    satisfy demand.
+                    - "n_cut" (int): Total number of demand units that could not be
+                    satisfied.
                 - dict: Gradient estimates for each response.
-        """  # noqa: E501
+        """
         capacity = np.array(self.factors["capacity"])
+        if self._mean_vec is None:
+            raise RuntimeError(
+                "mean vector is not initialized. Call before_replicate first."
+            )
         demand = self.demand_model.random(self._mean_vec)
         extra_demand = demand - capacity
         pos_excess_mask = extra_demand > 0

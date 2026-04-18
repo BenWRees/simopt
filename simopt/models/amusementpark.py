@@ -306,13 +306,19 @@ class AmusementPark(Model):
 
         Returns:
             tuple: A tuple containing:
-                - dict[str, float | list[float]]: Performance metrics from the simulation:
-                    - "total_departed_tourists": Total number of tourists who left due to full queues.
-                    - "percent_departed_tourists": Percentage of tourists who left due to full queues.
-                    - "average_number_in_system": Average number of tourists in the park at a given time.
-                    - "attraction_utilization_percentages": Utilization percentage of each attraction.
-                - dict: Gradients of the performance measures with respect to model factors.
-        """  # noqa: E501
+                - dict[str, float | list[float]]: Performance metrics from the
+                simulation:
+                    - "total_departed_tourists": Total number of tourists who left due
+                    to full queues.
+                    - "percent_departed_tourists": Percentage of tourists who left due
+                    to full queues.
+                    - "average_number_in_system": Average number of tourists in the park
+                    at a given time.
+                    - "attraction_utilization_percentages": Utilization percentage of
+                    each attraction.
+                - dict: Gradients of the performance measures with respect to model
+                factors.
+        """
 
         def set_completion(i: int, new_time: float) -> None:
             """Set the completion time for an attraction.

@@ -8,22 +8,22 @@ from equadratures.sampling_methods.sampling_template import Sampling
 class Tensorgrid(Sampling):
     """The class defines a Tensorgrid sampling object.
 
-    :param list parameters: A list of parameters, where each element of the list is an instance of the Parameter class.
-    :param Basis basis: An instance of the Basis class corresponding to the multi-index set used.
+    :param list parameters: A list of parameters, where each element of the list is an
+    instance of the Parameter class.
+    :param Basis basis: An instance of the Basis class corresponding to the multi-index
+    set used.
     """
 
-    def __init__(self, parameters, basis, orders=None):
+    def __init__(self, parameters, basis, orders=None) -> None:  # noqa: ANN001, D107
         self.parameters = parameters
         self.basis = basis
         if orders is not None:
             self.basis.set_orders(orders)
         self.dimensions = len(self.parameters)
         self._set_points(orders)
-        super(Tensorgrid, self).__init__(
-            self.parameters, self.basis, self.points, self.weights
-        )
+        super().__init__(self.parameters, self.basis, self.points, self.weights)
 
-    def _set_points(self, orders=None):
+    def _set_points(self, orders=None) -> None:  # noqa: ANN001
         """Generates a tensor grid quadrature rule based on the parameters in Poly.
 
         :param Poly self:

@@ -1,0 +1,1 @@
+"""criticality_check module."""

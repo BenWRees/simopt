@@ -1,0 +1,15 @@
+{
+  "solver_names": ["ASTROMORF"],
+  "problem_names": ["NETWORK-1", "SAN-1", "DYNAMNEWS-1", "ROSENBROCK-1", "PARAMESTI-1"],
+  "dim_sizes": [100],
+  "fixed_factors": {
+    "ASTROMORF": {
+      "DYNAMNEWS-1":  {"crn_across_solns": true, "eta_1": 0.218, "eta_2": 0.29, "gamma_1": 3.4, "gamma_2": 1.97, "gamma_3": 0.38, "lambda_min": 5,  "subproblem_regularisation": 0.06, "ps_sufficient_reduction": 0.16, "mu": 3812.0},
+      "NETWORK-1":    {"crn_across_solns": true, "eta_1": 0.246, "eta_2": 0.63, "gamma_1": 3.0, "gamma_2": 2.0,  "gamma_3": 0.75, "lambda_min": 27, "subproblem_regularisation": 0.28, "ps_sufficient_reduction": 0.66, "mu": 8144.0},
+      "PARAMESTI-1":  {"crn_across_solns": true, "eta_1": 0.191, "eta_2": 0.26, "gamma_1": 3.6, "gamma_2": 1.91, "gamma_3": 0.4,  "lambda_min": 3,  "subproblem_regularisation": 0.33, "ps_sufficient_reduction": 0.75, "mu": 7216.0},
+      "ROSENBROCK-1": {"crn_across_solns": true, "eta_1": 0.155, "eta_2": 0.52, "gamma_1": 2.8, "gamma_2": 1.52, "gamma_3": 0.5,  "lambda_min": 16, "subproblem_regularisation": 0.25, "ps_sufficient_reduction": 0.5,  "mu": 5050.0},
+      "SAN-1":        {"crn_across_solns": true, "eta_1": 0.146, "eta_2": 0.37, "gamma_1": 1.7, "gamma_2": 1.67, "gamma_3": 0.18, "lambda_min": 23, "subproblem_regularisation": 0.39, "ps_sufficient_reduction": 0.0,  "mu": 4741.0}
+    }
+  },
+  "budgets": [10000]
+}

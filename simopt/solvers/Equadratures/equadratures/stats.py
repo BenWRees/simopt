@@ -1,36 +1,47 @@
 """Computing statistics from a polynomial expansions."""
 
-from itertools import *
+from itertools import *  # noqa: F403
 
 import numpy as np
 
 
 class Statistics:
-    """Compute statistics (mean, variance, skewness, kurtosis and sensitivity indices) of an orthogonal polynomial defined via parameters, a basis and coefficients.
+    """Compute statistics (mean, variance, skewness, kurtosis and sensitivity indices).
+
+    of an orthogonal polynomial defined via parameters, a basis and coefficients.
+
     Typically, it is recommended to use equivalent routines in `poly.py`.
 
-    :param list parameters: A list of parameters, where each element of the list is an instance of the Parameter class.
-    :param Basis basis: An instance of the Basis class corresponding to the multi-index set used.
+    :param list parameters: A list of parameters, where each element of the list is an
+    instance of the Parameter class.
+    :param Basis basis: An instance of the Basis class corresponding to the multi-index
+    set used.
     :param numpy.ndarray coefficients: Coefficients from a polynomial expansion.
-    :param numpy.ndarray quadrature_points: Quadrautre points associated with a quadrature rule of shape (number_of_points, dimensions)
-    :param numpy.ndarray quadrature_weights: Quadrature weights associated with a quadrature rule of shape (number_of_points, 1)
-    :param numpy.ndarray polynomial_matrix: The vandermonde-type matrix with multivariate polynomials evaluated at the quadrature_points of shape (cardinality, number_of_points).
-    :param int max_sobol_order: For fast numerical calculations, max_sobol_order restricts the computation of conditional variances (and thus higher order Sobol' indices) to a
+    :param numpy.ndarray quadrature_points: Quadrautre points associated with a
+    quadrature rule of shape (number_of_points, dimensions)
+    :param numpy.ndarray quadrature_weights: Quadrature weights associated with a
+    quadrature rule of shape (number_of_points, 1)
+    :param numpy.ndarray polynomial_matrix: The vandermonde-type matrix with
+    multivariate polynomials evaluated at the quadrature_points of shape (cardinality,
+    number_of_points).
+    :param int max_sobol_order: For fast numerical calculations, max_sobol_order
+    restricts the computation of conditional variances (and thus higher order Sobol'
+    indices) to a
         user-defined order.
 
     """
 
     # constructor
-    def __init__(
+    def __init__(  # noqa: D107
         self,
-        parameters,
-        basis,
-        coefficients,
-        quadrature_points=None,
-        quadrature_weights=None,
-        polynomial_matrix=None,
-        max_sobol_order=None,
-    ):
+        parameters,  # noqa: ANN001
+        basis,  # noqa: ANN001
+        coefficients,  # noqa: ANN001
+        quadrature_points=None,  # noqa: ANN001
+        quadrature_weights=None,  # noqa: ANN001
+        polynomial_matrix=None,  # noqa: ANN001
+        max_sobol_order=None,  # noqa: ANN001
+    ) -> None:
         mm = len(coefficients)
         self.coefficients = np.reshape(np.asarray(coefficients), (mm, 1))
         self.basis = basis
@@ -69,7 +80,7 @@ class Statistics:
                 self._variance,
             )
 
-    def get_mean(self):
+    def get_mean(self):  # noqa: ANN201
         """Compute the mean of the polynomial expansion.
 
         :param Statistics self:
@@ -80,57 +91,64 @@ class Statistics:
         """
         return self._mean
 
-    def get_variance(self):
+    def get_variance(self):  # noqa: ANN201
         """Compute the variance of the polynomial expansion.
 
         :param Statistics self:
             An instance of the Statistics class.
 
         :return:
-            **variance**: The approximated variance of the polynomial fit; output as a float.
+            **variance**: The approximated variance of the polynomial fit; output as a
+            float.
         """
         return self._variance
 
-    def get_skewness(self):
+    def get_skewness(self):  # noqa: ANN201
         """Compute the skewness of the polynomial expansion.
 
         :param Statistics self:
             An instance of the Statistics class.
 
         :return:
-            **skewness**: The approximated skewness of the polynomial fit; output as a float.
+            **skewness**: The approximated skewness of the polynomial fit; output as a
+            float.
         """
         return self._skewness
 
-    def get_kurtosis(self):
+    def get_kurtosis(self):  # noqa: ANN201
         """Compute the kurtosis of the polynomial expansion.
 
         :param Statistics self:
             An instance of the Statistics class.
 
         :return:
-            **kurtosis**: The approximated kurtosis of the polynomial fit; output as a float.
+            **kurtosis**: The approximated kurtosis of the polynomial fit; output as a
+            float.
         """
         return self._kurtosis
 
-    def get_sobol(self, order=1):
+    def get_sobol(self, order=1):  # noqa: ANN001, ANN201
         """Get Sobol' indices at specified order.
 
-        :param order int: The order at which Sobol' indices are computed. By default, computes first order Sobol' indices.
+        :param order int: The order at which Sobol' indices are computed. By default,
+        computes first order Sobol' indices.
 
-        :return: indices: Dictionary where keys specify non-zero dimensions and values represent Sobol' indices.
-        :rtype: dict
+        :return: indices: Dictionary where keys specify non-zero dimensions and values
+        represent Sobol' indices.
+        :rtype: dict.
 
         """
         return {key: value for key, value in self._sobol.items() if len(key) == order}
 
-    def get_conditional_skewness(self, order=1):
+    def get_conditional_skewness(self, order=1):  # noqa: ANN001, ANN201
         """Get conditional skewness indices at specified order.
 
-        :param order int: The order at which conditional skewness indices are computed. By default, computes first order conditional skewness.
+        :param order int: The order at which conditional skewness indices are computed.
+        By default, computes first order conditional skewness.
 
-        :return: indices: Dictionary where keys specify non-zero dimensions and values represent conditional skewness indices.
-        :rtype: dict
+        :return: indices: Dictionary where keys specify non-zero dimensions and values
+        represent conditional skewness indices.
+        :rtype: dict.
 
         """
         return private_conditional_skewness(
@@ -142,13 +160,15 @@ class Statistics:
             self._skewness,
         )
 
-    def get_conditional_kurtosis(self, order=1):
+    def get_conditional_kurtosis(self, order=1):  # noqa: ANN001, ANN201
         """Get conditional kurtosis indices at specified order.
 
-        :param order int: The order at which conditional kurtosis indices are computed. By default, computes first order conditional kurtosis.
+        :param order int: The order at which conditional kurtosis indices are computed.
+        By default, computes first order conditional kurtosis.
 
-        :return: indices: Dictionary where keys specify non-zero dimensions and values represent conditional kurtosis indices.
-        :rtype: dict
+        :return: indices: Dictionary where keys specify non-zero dimensions and values
+        represent conditional kurtosis indices.
+        :rtype: dict.
 
         """
         return private_conditional_kurtosis(
@@ -160,24 +180,25 @@ class Statistics:
             self._kurtosis,
         )
 
-    def get_sobol_total(self):
-        """Get total Sobol' indices
-        :return: list: Totol Sobol' indices for each parameter
+    def get_sobol_total(self):  # noqa: ANN201
+        """Get total Sobol' indices.
+
+        :return: list: Totol Sobol' indices for each parameter.
         """
         all_sobols = self._sobol
         dims = len(self.parameters)
-        TSI = np.zeros(dims)
-        for i in all_sobols.keys():
+        TSI = np.zeros(dims)  # noqa: N806
+        for i in all_sobols:
             for p in i:
                 TSI[p] += all_sobols[i]
         return TSI
 
 
-def private_get_mean(coefficients):
+def private_get_mean(coefficients):  # noqa: ANN001, ANN201, D103
     return float(coefficients[0])
 
 
-def private_get_variance(coefficients):
+def private_get_variance(coefficients):  # noqa: ANN001, ANN201, D103
     result = 0.0
     for i in range(1, len(coefficients)):
         variance = result + float(coefficients[i] ** 2)
@@ -185,7 +206,7 @@ def private_get_variance(coefficients):
     return variance
 
 
-def private_get_all_sobol_indices(coefficients, basis, max_order):
+def private_get_all_sobol_indices(coefficients, basis, max_order):  # noqa: ANN001, ANN201, D103
     variance = private_get_variance(coefficients)
     if not (isinstance(basis, np.ndarray)):
         basis = basis.elements
@@ -197,7 +218,7 @@ def private_get_all_sobol_indices(coefficients, basis, max_order):
     if max_order is None or max_order > dimensions:
         max_order = dimensions
     for order in range(1, max_order + 1):  # loop over order
-        for i in combinations(range(dimensions), order):
+        for i in combinations(range(dimensions), order):  # noqa: F405
             # initialize each index to be 0
             combo_index[i] = 0
 
@@ -218,26 +239,31 @@ def private_get_all_sobol_indices(coefficients, basis, max_order):
     return combo_index
 
 
-def private_get_skewness(quadrature_weights, weighted_evals, basis, variance):
+def private_get_skewness(quadrature_weights, weighted_evals, basis, variance):  # noqa: ANN001, ANN201, ARG001, D103
     total_evals = np.sum(weighted_evals[1:], 0)
     third_total_evals = total_evals**3
     return np.dot(third_total_evals, quadrature_weights) / (variance**1.5)
 
 
-def private_get_kurtosis(quadrature_weights, weighted_evals, basis, variance):
+def private_get_kurtosis(quadrature_weights, weighted_evals, basis, variance):  # noqa: ANN001, ANN201, ARG001, D103
     total_evals = np.sum(weighted_evals[1:], 0)
     fourth_total_evals = total_evals**4
     return np.dot(fourth_total_evals, quadrature_weights) / (variance**2)
 
 
-def private_conditional_skewness(
-    order, quadrature_weights, weighted_evals, basis, variance, skewness
+def private_conditional_skewness(  # noqa: ANN201, D103
+    order,  # noqa: ANN001
+    quadrature_weights,  # noqa: ANN001
+    weighted_evals,  # noqa: ANN001
+    basis,  # noqa: ANN001
+    variance,  # noqa: ANN001
+    skewness,  # noqa: ANN001
 ):
     dimensions = basis.elements.shape[1]
     norm_ind = basis.elements.copy()
     norm_ind = list(map(tuple, (norm_ind > 0).astype(int)))
     combo_index = {}
-    for i in combinations(range(dimensions), order):
+    for i in combinations(range(dimensions), order):  # noqa: F405
         index = np.zeros(dimensions).astype(int)
         index[list(i)] = 1
         combo_index[tuple(index)] = 0.0
@@ -291,7 +317,7 @@ def private_conditional_skewness(
                 if sum(summed_norm_index) != order:
                     continue
                 delta = False
-                for d in range(dimensions):
+                for d in range(dimensions):  # noqa: B007
                     if delta_pqr([temp_ind[p, :], temp_ind[q, :], temp_ind[r, :]]):
                         delta = True
                         break
@@ -307,21 +333,23 @@ def private_conditional_skewness(
                 combo_index[summed_norm_index] = combo_index[
                     summed_norm_index
                 ] + 6 * integral3 / (variance**1.5 * skewness)
-    combo_index = {
-        tuple(np.nonzero(key)[0]): value for key, value in combo_index.items()
-    }
-    return combo_index
+    return {tuple(np.nonzero(key)[0]): value for key, value in combo_index.items()}
 
 
-def private_conditional_kurtosis(
-    order, quadrature_weights, weighted_evals, basis, variance, kurtosis
+def private_conditional_kurtosis(  # noqa: ANN201, D103
+    order,  # noqa: ANN001
+    quadrature_weights,  # noqa: ANN001
+    weighted_evals,  # noqa: ANN001
+    basis,  # noqa: ANN001
+    variance,  # noqa: ANN001
+    kurtosis,  # noqa: ANN001
 ):
     # Get all polynomials evaluated at the quad. pts and corresponding wts
     dimensions = basis.elements.shape[1]
     norm_ind = basis.elements.copy()
     norm_ind = list(map(tuple, (norm_ind > 0).astype(int)))
     combo_index = {}
-    for i in combinations(range(dimensions), order):
+    for i in combinations(range(dimensions), order):  # noqa: F405
         index = np.zeros(dimensions).astype(int)
         index[list(i)] = 1
         combo_index[tuple(index)] = 0.0
@@ -390,7 +418,7 @@ def private_conditional_kurtosis(
                     continue
                 # check if selection function is zero, in which case delta = True
                 delta = False
-                for d in range(dimensions):
+                for d in range(dimensions):  # noqa: B007
                     if (
                         (
                             delta_p_qr(
@@ -442,7 +470,7 @@ def private_conditional_kurtosis(
                         continue
                     # check if selection function is zero, in which case delta = True
                     delta = False
-                    for d in range(dimensions):
+                    for d in range(dimensions):  # noqa: B007
                         if delta_pqrs(
                             [
                                 temp_ind[p, :],
@@ -474,26 +502,19 @@ def private_conditional_kurtosis(
                     combo_index[summed_norm_index] = combo_index[
                         summed_norm_index
                     ] + 24 * integral5 / (variance**2 * kurtosis)
-    combo_index = {
-        tuple(np.nonzero(key)[0]): value for key, value in combo_index.items()
-    }
-    return combo_index
+    return {tuple(np.nonzero(key)[0]): value for key, value in combo_index.items()}
 
 
 # Calculates delta^p_{qr} (Geraci)
-def delta_p_qr(rows):
+def delta_p_qr(rows) -> bool:  # noqa: ANN001, D103
     # first row = p, then q, then r
     assert len(rows) == 3
     dimensions = len(rows[0])
-    for d in range(dimensions):
-        if rows[0][d] == 0:
-            if rows[1][d] != rows[2][d]:
-                return True
-    return False
+    return any(rows[0][d] == 0 and rows[1][d] != rows[2][d] for d in range(dimensions))
 
 
 # Calculates delta_pqrs (From Geraci)
-def delta_pqrs(rows):
+def delta_pqrs(rows) -> bool:  # noqa: ANN001, D103
     assert len(rows) == 4  # Comparison of 4 rows
     norm_rows = []
     norm_rows[:] = rows[:]
@@ -520,7 +541,7 @@ def delta_pqrs(rows):
 
 
 # Calculates delta_pqr (Geraci)
-def delta_pqr(rows):
+def delta_pqr(rows) -> bool:  # noqa: ANN001, D103
     #    print "-----"
     #    print rows
     assert len(rows) == 3

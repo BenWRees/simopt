@@ -15,15 +15,20 @@ class Basis:
     Parameters
     ----------
     basis_type : str
-            The type of index set to be used. Options include: ``univariate``, ``total-order``, ``tensor-grid``,
-            ``sparse-grid``, ``hyperbolic-basis`` [1] and ``euclidean-degree`` [2]; all basis are isotropic.
+            The type of index set to be used. Options include: ``univariate``, ``total-
+            order``, ``tensor-grid``,
+            ``sparse-grid``, ``hyperbolic-basis`` [1] and ``euclidean-degree`` [2]; all
+            basis are isotropic.
     orders : list, optional
-            List of integers corresponding to the highest polynomial order in each direction.
+            List of integers corresponding to the highest polynomial order in each
+            direction.
     growth_rule : str, optional
             The type of growth rule associated with sparse grids.
-            Options include: ``linear`` and ``exponential``. This input is only required when using a sparse grid.
+            Options include: ``linear`` and ``exponential``. This input is only required
+            when using a sparse grid.
     q : float, optional
-            The ``q`` parameter is used to control the number of basis terms used in a hyperbolic basis (see [1]).
+            The ``q`` parameter is used to control the number of basis terms used in a
+            hyperbolic basis (see [1]).
             Varies between 0.0 to 1.0. A value of 1.0 yields a total order basis.
 
     Examples:
@@ -39,11 +44,22 @@ class Basis:
 
     References:
     ----------
-            1. Blatman, G., Sudret, B., (2011) Adaptive Sparse Polynomial Chaos Expansion Based on Least Angle Regression. Journal of Computational Physics, 230(6), 2345-2367.
-            2. Trefethen, L., (2017) Multivariate Polynomial Approximation in the Hypercube. Proceedings of the American Mathematical Society, 145(11), 4837-4844. `Pre-print <https://arxiv.org/pdf/1608.02216v1.pdf>`_.
+            1. Blatman, G., Sudret, B., (2011) Adaptive Sparse Polynomial Chaos
+            Expansion Based on Least Angle Regression. Journal of Computational Physics,
+            230(6), 2345-2367.
+            2. Trefethen, L., (2017) Multivariate Polynomial Approximation in the
+            Hypercube. Proceedings of the American Mathematical Society, 145(11),
+            4837-4844. `Pre-print <https://arxiv.org/pdf/1608.02216v1.pdf>`_.
     """
 
-    def __init__(self, basis_type, orders=None, level=None, growth_rule=None, q=None):
+    def __init__(  # noqa: D107
+        self,
+        basis_type,  # noqa: ANN001
+        orders=None,  # noqa: ANN001
+        level=None,  # noqa: ANN001
+        growth_rule=None,  # noqa: ANN001
+        q=None,  # noqa: ANN001
+    ) -> None:
         # Required
         self.basis_type = basis_type  # string
         # Check for the levels (only for sparse grids)
@@ -67,7 +83,7 @@ class Basis:
         else:
             self.set_orders(orders)
 
-    def set_orders(self, orders):
+    def set_orders(self, orders) -> None:  # noqa: ANN001
         """Sets the highest order in each direction of the basis.
 
         Parameters
@@ -93,7 +109,7 @@ class Basis:
                 (self.orders[0] + 1, 1),
             )
         elif name.lower() == "sparse-grid":
-            sparse_index, a, SG_set = sparse_grid_basis(
+            _sparse_index, _a, SG_set = sparse_grid_basis(  # noqa: N806
                 self.level, self.growth_rule, self.dimensions
             )  # Note sparse grid rule depends on points!
             basis = SG_set
@@ -109,7 +125,7 @@ class Basis:
         self.elements = basis
         self.cardinality = len(basis)
 
-    def get_cardinality(self):
+    def get_cardinality(self):  # noqa: ANN201
         """Returns the number of elements of an index set.
 
         Returns:
@@ -118,14 +134,14 @@ class Basis:
                 The number of multi-index elements of the basis.
         """
         try:
-            a, b = self.elements.shape
+            a, _b = self.elements.shape
         except AttributeError as e:
             raise type(e)(
                 "The basis elements have not yet been set. get_cardinality() can only be called if a list of orders is provided during the definition of Basis. Otherwise, call Poly.basis.get_cardinality() once the Poly has been defined."
             ) from e
         return a
 
-    def prune(self, number_of_elements_to_delete):
+    def prune(self, number_of_elements_to_delete) -> None:  # noqa: ANN001
         """Prunes down the number of elements in an index set.
 
         Parameters
@@ -136,7 +152,8 @@ class Basis:
         Raises:
         ------
         ValueError
-                In Basis() --> prune(): Number of elements to be deleted must be greater than the total number of elements
+                In Basis() --> prune(): Number of elements to be deleted must be greater
+                than the total number of elements
         """
         self.sort()
         index_entries = self.elements
@@ -148,8 +165,11 @@ class Basis:
             )
         self.elements = index_entries[0:new_elements, :]
 
-    def sort(self):
-        """Routine that sorts a multi-index in ascending order based on the total orders. The constructor by default calls this function."""
+    def sort(self) -> None:
+        """Routine that sorts a multi-index in ascending order based on the total.
+
+        orders. The constructor by default calls this function.
+        """
         number_of_elements = len(self.elements)
         combined_indices_for_sorting = np.ones((number_of_elements, 1))
         sorted_elements = np.ones((number_of_elements, self.dimensions))
@@ -169,13 +189,19 @@ class Basis:
                 sorted_elements[i, j] = elements[row_index, j]
         self.elements = sorted_elements
 
-    def get_basis(self):
+    def get_basis(self):  # noqa: ANN201
         """Gets the index set elements for the Basis object.
 
         Returns:
         -------
         numpy.ndarray
-                Elements associated with the multi-index set. For ``total-order``, ``tensor-grid``, ``hyperbolic-basis``, ``hyperbolic-basis`` and ``euclidean-degree`` these correspond to the multi-index set elements within the set. For a ``sparse-grid`` the output will comprise of three arguments: (i) list of tensor grid orders (anisotropic), (ii) the positive and negative weights, and (iii) the individual sparse grid multi-index elements.
+                Elements associated with the multi-index set. For ``total-order``,
+                ``tensor-grid``, ``hyperbolic-basis``, ``hyperbolic-basis`` and
+                ``euclidean-degree`` these correspond to the multi-index set elements
+                within the set. For a ``sparse-grid`` the output will comprise of three
+                arguments: (i) list of tensor grid orders (anisotropic), (ii) the
+                positive and negative weights, and (iii) the individual sparse grid
+                multi-index elements.
 
         Raises:
         ------
@@ -201,7 +227,7 @@ class Basis:
             basis = [0]
         return basis
 
-    def get_elements(self):
+    def get_elements(self):  # noqa: ANN201
         """Returns the elements of an index set.
 
         Returns:
@@ -219,7 +245,7 @@ class Basis:
 # ---------------------------------------------------------------------------------------------------
 # PRIVATE FUNCTIONS
 # ---------------------------------------------------------------------------------------------------
-def euclidean_degree_basis(orders):
+def euclidean_degree_basis(orders):  # noqa: ANN001, ANN201, D103
     dimensions = len(orders)
     n_bar = tensor_grid_basis(orders)
     n_new = []
@@ -243,7 +269,7 @@ def euclidean_degree_basis(orders):
     return euclidean_set
 
 
-def getIndexLocation(small_index, large_index):
+def getIndexLocation(small_index, large_index):  # noqa: ANN001, ANN201, D103, N802
     index_values = []
     i = 0
     while i < len(small_index):
@@ -255,7 +281,7 @@ def getIndexLocation(small_index, large_index):
     return index_values
 
 
-def hyperbolic_basis(orders, q):
+def hyperbolic_basis(orders, q):  # noqa: ANN001, ANN201, D103
     # Initialize a few parameters for the setup
     dimensions = len(orders)
     n_bar = total_order_basis(orders)
@@ -283,53 +309,53 @@ def hyperbolic_basis(orders, q):
 
 
 # Double checked April 7th, 2016 --> Works!
-def getTotalOrderBasisRecursion(highest_order, dimensions):
+def getTotalOrderBasisRecursion(highest_order, dimensions):  # noqa: ANN001, ANN201, D103, N802
     if dimensions == 1:
-        I = np.zeros((1, 1))
+        I = np.zeros((1, 1))  # noqa: E741, N806
         I[0, 0] = highest_order
     else:
         for j in range(0, highest_order + 1):
-            U = getTotalOrderBasisRecursion(highest_order - j, dimensions - 1)
+            U = getTotalOrderBasisRecursion(highest_order - j, dimensions - 1)  # noqa: N806
             rows, cols = U.shape
-            T = np.zeros((rows, cols + 1))  # allocate space!
+            T = np.zeros((rows, cols + 1))  # allocate space!  # noqa: N806
             T[:, 0] = j * np.ones((1, rows))
             T[:, 1 : cols + 1] = U
             if j == 0:
-                I = T
+                I = T  # noqa: E741, N806
             elif j >= 0:
-                rows_I, cols_I = I.shape
-                rows_T, cols_T = T.shape
-                Itemp = np.zeros((rows_I + rows_T, cols_I))
+                rows_I, cols_I = I.shape  # noqa: N806
+                rows_T, _cols_T = T.shape  # noqa: N806
+                Itemp = np.zeros((rows_I + rows_T, cols_I))  # noqa: N806
                 Itemp[0:rows_I, :] = I
                 Itemp[rows_I : rows_I + rows_T, :] = T
-                I = Itemp
+                I = Itemp  # noqa: E741, N806
             del T
     return I
 
 
-def total_order_basis(orders):
+def total_order_basis(orders):  # noqa: ANN001, ANN201, D103
     # init
     dimensions = len(orders)
     highest_order = np.max(orders)
     # Check what the cardinality will be, stop if too large!
-    L = int(
+    L = int(  # noqa: N806
         np.math.factorial(highest_order + dimensions)
         / (np.math.factorial(highest_order) * np.math.factorial(dimensions))
     )
     # Check cardinality
     if L >= CARD_LIMIT_HARD:
         raise Exception(
-            "Cardinality %.1e is >= hard cardinality limit %.1e" % (L, CARD_LIMIT_HARD)
+            f"Cardinality {L:.1e} is >= hard cardinality limit {CARD_LIMIT_HARD:.1e}"
         )
     # Generate basis
     total_order = np.zeros((1, dimensions))
     for i in range(1, highest_order + 1):
-        R = getTotalOrderBasisRecursion(i, dimensions)
+        R = getTotalOrderBasisRecursion(i, dimensions)  # noqa: N806
         total_order = np.vstack((total_order, R))
     return total_order
 
 
-def sparse_grid_basis(level, growth_rule, dimensions):
+def sparse_grid_basis(level, growth_rule, dimensions):  # noqa: ANN001, ANN201, D103
     # Initialize a few parameters for the setup
     level_new = level - 1
     lhs = int(level_new) + 1
@@ -378,14 +404,14 @@ def sparse_grid_basis(level, growth_rule, dimensions):
     # print sparse_index
     # Ok, but sparse_index just has the tensor order sets to be used. Now we need
     # to get all the index sets!
-    SG_indices = {}
+    SG_indices = {}  # noqa: N806
 
     counter = 0
     for i in range(0, len(sparse_index)):
         SG_indices[i] = tensor_grid_basis(sparse_index[i, :])
         counter = counter + len(SG_indices[i])
 
-    SG_set = np.zeros((counter, dimensions))
+    SG_set = np.zeros((counter, dimensions))  # noqa: N806
     counter = 0
     for i in range(0, len(sparse_index)):
         for j in range(0, len(SG_indices[i])):
@@ -394,19 +420,18 @@ def sparse_grid_basis(level, growth_rule, dimensions):
     return sparse_index, a, SG_set
 
 
-def tensor_grid_basis(orders):
+def tensor_grid_basis(orders):  # noqa: ANN001, ANN201, D103
     dimensions = len(orders)  # number of dimensions
-    I = [1.0]  # initialize!
+    I = [1.0]  # initialize!  # noqa: E741, N806
 
     # Check what the cardinality will be, stop if too large!
-    L = 1
+    L = 1  # noqa: N806
     for p in orders:
-        L *= p + 1
+        L *= p + 1  # noqa: N806
         # Check cardinality so far
         if L >= CARD_LIMIT_HARD:
             raise Exception(
-                "Cardinality (so far) is %.1e, which is >= hard cardinality limit %.1e"
-                % (L, CARD_LIMIT_HARD)
+                f"Cardinality (so far) is {L:.1e}, which is >= hard cardinality limit {CARD_LIMIT_HARD:.1e}"
             )
 
     # For loop across each dimension
@@ -420,20 +445,19 @@ def tensor_grid_basis(orders):
         right_side = np.array(
             np.kron(vector_of_ones_b, counting)
         )  # make a row-wise vector
-        I = np.concatenate((left_side, right_side), axis=1)
+        I = np.concatenate((left_side, right_side), axis=1)  # noqa: E741, N806
 
     # Ignore the first column of pp
-    basis = I[:, 1::]
-    return basis
+    return I[:, 1::]
 
 
-def column(matrix, i):
+def column(matrix, i):  # noqa: ANN001, ANN201, D103
     return [row[i] for row in matrix]
 
 
-def main():
+def main() -> None:  # noqa: D103
     d = 3
-    Base = Basis("total-order", orders=np.tile([2], d))  # orders=[2,2]
+    Base = Basis("total-order", orders=np.tile([2], d))  # orders=[2,2]  # noqa: N806
     print(Base.get_basis())  # [:,range(d-1, -1, -1)])
 
 

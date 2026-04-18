@@ -1,4 +1,4 @@
-# ---
+# ---  # noqa: D100
 # jupyter:
 #   jupytext:
 #     formats: ipynb,py:percent
@@ -16,16 +16,16 @@
 # %% [markdown]
 # # Demo for Data Farming Models
 #
-# This script is intended to help with running a data-farming experiment on a simulation model.
+# This script is intended to help with running a data-farming experiment on a simulation model.  # noqa: E501
 #
-# It creates a design of model factors and runs multiple replications at each configuration of the model.
+# It creates a design of model factors and runs multiple replications at each configuration of the model.  # noqa: E501
 #
 # Outputs are printed to a file.
 
 # %% [markdown]
 # ## Append SimOpt Path
 #
-# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.
+# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.  # noqa: E501
 
 # %%
 import sys
@@ -37,16 +37,16 @@ sys.path.append(str(Path.cwd().parent))
 # %% [markdown]
 # ## Configure Design
 #
-# To configure a design, the name of each factor being varied must be provided via the `factor_headers` parameter, along with **either** the `factor_settings` **or** `design_filename` parameter. Please note that the ordering of factors in `factor_headers` must match the ordering in either `factor_settings` or `design_filename`.
+# To configure a design, the name of each factor being varied must be provided via the `factor_headers` parameter, along with **either** the `factor_settings` **or** `design_filename` parameter. Please note that the ordering of factors in `factor_headers` must match the ordering in either `factor_settings` or `design_filename`.  # noqa: E501
 #
 # ### `factor_settings`
 #
-# Use this parameter to define the factors for a new design of experiments. Each factor requires a lower bound, an upper bound, and a number of digits for discretization.
+# Use this parameter to define the factors for a new design of experiments. Each factor requires a lower bound, an upper bound, and a number of digits for discretization.  # noqa: E501
 #
 # You can provide these settings in one of two ways:
 #
 # #### 1. List of Tuples (Recommended)
-# Pass a list where each element is a 3-tuple representing a single factor with the following structure:
+# Pass a list where each element is a 3-tuple representing a single factor with the following structure:  # noqa: E501
 # - lower_bound: The minimum value for the factor.
 # - upper_bound: The maximum value for the factor.
 # - num_digits: An integer for the number of decimal places (e.g., 0 for integers).
@@ -60,7 +60,7 @@ sys.path.append(str(Path.cwd().parent))
 # ```
 #
 # #### 2. File Path
-# Pass a string containing the path to a settings file. The file must contain three columns, with each row corresponding to a different factor.
+# Pass a string containing the path to a settings file. The file must contain three columns, with each row corresponding to a different factor.  # noqa: E501
 #
 # The columns should be structured as follows:
 # - Column 1: Lower bound for the factor's value.
@@ -74,7 +74,7 @@ sys.path.append(str(Path.cwd().parent))
 # The file must be structured as a simple table with the following format:
 # - Rows: Each row corresponds to a single design point (an experimental run).
 # - Columns: The number of columns must equal the number of factors being varied.
-# - Values: Each cell contains the specific value for a given factor (column) at a specific design point (row).
+# - Values: Each cell contains the specific value for a given factor (column) at a specific design point (row).  # noqa: E501
 
 # %%
 # Name of the model being run
@@ -96,7 +96,7 @@ design_filename = None
 # ## Create Experiment using Specified Configuration
 
 # %%
-from simopt.data_farming_base import DataFarmingExperiment
+from simopt.data_farming_base import DataFarmingExperiment  # noqa: E402
 
 myexperiment = DataFarmingExperiment(
     model_name=model_abbr_name,
@@ -107,7 +107,7 @@ myexperiment = DataFarmingExperiment(
 
 # %% [markdown]
 # ## Run Data Farming Experiment
-# Executes the specified number of replications at each design point and saves the results to a CSV file.
+# Executes the specified number of replications at each design point and saves the results to a CSV file.  # noqa: E501
 
 # %%
 # Number of replications to run of the model at each design point

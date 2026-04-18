@@ -1,4 +1,4 @@
-# ---
+# ---  # noqa: D100
 # jupyter:
 #   jupytext:
 #     formats: ipynb,py:percent
@@ -18,14 +18,14 @@
 #
 # This script is intended to help with running a data-farming experiment on a solver.
 #
-# It creates a design of solver factors and runs multiple macroreplications at each version of the solver.
+# It creates a design of solver factors and runs multiple macroreplications at each version of the solver.  # noqa: E501
 #
 # Outputs are printed to a file.
 
 # %% [markdown]
 # ## Append SimOpt Path
 #
-# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.
+# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.  # noqa: E501
 
 # %%
 import sys
@@ -63,7 +63,7 @@ solver_cross_design_factors = {"crn_across_solns": [True, False]}
 # ## Create Solver Design
 
 # %%
-from simopt.experiment_base import create_design
+from simopt.experiment_base import create_design  # noqa: E402
 
 # Create DataFarmingExperiment object for solver design
 solver_design_list = create_design(
@@ -102,10 +102,10 @@ model_fixed_factors = {"salvage_price": 3, "Burr_c": 1}
 model_cross_design_factors = {}
 
 # %% [markdown]
-# ## Create Problem/Model Design 
+# ## Create Problem/Model Design
 
 # %%
-from simopt.experiment_base import create_design
+from simopt.experiment_base import create_design  # noqa: E402
 
 # Create DataFarmingExperiment object for model design
 model_design_list = create_design(
@@ -141,7 +141,7 @@ crn_across_init_opt = True  # Default
 # ## Create Experiment using Specified Configuration
 
 # %%
-from simopt.experiment_base import ProblemsSolvers
+from simopt.experiment_base import ProblemsSolvers  # noqa: E402
 
 # Create solver and problem names lists
 solver_names = [solver_abbr_name] * len(solver_design_list)

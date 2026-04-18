@@ -1,4 +1,7 @@
-"""The polynomial parent class; one of the main building blocks in Effective Quadratures."""
+"""The polynomial parent class; one of the main building blocks in Effective.
+
+Quadratures.
+"""
 
 from copy import deepcopy
 
@@ -23,63 +26,114 @@ class Poly:
     Parameters
     ----------
     parameters : list
-        A list of parameters, where each element of the list is an instance of the Parameter class.
+        A list of parameters, where each element of the list is an instance of the
+        Parameter class.
     basis : Basis
         An instance of the Basis class corresponding to the multi-index set used.
     method : str, optional
-        The method used for computing the coefficients. Should be one of: ``compressed-sensing``, ``least-squares``, ``minimum-norm``, ``numerical-integration``, ``least-squares-with-gradients``, ``least-absolute-residual``, ``huber``, ``elastic-net``, ``relevance-vector-machine`` or ``custom-solver``. See :class:`~equadratures.solver.Solver` for further details.
+        The method used for computing the coefficients. Should be one of: ``compressed-
+        sensing``, ``least-squares``, ``minimum-norm``, ``numerical-integration``,
+        ``least-squares-with-gradients``, ``least-absolute-residual``, ``huber``,
+        ``elastic-net``, ``relevance-vector-machine`` or ``custom-solver``. See
+        :class:`~equadratures.solver.Solver` for further details.
     sampling_args : dict, optional
-        A dict containing optional arguments centered around the specific sampling strategy:
+        A dict containing optional arguments centered around the specific sampling
+        strategy:
 
-            - **mesh** (str): Avaliable options are: ``monte-carlo``, ``sparse-grid``, ``tensor-grid``, ``induced``, or ``user-defined``. Note that when the ``sparse-grid`` option is invoked, the sparse pseudospectral approximation method [1] is the adopted. One can think of this as being the correct way to use sparse grids in the context of polynomial chaos [2] techniques.
-            - **subsampling-algorithm** (str): The ``subsampling-algorithm`` input refers to the optimisation technique for subsampling. In the aforementioned four sampling strategies, we generate a logarithm factor of samples above the required amount and prune down the samples using an optimisation technique (see [1]). Existing optimisation strategies include: ``qr``, ``lu``, ``svd``, ``newton``. These refer to QR with column pivoting [2], LU with row pivoting [3], singular value decomposition with subset selection [2] and a convex relaxation via Newton's method for determinant maximization [4]. Note that if the ``tensor-grid`` option is selected, then subsampling will depend on whether the Basis argument is a total order index set, hyperbolic basis or a tensor order index set.
-            - **sampling-ratio** (float): Denotes the extent of undersampling or oversampling required. For values equal to unity (default), the number of rows and columns of the associated Vandermonde-type matrix are equal.
-            - **sample-points** (numpy.ndarray): A numpy ndarray with shape (number_of_observations, dimensions) that corresponds to a set of sample points over the parameter space.
-            - **sample-outputs** (numpy.ndarray): A numpy ndarray with shape (number_of_observations, 1) that corresponds to model evaluations at the sample points. Note that if ``sample-points`` is provided as an input, then the code expects ``sample-outputs`` too.
-            - **sample-gradients** (numpy.ndarray): A numpy ndarray with shape (number_of_observations, dimensions) that corresponds to a set of sample gradient values over the parameter space.
+            - **mesh** (str): Avaliable options are: ``monte-carlo``, ``sparse-grid``,
+            ``tensor-grid``, ``induced``, or ``user-defined``. Note that when the
+            ``sparse-grid`` option is invoked, the sparse pseudospectral approximation
+            method [1] is the adopted. One can think of this as being the correct way to
+            use sparse grids in the context of polynomial chaos [2] techniques.
+            - **subsampling-algorithm** (str): The ``subsampling-algorithm`` input
+            refers to the optimisation technique for subsampling. In the aforementioned
+            four sampling strategies, we generate a logarithm factor of samples above
+            the required amount and prune down the samples using an optimisation
+            technique (see [1]). Existing optimisation strategies include: ``qr``,
+            ``lu``, ``svd``, ``newton``. These refer to QR with column pivoting [2], LU
+            with row pivoting [3], singular value decomposition with subset selection
+            [2] and a convex relaxation via Newton's method for determinant maximization
+            [4]. Note that if the ``tensor-grid`` option is selected, then subsampling
+            will depend on whether the Basis argument is a total order index set,
+            hyperbolic basis or a tensor order index set.
+            - **sampling-ratio** (float): Denotes the extent of undersampling or
+            oversampling required. For values equal to unity (default), the number of
+            rows and columns of the associated Vandermonde-type matrix are equal.
+            - **sample-points** (numpy.ndarray): A numpy ndarray with shape
+            (number_of_observations, dimensions) that corresponds to a set of sample
+            points over the parameter space.
+            - **sample-outputs** (numpy.ndarray): A numpy ndarray with shape
+            (number_of_observations, 1) that corresponds to model evaluations at the
+            sample points. Note that if ``sample-points`` is provided as an input, then
+            the code expects ``sample-outputs`` too.
+            - **sample-gradients** (numpy.ndarray): A numpy ndarray with shape
+            (number_of_observations, dimensions) that corresponds to a set of sample
+            gradient values over the parameter space.
     solver_args : dict, optional
-        Optional arguments centered around the specific solver used for computing the coefficients. See :class:`Solver<equadratures.solver.Solver>`.
+        Optional arguments centered around the specific solver used for computing the
+        coefficients. See :class:`Solver<equadratures.solver.Solver>`.
     override_cardinality: bool, optional
-        Option to override the soft cardinality limit of 50E3. By default the limit is enforced in order to avoid excessively long run times when the polynomial coefficients are computed.
+        Option to override the soft cardinality limit of 50E3. By default the limit is
+        enforced in order to avoid excessively long run times when the polynomial
+        coefficients are computed.
 
     Examples:
     --------
     >>> # Subsampling from a tensor grid
     >>> param = eq.Parameter(distribution='uniform', lower=-1., upper=1., order=3)
     >>> basis = eq.Basis('total order')
-    >>> poly = eq.Poly(parameters=[param, param], basis=basis, method='least-squares' , sampling_args={'mesh':'tensor-grid', 'subsampling-algorithm':'svd', 'sampling-ratio':1.0})
+    >>> poly = eq.Poly(parameters=[param, param], basis=basis, method='least-squares' ,
+    sampling_args={'mesh':'tensor-grid', 'subsampling-algorithm':'svd', 'sampling-
+    ratio':1.0})
 
     >>> # User-defined data with compressive sensing
     >>> X = np.loadtxt('inputs.txt')
     >>> y = np.loadtxt('outputs.txt')
     >>> param = eq.Parameter(distribution='uniform', lower=-1., upper=1., order=3)
     >>> basis = eq.Basis('total order')
-    >>> poly = eq.Poly([param, param], basis, method='compressive-sensing', sampling_args={'sample-points':X_red,'sample-outputs':Y_red})
+    >>> poly = eq.Poly([param, param], basis, method='compressive-sensing',
+    sampling_args={'sample-points':X_red,'sample-outputs':Y_red})
 
     >>> # Using a sparse grid
     >>> param = eq.Parameter(distribution='uniform', lower=-1., upper=1., order=3)
     >>> basis = eq.Basis('sparse-grid', level=7, growth_rule='exponential')
-    >>> poly = eq.Poly(parameters=[param, param], basis=basis, method='numerical-integration')
+    >>> poly = eq.Poly(parameters=[param, param], basis=basis, method='numerical-
+    integration')
 
     References:
     ----------
-    1. Constantine, P. G., Eldred, M. S., Phipps, E. T., (2012) Sparse Pseudospectral Approximation Method. Computer Methods in Applied Mechanics and Engineering. 1-12. `Paper <https://www.sciencedirect.com/science/article/pii/S0045782512000953>`__
-    2. Xiu, D., Karniadakis, G. E., (2002) The Wiener-Askey Polynomial Chaos for Stochastic Differential Equations. SIAM Journal on Scientific Computing,  24(2), `Paper <https://epubs.siam.org/doi/abs/10.1137/S1064827501387826?journalCode=sjoce3>`__
-    3. Seshadri, P., Iaccarino, G., Ghisu, T., (2018) Quadrature Strategies for Constructing Polynomial Approximations. Uncertainty Modeling for Engineering Applications. Springer, Cham, 2019. 1-25. `Preprint <https://arxiv.org/pdf/1805.07296.pdf>`__
-    4. Seshadri, P., Narayan, A., Sankaran M., (2017) Effectively Subsampled Quadratures for Least Squares Polynomial Approximations. SIAM/ASA Journal on Uncertainty Quantification, 5(1). `Paper <https://epubs.siam.org/doi/abs/10.1137/16M1057668>`__
-    5. Rogers, S., Girolami, M., (2016) Variability in predictions. In: A First Course in Machine Learning, Second Edition (2nd. ed.). Chapman & Hall/CRC. `Book <https://github.com/wwkenwong/book/blob/master/Simon%20Rogers%2C%20Mark%20Girolami%20A%20First%20Course%20in%20Machine%20Learning.pdf>`__
+    1. Constantine, P. G., Eldred, M. S., Phipps, E. T., (2012) Sparse Pseudospectral
+    Approximation Method. Computer Methods in Applied Mechanics and Engineering. 1-12.
+    `Paper <https://www.sciencedirect.com/science/article/pii/S0045782512000953>`__
+    2. Xiu, D., Karniadakis, G. E., (2002) The Wiener-Askey Polynomial Chaos for
+    Stochastic Differential Equations. SIAM Journal on Scientific Computing,  24(2),
+    `Paper
+    <https://epubs.siam.org/doi/abs/10.1137/S1064827501387826?journalCode=sjoce3>`__
+    3. Seshadri, P., Iaccarino, G., Ghisu, T., (2018) Quadrature Strategies for
+    Constructing Polynomial Approximations. Uncertainty Modeling for Engineering
+    Applications. Springer, Cham, 2019. 1-25. `Preprint
+    <https://arxiv.org/pdf/1805.07296.pdf>`__
+    4. Seshadri, P., Narayan, A., Sankaran M., (2017) Effectively Subsampled Quadratures
+    for Least Squares Polynomial Approximations. SIAM/ASA Journal on Uncertainty
+    Quantification, 5(1). `Paper <https://epubs.siam.org/doi/abs/10.1137/16M1057668>`__
+    5. Rogers, S., Girolami, M., (2016) Variability in predictions. In: A First Course
+    in Machine Learning, Second Edition (2nd. ed.). Chapman & Hall/CRC. `Book <https://g
+    ithub.com/wwkenwong/book/blob/master/Simon%20Rogers%2C%20Mark%20Girolami%20A%20First
+    %20Course%20in%20Machine%20Learning.pdf>`__
     """
 
-    def __init__(
+    def __init__(  # noqa: D107
         self,
-        parameters,
-        basis,
-        method=None,
-        sampling_args=None,
-        solver_args={},
-        variable=None,
-        override_cardinality=False,
-    ):
+        parameters,  # noqa: ANN001
+        basis,  # noqa: ANN001
+        method=None,  # noqa: ANN001
+        sampling_args=None,  # noqa: ANN001
+        solver_args=None,  # noqa: ANN001
+        variable=None,  # noqa: ANN001
+        override_cardinality=False,  # noqa: ANN001
+    ) -> None:
+        if solver_args is None:
+            solver_args = {}
         try:
             len(parameters)
         except TypeError:
@@ -160,7 +214,7 @@ class Poly:
                     self.gradients = sampling_args.get("sample-gradients")
                     sampling_args_flag = 1
                 if "gram-schmidt-correction" in sampling_args:
-                    R_Psi = sampling_args.get("gram-schmidt-correction")
+                    R_Psi = sampling_args.get("gram-schmidt-correction")  # noqa: N806
                     self.inv_R_Psi = np.linalg.inv(R_Psi)
                     sampling_args_flag = 1
                 if "correlations" in sampling_args:
@@ -179,8 +233,7 @@ class Poly:
                 cardinality = self.basis.get_cardinality()
                 if cardinality >= CARD_LIMIT_SOFT:
                     raise Exception(
-                        "Cardinality %.1e >= soft cardinality limit %.1e. Computing polynomial coefficients may take a long time. To override this, set override_cardinality=True."
-                        % (cardinality, CARD_LIMIT_SOFT)
+                        f"Cardinality {cardinality:.1e} >= soft cardinality limit {CARD_LIMIT_SOFT:.1e}. Computing polynomial coefficients may take a long time. To override this, set override_cardinality=True."
                     )
 
             # Set solver, points and weight etc
@@ -190,71 +243,100 @@ class Poly:
         else:
             print("WARNING: Method not declared.")
 
-    def plot_polyfit_1D(
+    def plot_polyfit_1D(  # noqa: ANN201, N802
         self,
-        ax=None,
-        uncertainty=True,
-        output_variances=None,
-        number_of_points=200,
-        show=True,
+        ax=None,  # noqa: ANN001
+        uncertainty=True,  # noqa: ANN001
+        output_variances=None,  # noqa: ANN001
+        number_of_points=200,  # noqa: ANN001
+        show=True,  # noqa: ANN001
     ):
-        """Plots a 1D only polynomial fit to the data. See :meth:`~equadratures.plot.plot_polyfit_1D` for full description."""
+        """Plots a 1D only polynomial fit to the data. See.
+
+        :meth:`~equadratures.plot.plot_polyfit_1D` for full description.
+        """
         return plot.plot_polyfit_1D(
             self, ax, uncertainty, output_variances, number_of_points, show
         )
 
-    def plot_model_vs_data(
-        self, ax=None, sample_data=None, metric="adjusted_r2", show=True
+    def plot_model_vs_data(  # noqa: ANN201
+        self,
+        ax=None,  # noqa: ANN001
+        sample_data=None,  # noqa: ANN001
+        metric="adjusted_r2",  # noqa: ANN001
+        show=True,  # noqa: ANN001
     ):
-        """Plots the polynomial approximation against the true data. See :meth:`~equadratures.plot.plot_model_vs_data` for full description."""
+        """Plots the polynomial approximation against the true data. See.
+
+        :meth:`~equadratures.plot.plot_model_vs_data` for full description.
+        """
         return plot.plot_model_vs_data(self, ax, sample_data, metric, show)
 
-    def plot_sobol(self, ax=None, order=1, show=True, labels=None, kwargs={}):
-        """Plots a polynomial's Sobol' indices of a given order. See :meth:`~equadratures.plot.plot_sobol` for full description."""
+    def plot_sobol(self, ax=None, order=1, show=True, labels=None, kwargs=None):  # noqa: ANN001, ANN201
+        """Plots a polynomial's Sobol' indices of a given order. See.
+
+        :meth:`~equadratures.plot.plot_sobol` for full description.
+        """
+        if kwargs is None:
+            kwargs = {}
         return plot.plot_sobol(self, ax, order, show, labels, kwargs)
 
-    def plot_parameters(self, ax=None, cols=2, show=True):
-        """Plots the probability density functions for all Parameters within a Polynomial. See :meth:`~equadratures.plot.plot_parameters` for full description."""
+    def plot_parameters(self, ax=None, cols=2, show=True):  # noqa: ANN001, ANN201
+        """Plots the probability density functions for all Parameters within a.
+
+        Polynomial. See :meth:`~equadratures.plot.plot_parameters` for full
+        description.
+        """
         return plot.plot_parameters(self, ax, cols, show)
 
-    def plot_total_sobol(self, ax=None, show=True, labels=None, kwargs={}):
-        """Plots a polynomial's total-order Sobol' indices. See :meth:`~equadratures.plot.plot_total_sobol` for full description."""
+    def plot_total_sobol(self, ax=None, show=True, labels=None, kwargs=None):  # noqa: ANN001, ANN201
+        """Plots a polynomial's total-order Sobol' indices. See.
+
+        :meth:`~equadratures.plot.plot_total_sobol` for full description.
+        """
+        if kwargs is None:
+            kwargs = {}
         return plot.plot_total_sobol(self, ax, show, labels, kwargs)
 
-    def plot_sobol_heatmap(self, parameters=None, show=True, ax=None):
-        """Generates a heatmap showing the first and second order Sobol indices. See :meth:`~equadratures.plot.plot_sobol_heatmap` for full description."""
+    def plot_sobol_heatmap(self, parameters=None, show=True, ax=None):  # noqa: ANN001, ANN201
+        """Generates a heatmap showing the first and second order Sobol indices. See.
+
+        :meth:`~equadratures.plot.plot_sobol_heatmap` for full description.
+        """
         return plot.plot_sobol_heatmap(self, parameters, show, ax)
 
-    def _set_parameters(self, parameters):
+    def _set_parameters(self, parameters) -> None:  # noqa: ANN001
         """Private function that sets the parameters. Required by the Correlated class."""
         self.parameters = parameters
         self._set_points_and_weights()
 
-    def get_parameters(self):
+    def get_parameters(self):  # noqa: ANN201
         """Returns the list of parameters.
 
         Returns:
         -------
         list
-            Contains the :class:`~equadratures.parameter.Parameter` objects belonging to the polynomial.
+            Contains the :class:`~equadratures.parameter.Parameter` objects belonging to
+            the polynomial.
         """
         return self.parameters
 
-    def get_summary(self, filename=None, tosay=False):
-        """A simple utility that writes a file summarising what the polynomial approximation has determined.
+    def get_summary(self, filename=None, tosay=False) -> None:  # noqa: ANN001
+        """A simple utility that writes a file summarising what the polynomial.
+
+        approximation has determined.
 
         Parameters
         ----------
         filename : str, optional
-            The filename to write to. If ``None``, the summary is written to *effective-quadratures-output.txt*.
+            The filename to write to. If ``None``, the summary is written to *effective-
+            quadratures-output.txt*.
         tosay : bool, optional
-            True will replace "-" signs with "minus" when writing to file for compatibility with os.say().
+            True will replace "-" signs with "minus" when writing to file for
+            compatibility with os.say().
         """
         prec = "{:.3g}"
-        if self.dimensions == 1:
-            parameter_string = "parameter."
-        else:
-            parameter_string = "parameters."
+        parameter_string = "parameter." if self.dimensions == 1 else "parameters."
         introduction = str(
             "Your problem has been defined by "
             + str(self.dimensions)
@@ -283,10 +365,10 @@ class Poly:
                 added = added + added_new
         if self.statistics_object is not None:
             mean_value, var_value = self.get_mean_and_variance()
-            X = self.get_points()
+            X = self.get_points()  # noqa: N806
             y_eval = self.get_polyfit(X)
             y_valid = self._model_evaluations
-            a, b, r, _, _ = st.linregress(y_eval.flatten(), y_valid.flatten())
+            _a, _b, r, _, _ = st.linregress(y_eval.flatten(), y_valid.flatten())
             r2 = r**2
             statistics = (
                 "\n \nA summary of computed output statistics is given below:\nThe mean is estimated to be "
@@ -312,27 +394,27 @@ class Poly:
                 added = added.replace("minus0", "minus")
         if filename is None:
             filename = "effective-quadratures-output.txt"
-        output_file = open(filename, "w")
+        output_file = open(filename, "w")  # noqa: PTH123, SIM115
         output_file.write(added)
         output_file.close()
 
-    def _set_subsampling_algorithm(self):
-        """Private function that sets the subsampling algorithm based on the user-defined method."""
+    def _set_subsampling_algorithm(self) -> None:
+        """Private function that sets the subsampling algorithm based on the user-.
+
+        defined method.
+        """
         polysubsampling = Subsampling(self.subsampling_algorithm_name)
         self.subsampling_algorithm_function = polysubsampling.get_subsampling_method()
 
-    def _set_solver(self):
+    def _set_solver(self) -> None:
         """Private function that sets the solver depending on the user-defined method."""
         self.solver = Solver.select_solver(self.method, self.solver_args)
         if self.method.lower() == "elastic-net":
             self.solver.elements = self.basis.elements
 
-    def _set_points_and_weights(self):
+    def _set_points_and_weights(self) -> None:
         """Private function that sets the quadrature points."""
-        if hasattr(self, "corr"):
-            corr = self.corr
-        else:
-            corr = None
+        corr = self.corr if hasattr(self, "corr") else None
         self.quadrature = Quadrature(
             parameters=self.parameters,
             basis=self.basis,
@@ -342,12 +424,12 @@ class Poly:
         )
         quadrature_points, quadrature_weights = self.quadrature.get_points_and_weights()
         if self.subsampling_algorithm_name is not None:
-            P = self.get_poly(quadrature_points)
-            W = np.asmatrix(np.diag(np.sqrt(quadrature_weights)))
-            A = W * P.T
+            P = self.get_poly(quadrature_points)  # noqa: N806
+            W = np.asmatrix(np.diag(np.sqrt(quadrature_weights)))  # noqa: N806
+            A = W * P.T  # noqa: N806
             self.A = A
             self.P = P
-            mm, nn = A.shape
+            _mm, nn = A.shape
             m_refined = int(np.round(self.sampling_ratio * nn))
             z = self.subsampling_algorithm_function(A, m_refined)
             self._quadrature_points = quadrature_points[z, :]
@@ -357,13 +439,13 @@ class Poly:
         else:
             self._quadrature_points = quadrature_points
             self._quadrature_weights = quadrature_weights
-            P = self.get_poly(quadrature_points)
-            W = np.asmatrix(np.diag(np.sqrt(quadrature_weights)))
-            A = W * P.T
+            P = self.get_poly(quadrature_points)  # noqa: N806
+            W = np.asmatrix(np.diag(np.sqrt(quadrature_weights)))  # noqa: N806
+            A = W * P.T  # noqa: N806
             self.A = A
             self.P = P
 
-    def get_model_evaluations(self):
+    def get_model_evaluations(self):  # noqa: ANN201
         """Returns the output model evaluations used to fit the polynomial.
 
         Returns:
@@ -373,24 +455,26 @@ class Poly:
         """
         return self._model_evaluations
 
-    def get_mean_and_variance(self):
+    def get_mean_and_variance(self):  # noqa: ANN201
         """Computes the mean and variance of the model.
 
         Returns:
         -------
         tuple
-            Tuple containing two floats; the approximated mean and variance from the polynomial fit.
+            Tuple containing two floats; the approximated mean and variance from the
+            polynomial fit.
         """
         self._set_statistics()
         return self.statistics_object.get_mean(), self.statistics_object.get_variance()
 
-    def get_skewness_and_kurtosis(self):
+    def get_skewness_and_kurtosis(self):  # noqa: ANN201
         """Computes the skewness and kurtosis of the model.
 
         Returns:
         -------
         tuple
-            Tuple containing two floats; the approximated skewness and kurtosis from the polynomial fit.
+            Tuple containing two floats; the approximated skewness and kurtosis from the
+            polynomial fit.
         """
         self._set_statistics()
         return (
@@ -398,12 +482,12 @@ class Poly:
             self.statistics_object.get_kurtosis(),
         )
 
-    def _set_statistics(self):
+    def _set_statistics(self) -> None:
         """Private method that is used within the statistics routines."""
         if self.statistics_object is None:
             if hasattr(self, "inv_R_Psi"):
                 # quad_pts, quad_wts = self.quadrature.get_points_and_weights()
-                N_quad = 20000
+                N_quad = 20000  # noqa: N806
                 quad_pts = self.corr.get_correlated_samples(N=N_quad)
                 quad_wts = 1.0 / N_quad * np.ones(N_quad)
                 poly_vandermonde_matrix = self.get_poly(quad_pts)
@@ -431,7 +515,7 @@ class Poly:
                     oversampling=10.0,
                 )
                 quad_pts, quad_wts = quad.get_points_and_weights()
-                N_quad = len(quad_wts)
+                N_quad = len(quad_wts)  # noqa: N806
                 quad_wts = 1.0 / N_quad * np.ones(N_quad)
                 poly_vandermonde_matrix = self.get_poly(quad_pts)
             else:
@@ -462,7 +546,7 @@ class Poly:
                     max_sobol_order=MAXIMUM_ORDER_FOR_STATS,
                 )
 
-    def get_sobol_indices(self, order):
+    def get_sobol_indices(self, order):  # noqa: ANN001, ANN201
         """Computes the Sobol' indices.
 
         Parameters
@@ -473,12 +557,13 @@ class Poly:
         Returns:
         -------
         dict
-            A dict comprising of Sobol' indices and constitutent mixed orders of the parameters.
+            A dict comprising of Sobol' indices and constitutent mixed orders of the
+            parameters.
         """
         self._set_statistics()
         return self.statistics_object.get_sobol(order)
 
-    def get_total_sobol_indices(self):
+    def get_total_sobol_indices(self):  # noqa: ANN201
         """Computes the total Sobol' indices.
 
         Returns:
@@ -489,7 +574,7 @@ class Poly:
         self._set_statistics()
         return self.statistics_object.get_sobol_total()
 
-    def get_conditional_skewness_indices(self, order):
+    def get_conditional_skewness_indices(self, order):  # noqa: ANN001, ANN201
         """Computes the skewness indices.
 
         Parameters
@@ -500,12 +585,13 @@ class Poly:
         Returns:
         -------
         dict
-            A dict comprising of skewness indices and constitutent mixed orders of the parameters.
+            A dict comprising of skewness indices and constitutent mixed orders of the
+            parameters.
         """
         self._set_statistics()
         return self.statistics_object.get_conditional_skewness(order)
 
-    def get_conditional_kurtosis_indices(self, order):
+    def get_conditional_kurtosis_indices(self, order):  # noqa: ANN001, ANN201
         """Computes the kurtosis indices.
 
         Parameters
@@ -516,22 +602,29 @@ class Poly:
         Returns:
         -------
         dict
-            A dict comprising of kurtosis indices and constitutent mixed orders of the parameters.
+            A dict comprising of kurtosis indices and constitutent mixed orders of the
+            parameters.
         """
         self._set_statistics()
         return self.statistics_object.get_conditional_kurtosis(order)
 
-    def set_model(self, model=None, model_grads=None):
+    def set_model(self, model=None, model_grads=None) -> None:  # noqa: ANN001
         """Computes the coefficients of the polynomial via the method selected.
 
-        If model evaluations and/or gradients have not yet been provided to Poly via ``sample-outputs`` and/or ``sample-gradients``, they can be given here via the ``model`` and ``model_grads`` arguments.
+        If model evaluations and/or gradients have not yet been provided to Poly via
+        ``sample-outputs`` and/or ``sample-gradients``, they can be given here via the
+        ``model`` and ``model_grads`` arguments.
 
         Parameters
         ----------
         model : ~collections.abc.Callable,numpy.ndarray
-            The function that needs to be approximated. In the absence of a callable function, the input can be a ndarray model evaluations at the quadrature points.
+            The function that needs to be approximated. In the absence of a callable
+            function, the input can be a ndarray model evaluations at the quadrature
+            points.
         model_grads : ~collections.abc.Callable,numpy.ndarray
-            The gradient of the function that needs to be approximated. In the absence of a callable gradient function, the input can be a ndarray of gradient evaluations at the quadrature points.
+            The gradient of the function that needs to be approximated. In the absence
+            of a callable gradient function, the input can be a ndarray of gradient
+            evaluations at the quadrature points.
 
         Examples:
         --------
@@ -543,7 +636,8 @@ class Poly:
 
         Least-squares regression of existing data
             >>> y = f(x)
-            >>> poly = eq.Poly(param,basis,method='least-squares',sampling_args={'mesh': 'user-defined','sample-points':x,'sample-outputs':y})
+            >>> poly = eq.Poly(param,basis,method='least-squares',sampling_args={'mesh':
+            'user-defined','sample-points':x,'sample-outputs':y})
             >>> poly.set_model()
             >>> eq.datasets.score(f(xtest),poly.get_polyfit(xtest),metric='rmse')
             5.438959822042073e-16
@@ -591,7 +685,7 @@ class Poly:
                         grad_values = model_grads
                 p, q = grad_values.shape
                 self._gradient_evaluations = np.zeros((p * q, 1))
-                W = np.diag(np.sqrt(self._quadrature_weights))
+                W = np.diag(np.sqrt(self._quadrature_weights))  # noqa: N806
                 counter = 0
                 for j in range(0, q):
                     for i in range(0, p):
@@ -603,13 +697,14 @@ class Poly:
         self.statistics_object = None
         self._set_coefficients()
 
-    def _set_coefficients(self, user_defined_coefficients=None):
+    def _set_coefficients(self, user_defined_coefficients=None) -> None:  # noqa: ANN001
         """Computes the polynomial approximation coefficients.
 
         Parameters
         ----------
         user_defined_coefficients : numpy.ndarray, optional
-            A numpy.ndarray of shape (N, 1) where N corresponds to the N coefficients provided by the user
+            A numpy.ndarray of shape (N, 1) where N corresponds to the N coefficients
+            provided by the user
         """
         # Check to ensure that if there any NaNs, a different basis must be used and solver must be changed
         # to least squares!
@@ -643,13 +738,12 @@ class Poly:
             self.set_model()
         if self.mesh == "sparse-grid":
             counter = 0
-            multi_index = []
             coefficients = np.empty([1])
             multindices = np.empty([1, self.dimensions])
             for tensor in self.quadrature.list:
-                P = self.get_poly(tensor.points, tensor.basis.elements)
-                W = np.diag(np.sqrt(tensor.weights))
-                A = np.dot(W, P.T)
+                P = self.get_poly(tensor.points, tensor.basis.elements)  # noqa: N806
+                W = np.diag(np.sqrt(tensor.weights))  # noqa: N806
+                A = np.dot(W, P.T)  # noqa: N806
                 _, _, counts = np.unique(
                     np.vstack([tensor.points, self._quadrature_points]),
                     axis=0,
@@ -680,17 +774,17 @@ class Poly:
             self.coefficients = coefficients_final
             self.basis.elements = unique_indices
         else:
-            P = self.get_poly(self._quadrature_points)
-            W = np.diag(np.sqrt(self._quadrature_weights))
-            A = np.dot(W, P.T)
+            P = self.get_poly(self._quadrature_points)  # noqa: N806
+            W = np.diag(np.sqrt(self._quadrature_weights))  # noqa: N806
+            A = np.dot(W, P.T)  # noqa: N806
             b = np.dot(W, self._model_evaluations)
             if self.gradient_flag:
                 # Now, we can reduce the number of rows!
-                dP = self.get_poly_grad(self._quadrature_points)
-                C = cell2matrix(dP, W)
-                G = np.vstack([A, C])
+                dP = self.get_poly_grad(self._quadrature_points)  # noqa: N806
+                C = cell2matrix(dP, W)  # noqa: N806
+                G = np.vstack([A, C])  # noqa: N806
                 r = np.linalg.matrix_rank(G)
-                m, n = A.shape
+                _m, n = A.shape
                 print(
                     "Gradient computation: The rank of the stacked matrix is "
                     + str(r)
@@ -707,7 +801,7 @@ class Poly:
             else:
                 self.coefficients = self.solver.get_coefficients(A, b)
 
-    def get_multi_index(self):
+    def get_multi_index(self):  # noqa: ANN201
         """Returns the multi-index set of the basis.
 
         Returns:
@@ -717,7 +811,7 @@ class Poly:
         """
         return self.basis.elements
 
-    def get_coefficients(self):
+    def get_coefficients(self):  # noqa: ANN201
         """Returns the coefficients of the polynomial approximation.
 
         Returns:
@@ -727,7 +821,7 @@ class Poly:
         """
         return self.coefficients
 
-    def get_points(self):
+    def get_points(self):  # noqa: ANN201
         """Returns the samples based on the sampling strategy.
 
         Returns:
@@ -737,69 +831,81 @@ class Poly:
         """
         return self._quadrature_points
 
-    def get_weights(self):
+    def get_weights(self):  # noqa: ANN201
         """Computes quadrature weights.
 
         Returns:
         -------
         numpy.ndarray
-            Array of the corresponding quadrature weights with shape (number_of_samples, 1).
+            Array of the corresponding quadrature weights with shape (number_of_samples,
+            1).
         """
         return self._quadrature_weights
 
-    def get_points_and_weights(self):
+    def get_points_and_weights(self):  # noqa: ANN201
         """Returns the samples and weights based on the sampling strategy.
 
         Returns:
         -------
         tuple
-            Tuple containing two ndarrays; the sampled quadrature points with shape (number_of_samples, dimension), and the corresponding quadrature weights with shape (number_of_samples, 1).
+            Tuple containing two ndarrays; the sampled quadrature points with shape
+            (number_of_samples, dimension), and the corresponding quadrature weights
+            with shape (number_of_samples, 1).
         """
         return self._quadrature_points, self._quadrature_weights
 
-    def get_polyfit(self, stack_of_points, uq=False):
-        """Evaluates the /polynomial approximation of a function (or model data) at prescribed points.
+    def get_polyfit(self, stack_of_points, uq=False):  # noqa: ANN001, ANN201
+        """Evaluates the /polynomial approximation of a function (or model data) at.
+
+        prescribed points.
 
         Parameters
         ----------
         stack_of_points : numpy.ndarray
-            An ndarray with shape (number_of_observations, dimensions) at which the polynomial fit must be evaluated at.
+            An ndarray with shape (number_of_observations, dimensions) at which the
+            polynomial fit must be evaluated at.
         uq : bool, optional
-            If ``True``, the estimated uncertainty (standard deviation) of the polynomial approximation is also returned (see [5]).
+            If ``True``, the estimated uncertainty (standard deviation) of the
+            polynomial approximation is also returned (see [5]).
 
         Returns:
         -------
         numpy.ndarray
-            Array with shape (1, number_of_observations) corresponding to the polynomial approximation of the model.
+            Array with shape (1, number_of_observations) corresponding to the polynomial
+            approximation of the model.
         """
-        N = len(self.coefficients)
+        N = len(self.coefficients)  # noqa: N806
         if uq:
             return np.dot(
                 self.get_poly(stack_of_points).T, self.coefficients.reshape(N, 1)
             ), self._get_polystd(stack_of_points)
         return np.dot(self.get_poly(stack_of_points).T, self.coefficients.reshape(N, 1))
 
-    def get_polyfit_grad(self, stack_of_points, dim_index=None):
-        """Evaluates the gradient of the polynomial approximation of a function (or model data) at prescribed points.
+    def get_polyfit_grad(self, stack_of_points, dim_index=None):  # noqa: ANN001, ANN201
+        """Evaluates the gradient of the polynomial approximation of a function (or.
+
+        model data) at prescribed points.
 
         Parameters
         ----------
         stack_of_points : numpy.ndarray
-            An ndarray with shape (number_of_observations, dimensions) at which the polynomial fit approximation's gradient must be evaluated at.
+            An ndarray with shape (number_of_observations, dimensions) at which the
+            polynomial fit approximation's gradient must be evaluated at.
         dim_index : int, optional
             Index of dimension to evaluate gradient for.
 
         Returns:
         -------
         numpy.ndarray
-            Array of shape (dimensions, number_of_observations) corresponding to the polynomial gradient approximation of the model.
+            Array of shape (dimensions, number_of_observations) corresponding to the
+            polynomial gradient approximation of the model.
         """
-        N = len(self.coefficients)
+        N = len(self.coefficients)  # noqa: N806
         if stack_of_points.ndim == 1:
             no_of_points = 1
         else:
             no_of_points, _ = stack_of_points.shape
-        H = self.get_poly_grad(stack_of_points, dim_index=dim_index)
+        H = self.get_poly_grad(stack_of_points, dim_index=dim_index)  # noqa: N806
         grads = np.zeros((self.dimensions, no_of_points))
         if self.dimensions == 1:
             return np.dot(
@@ -817,24 +923,28 @@ class Poly:
             )
         return grads
 
-    def get_polyfit_hess(self, stack_of_points):
-        """Evaluates the hessian of the polynomial approximation of a function (or model data) at prescribed points.
+    def get_polyfit_hess(self, stack_of_points):  # noqa: ANN001, ANN201
+        """Evaluates the hessian of the polynomial approximation of a function (or model.
+
+        data) at prescribed points.
 
         Parameters
         --------_-
         stack_of_points : numpy.ndarray
-            An ndarray with shape (number_of_observations, dimensions) at which the polynomial fit approximation's Hessian must be evaluated at.
+            An ndarray with shape (number_of_observations, dimensions) at which the
+            polynomial fit approximation's Hessian must be evaluated at.
 
         Returns:
         -------
         numpy.ndarray
-            Array of shape (dimensions, dimensions, number_of_observations) corresponding to the polynomial Hessian approximation of the model.
+            Array of shape (dimensions, dimensions, number_of_observations)
+            corresponding to the polynomial Hessian approximation of the model.
         """
         if stack_of_points.ndim == 1:
             no_of_points = 1
         else:
             no_of_points, _ = stack_of_points.shape
-        H = self.get_poly_hess(stack_of_points)
+        H = self.get_poly_hess(stack_of_points)  # noqa: N806
         if self.dimensions == 1:
             return np.dot(self.coefficients.T, H)
         hess = np.zeros((self.dimensions, self.dimensions, no_of_points))
@@ -843,7 +953,7 @@ class Poly:
                 hess[i, j, :] = np.dot(self.coefficients.T, H[i * self.dimensions + j])
         return hess
 
-    def get_polyfit_function(self):
+    def get_polyfit_function(self):  # noqa: ANN201
         """Returns a callable polynomial approximation of a function (or model data).
 
         Returns:
@@ -851,11 +961,13 @@ class Poly:
         ~collections.abc.Callable
             A callable function.
         """
-        N = len(self.coefficients)
+        N = len(self.coefficients)  # noqa: N806
         return lambda x: np.dot(self.get_poly(x).T, self.coefficients.reshape(N, 1))
 
-    def get_polyfit_grad_function(self):
-        """Returns a callable for the gradients of the polynomial approximation of a function (or model data).
+    def get_polyfit_grad_function(self):  # noqa: ANN201
+        """Returns a callable for the gradients of the polynomial approximation of a.
+
+        function (or model data).
 
         Returns:
         -------
@@ -864,8 +976,10 @@ class Poly:
         """
         return lambda x: self.get_polyfit_grad(x)
 
-    def get_polyfit_hess_function(self):
-        """Returns a callable for the hessian of the polynomial approximation of a function (or model data).
+    def get_polyfit_hess_function(self):  # noqa: ANN201
+        """Returns a callable for the hessian of the polynomial approximation of a.
+
+        function (or model data).
 
         Returns:
         -------
@@ -874,20 +988,23 @@ class Poly:
         """
         return lambda x: self.get_polyfit_hess(x)
 
-    def get_poly(self, stack_of_points, custom_multi_index=None):
+    def get_poly(self, stack_of_points, custom_multi_index=None):  # noqa: ANN001, ANN201
         """Evaluates the value of each polynomial basis function at a set of points.
 
         Parameters
         ----------
         stack_of_points : numpy.ndarray
-            An ndarray with shape (number of observations, dimensions) at which the polynomial must be evaluated.
+            An ndarray with shape (number of observations, dimensions) at which the
+            polynomial must be evaluated.
         custom_multi_index : numpy.ndarray, optional
-            Array containing a custom multi-index set, in the format given by :meth:`~equadratures.basis.Basis.get_elements`.
+            Array containing a custom multi-index set, in the format given by
+            :meth:`~equadratures.basis.Basis.get_elements`.
 
         Returns:
         -------
         numpy.ndarray
-            Array of shape (cardinality, number_of_observations) corresponding to the polynomial basis function evaluations at the stack_of_points.
+            Array of shape (cardinality, number_of_observations) corresponding to the
+            polynomial basis function evaluations at the stack_of_points.
         """
         if custom_multi_index is None:
             basis = self.basis.elements
@@ -923,20 +1040,26 @@ class Poly:
             polynomial = self.inv_R_Psi.T @ polynomial
         return polynomial
 
-    def get_poly_grad(self, stack_of_points, dim_index=None):
-        """Evaluates the gradient for each of the polynomial basis functions at a set of points, with respect to each input variable.
+    def get_poly_grad(self, stack_of_points, dim_index=None):  # noqa: ANN001, ANN201
+        """Evaluates the gradient for each of the polynomial basis functions at a set of.
+
+        points, with respect to each input variable.
 
         Parameters
         ----------
         stack_of_points : numpy.ndarray
-            An ndarray with shape (number_of_observations, dimensions) at which the gradient must be evaluated.
+            An ndarray with shape (number_of_observations, dimensions) at which the
+            gradient must be evaluated.
         dim_index : int, optional
             Index of the dimension to evaluate the gradient for.
 
         Returns:
         -------
         list
-            A list with d elements, where d corresponds to the dimension of the problem. Each element is a numpy.ndarray of shape (cardinality, number_of_observations) corresponding to the gradient polynomial evaluations at the stack_of_points.
+            A list with d elements, where d corresponds to the dimension of the problem.
+            Each element is a numpy.ndarray of shape (cardinality,
+            number_of_observations) corresponding to the gradient polynomial evaluations
+            at the stack_of_points.
         """
         # "Unpack" parameters from "self"
         basis = self.basis.elements
@@ -966,7 +1089,7 @@ class Poly:
             )
 
         # One loop for polynomials
-        R = []
+        R = []  # noqa: N806
         if dim_index is None:
             dim_index = range(dimensions)
         for v in range(dimensions):
@@ -985,18 +1108,24 @@ class Poly:
                 R.append(polynomialgradient)
         return R
 
-    def get_poly_hess(self, stack_of_points):
-        """Evaluates the Hessian for each of the polynomial basis functions at a set of points, with respect to each input variable.
+    def get_poly_hess(self, stack_of_points):  # noqa: ANN001, ANN201
+        """Evaluates the Hessian for each of the polynomial basis functions at a set of.
+
+        points, with respect to each input variable.
 
         Parameters
         ----------
         stack_of_points : numpy.ndarray
-            An ndarray with shape (number_of_observations, dimensions) at which the Hessian must be evaluated.
+            An ndarray with shape (number_of_observations, dimensions) at which the
+            Hessian must be evaluated.
 
         Returns:
         -------
         list
-            A list with d^2 elements, where d corresponds to the dimension of the model. Each element is a numpy.ndarray of shape (cardinality, number_of_observations) corresponding to the hessian polynomial evaluations at the stack_of_points.
+            A list with d^2 elements, where d corresponds to the dimension of the model.
+            Each element is a numpy.ndarray of shape (cardinality,
+            number_of_observations) corresponding to the hessian polynomial evaluations
+            at the stack_of_points.
         """
         # "Unpack" parameters from "self"
         basis = self.basis.elements
@@ -1024,18 +1153,18 @@ class Poly:
                 grad=True,
                 hess=True,
             )
-        H = []
+        H = []  # noqa: N806
         for w in range(0, dimensions):
-            gradDirection1 = w
+            gradDirection1 = w  # noqa: N806
             for v in range(0, dimensions):
-                gradDirection2 = v
+                gradDirection2 = v  # noqa: N806
                 polynomialhessian = np.zeros((basis_entries, no_of_points))
                 for i in range(0, basis_entries):
                     temp = np.ones((1, no_of_points))
                     for k in range(0, dimensions):
                         if k == gradDirection1 == gradDirection2:
                             polynomialhessian[i, :] = d2p[k][int(basis[i, k])] * temp
-                        elif k == gradDirection1 or k == gradDirection2:
+                        elif k in (gradDirection1, gradDirection2):
                             polynomialhessian[i, :] = dp[k][int(basis[i, k])] * temp
                         else:
                             polynomialhessian[i, :] = p[k][int(basis[i, k])] * temp
@@ -1046,28 +1175,38 @@ class Poly:
 
         return H
 
-    def get_polyscore(self, X_test=None, y_test=None, metric="adjusted_r2"):
-        """Evaluates the accuracy of the polynomial approximation using the selected accuracy metric.
+    def get_polyscore(self, X_test=None, y_test=None, metric="adjusted_r2"):  # noqa: ANN001, ANN201, N803
+        """Evaluates the accuracy of the polynomial approximation using the selected.
 
-        Training accuracy is evaluated on the data used for fitting the polynomial. Testing accuracy is evaluated on new data if it is provided by the ``X_test`` and ``y_test`` arguments (both must be provided together).
+        accuracy metric.
+
+        Training accuracy is evaluated on the data used for fitting the polynomial.
+        Testing accuracy is evaluated on new data if it is provided by the ``X_test``
+        and ``y_test`` arguments (both must be provided together).
 
         Parameters
         ----------
         X_test : numpy.ndarray, optional
-            An ndarray with shape (number_of_observations, dimensions), containing new data ``X_test`` data (optional).
+            An ndarray with shape (number_of_observations, dimensions), containing new
+            data ``X_test`` data (optional).
         y_test : numpy.ndarray, optional
-            An ndarray with shape (number_of_observations, 1) containing new ``y_test`` data (optional).
+            An ndarray with shape (number_of_observations, 1) containing new ``y_test``
+            data (optional).
         metric : str, optional
-            An optional string containing the scoring metric to use. Avaliable options are: ``adjusted_r2``, ``r2``, ``mae``, ``rmse``, or ``normalised_mae`` (default: ``adjusted_r2``).
+            An optional string containing the scoring metric to use. Avaliable options
+            are: ``adjusted_r2``, ``r2``, ``mae``, ``rmse``, or ``normalised_mae``
+            (default: ``adjusted_r2``).
 
         Returns:
         -------
         float
-            If ``X_test`` and ``y_test`` are ``None``. The training score of the model, output as a float.
+            If ``X_test`` and ``y_test`` are ``None``. The training score of the model,
+            output as a float.
         tuple
-            If ``X_test`` and ``y_test`` are given. Tuple containing the train and test scores of the model.
+            If ``X_test`` and ``y_test`` are given. Tuple containing the train and test
+            scores of the model.
         """
-        X = self.get_points()
+        X = self.get_points()  # noqa: N806
         y_pred = self.get_polyfit(X)
         train_score = score(self._model_evaluations, y_pred, metric, X=X)
         if X_test is not None and y_test is not None:
@@ -1076,21 +1215,25 @@ class Poly:
             return train_score, test_score
         return train_score
 
-    def _get_polystd(self, stack_of_points):
-        """Private function to evaluate the uncertainty of the polynomial approximation at prescribed points, following the approach from [5].
+    def _get_polystd(self, stack_of_points):  # noqa: ANN001, ANN202
+        """Private function to evaluate the uncertainty of the polynomial approximation.
+
+        at prescribed points, following the approach from [5].
 
         Parameters
         ----------
         stack_of_points : numpy.ndarray
-            An ndarray with shape (number_of_observations, dimensions) at which the polynomial variance must be evaluated at.
+            An ndarray with shape (number_of_observations, dimensions) at which the
+            polynomial variance must be evaluated at.
 
         Returns:
         -------
         numpy.ndarray
-            Array of shape (number_of_observations,1) corresponding to the uncertainty (one standard deviation) of the polynomial approximation at each point.
+            Array of shape (number_of_observations,1) corresponding to the uncertainty
+            (one standard deviation) of the polynomial approximation at each point.
         """
         # Training data
-        X_train = self._quadrature_points
+        X_train = self._quadrature_points  # noqa: N806
         y_train = self._model_evaluations
 
         # Define covariance matrix - TODO: allow non-diagonal matrix?
@@ -1104,23 +1247,23 @@ class Poly:
         # User defined variance (array)
         else:
             data_variance = self.output_variances
-        Sigma = np.diag(data_variance)
+        Sigma = np.diag(data_variance)  # noqa: N806
 
         # Construct Q, the pseudoinverse of the weighted orthogonal polynomial matrix P
-        P = self.get_poly(self._quadrature_points)
-        W = np.diag(np.sqrt(self._quadrature_weights))
-        A = np.dot(W, P.T)
-        Q = np.dot(_inv(np.dot(A.T, A)), A.T)
+        P = self.get_poly(self._quadrature_points)  # noqa: N806
+        W = np.diag(np.sqrt(self._quadrature_weights))  # noqa: N806
+        A = np.dot(W, P.T)  # noqa: N806
+        Q = np.dot(_inv(np.dot(A.T, A)), A.T)  # noqa: N806
 
         # Construct A matrix for test points, but omit weights
-        X_test = stack_of_points
-        Po = self.get_poly(X_test)
-        Ao = Po.T
+        X_test = stack_of_points  # noqa: N806
+        Po = self.get_poly(X_test)  # noqa: N806
+        Ao = Po.T  # noqa: N806
 
         # Propagate the uncertainties
-        Sigma_X = np.dot(np.dot(Q, Sigma), Q.T)
-        Sigma_F = np.dot(np.dot(Ao, Sigma_X), Ao.T)
-        std_F = np.sqrt(np.diag(Sigma_F))
+        Sigma_X = np.dot(np.dot(Q, Sigma), Q.T)  # noqa: N806
+        Sigma_F = np.dot(np.dot(Ao, Sigma_X), Ao.T)  # noqa: N806
+        std_F = np.sqrt(np.diag(Sigma_F))  # noqa: N806
         return std_F.reshape(-1, 1)
 
 
@@ -1139,7 +1282,7 @@ class Graphpolys:
         Edge weight for Graph edges, default=15.
     """
 
-    def __init__(self, Graph, data_train, poly, edge_weight=15):
+    def __init__(self, Graph, data_train, poly, edge_weight=15) -> None:  # noqa: ANN001, D107, N803
         self.Graph = Graph
         self.data_train = data_train
         self.poly = poly
@@ -1147,24 +1290,24 @@ class Graphpolys:
         for _, _, e in Graph.edges(data=True):
             e["weight"] = edge_weight
 
-    def _stratified_model_admm(
+    def _stratified_model_admm(  # noqa: ANN202
         self,
-        shape,
-        Lap,
-        loss_proximal_func,
-        regulariser_proximal_func,
-        graph_data=dict(),
-        relative_tolerance=1e-5,
-        absolute_tolerance=1e-5,
-        num_jobs=4,
-        max_cg_iters=10,
-        max_iters=1000,
-        rho=1,
-        tau_decrement=2,
-        tau_increment=2,
-        mu=10,
-        rho_min=0.1,
-        rho_max=1.0,
+        shape,  # noqa: ANN001
+        Lap,  # noqa: ANN001, N803
+        loss_proximal_func,  # noqa: ANN001
+        regulariser_proximal_func,  # noqa: ANN001
+        graph_data=None,  # noqa: ANN001
+        relative_tolerance=1e-5,  # noqa: ANN001
+        absolute_tolerance=1e-5,  # noqa: ANN001
+        num_jobs=4,  # noqa: ANN001
+        max_cg_iters=10,  # noqa: ANN001
+        max_iters=1000,  # noqa: ANN001
+        rho=1,  # noqa: ANN001
+        tau_decrement=2,  # noqa: ANN001
+        tau_increment=2,  # noqa: ANN001
+        mu=10,  # noqa: ANN001
+        rho_min=0.1,  # noqa: ANN001
+        rho_max=1.0,  # noqa: ANN001
     ):
         """Fits a Laplacian regularised stratified model using ADMM.
 
@@ -1172,7 +1315,8 @@ class Graphpolys:
 
         @article{strat_models,
         author       = {Jonathan Tuck and Shane Barratt and Stephen Boyd},
-        title        = {A Distributed Method for Fitting {L}aplacian Regularized Stratified Models},
+        title        = {A Distributed Method for Fitting {L}aplacian Regularized
+        Stratified Models},
         journal      = {Journal of Machine Learning Research},
         year         = {2021},
         note         = {To appear}
@@ -1183,6 +1327,8 @@ class Graphpolys:
 
         import scipy as sc
 
+        if graph_data is None:
+            graph_data = {}
         optimal_solution = False
         n = np.prod(shape)
         m = Lap.shape[0]
@@ -1192,7 +1338,7 @@ class Graphpolys:
         if "alpha_init" in graph_data:
             alpha = graph_data["alpha_init"].copy()
         else:
-            alpha = np.zeros((m,) + shape)
+            alpha = np.zeros((m, *shape))
 
         primal_residual = np.zeros(alpha.shape)
         primal_residual_tilde = np.zeros(alpha.shape)
@@ -1210,10 +1356,7 @@ class Graphpolys:
         else:
             alpha_hat = alpha.copy()
         # u
-        if "u" in graph_data:
-            u = graph_data["u"].copy()
-        else:
-            u = np.zeros(alpha.shape)
+        u = graph_data["u"].copy() if "u" in graph_data else np.zeros(alpha.shape)
         # u_tilde
         if "u_tilde" in graph_data:
             u_tilde = graph_data["u_tilde"].copy()
@@ -1225,7 +1368,7 @@ class Graphpolys:
             num_jobs = m
         proximal_pool = mp.Pool(num_jobs)
 
-        for iter_j in range(1, max_iters):
+        for iter_j in range(1, max_iters):  # noqa: B007
             # Update alpha
             alpha = loss_proximal_func(
                 t=1.0 / rho, nu=alpha_hat - u, warm_start=alpha, pool=proximal_pool
@@ -1241,12 +1384,12 @@ class Graphpolys:
 
             # Update alpha_hat
 
-            S = Lap + 2.0 * rho * sc.sparse.eye(m)
-            M = sc.sparse.diags(1.0 / S.diagonal())
+            S = Lap + 2.0 * rho * sc.sparse.eye(m)  # noqa: N806
+            M = sc.sparse.diags(1.0 / S.diagonal())  # noqa: N806
             indices = np.ndindex(shape)
             equ_rhs = rho * (alpha.T + alpha_tilde.T + u.T + u_tilde.T)
 
-            for j, index in enumerate(indices):
+            for _j, index in enumerate(indices):
                 index_value = index[::-1]
                 solution = sc.sparse.linalg.cg(
                     S,
@@ -1315,7 +1458,7 @@ class Graphpolys:
         result = {"iterations": iter_j, "optimal": optimal_solution}
         return output, result
 
-    def predict(self, data, score=True):
+    def predict(self, data, score=True):  # noqa: ANN001, ANN201
         """Predict.
 
         Parameters
@@ -1334,17 +1477,17 @@ class Graphpolys:
         """
         import torch
 
-        X = torch.from_numpy(data["X"])
-        X = torch.tensor(self.poly.get_poly(X)).double().t()
+        X = torch.from_numpy(data["X"])  # noqa: N806
+        X = torch.tensor(self.poly.get_poly(X)).double().t()  # noqa: N806
         alpha = torch.tensor([self.Graph._node[z]["alpha_tilde"] for z in data["Z"]])
-        Y_pred = (X.unsqueeze(-1) * alpha).sum(1).numpy()
+        Y_pred = (X.unsqueeze(-1) * alpha).sum(1).numpy()  # noqa: N806
         if score:
             residuals = (data["Y"] - Y_pred) ** 2
             mean_error = np.sqrt(np.mean(residuals))
             return Y_pred, mean_error
         return Y_pred
 
-    def _graph_to_data(self, shape):
+    def _graph_to_data(self, shape):  # noqa: ANN001, ANN202
         """Vectorises the variables in G --> returning a dict."""
         alpha_init = np.zeros(shape)
         alpha_tilde_init = np.zeros(shape)
@@ -1364,42 +1507,40 @@ class Graphpolys:
                 u_init[i] = vertex["u"]
             if "u_tilde" in vertex:
                 u_tilde_init[i] = vertex["u_tilde"]
-        data = {
+        return {
             "alpha_init": alpha_init,
             "alpha_tilde_init": alpha_tilde_init,
             "u_init": u_init,
             "u_tilde_init": u_tilde_init,
         }
-        return data
 
-    def fit(self):
+    def fit(self):  # noqa: ANN201
         """Fit polynomial to data."""
         import networkx as nx
         import torch
 
         # Step 1. Calculate the Laplacian matrix
-        L = nx.laplacian_matrix(self.Graph)
-        nodelist = self.Graph.nodes()
-        K = L.shape[0]
+        L = nx.laplacian_matrix(self.Graph)  # noqa: N806
+        self.Graph.nodes()
+        L.shape[0]
 
         # Step 2. Get the data in the right format
         cache = self.loss_function(self.data_train)
 
         # Step 3. Compute the proximal loss
-        def proximal_loss(t, nu, warm_start, pool, cache=cache):
-            XtX = cache["XtX"]
-            XtY = cache["XtY"]
+        def proximal_loss(t, nu, warm_start, pool, cache=cache):  # noqa: ANN001, ANN202, ARG001
+            XtX = cache["XtX"]  # noqa: N806
+            XtY = cache["XtY"]  # noqa: N806
             n = cache["n"]
             # LU = X'X + 0.5 * t * I
-            Alu = torch.lu(XtX + 1.0 / (2 * t) * torch.eye(n).unsqueeze(0).double())
+            Alu = torch.lu(XtX + 1.0 / (2 * t) * torch.eye(n).unsqueeze(0).double())  # noqa: N806
             b = XtY + 1.0 / (2 * t) * torch.from_numpy(nu)
-            x = torch.lu_solve(b, *Alu).numpy()
-            return x
+            return torch.lu_solve(b, *Alu).numpy()
 
-        def proximal_residual(t, nu, warm_start, pool, lambda_val=1e-4):
+        def proximal_residual(t, nu, warm_start, pool, lambda_val=1e-4):  # noqa: ANN001, ANN202, ARG001
             return nu / (1.0 + t * lambda_val)
 
-        G_to_data = self._graph_to_data(cache["alpha_shape"])
+        G_to_data = self._graph_to_data(cache["alpha_shape"])  # noqa: N806
         result, info = self._stratified_model_admm(
             shape=cache["shape"],
             Lap=L,
@@ -1410,21 +1551,21 @@ class Graphpolys:
         print(info)
         return self._output_to_graph(result)
 
-    def loss_function(self, data):
+    def loss_function(self, data):  # noqa: ANN001, ANN201, D102
         import torch
 
-        X = data["X"]
-        Y = data["Y"]
-        Z = data["Z"]
+        X = data["X"]  # noqa: N806
+        Y = data["Y"]  # noqa: N806
+        Z = data["Z"]  # noqa: N806
         if X.ndim == 1:
-            X = X.reshape(-1, 1)
-        N, _ = X.shape
+            X = X.reshape(-1, 1)  # noqa: N806
+        _N, _ = X.shape  # noqa: N806
         _, m = Y.shape
         n = self.poly.basis.cardinality  # verify!
-        K = len(self.Graph.nodes())
+        K = len(self.Graph.nodes())  # noqa: N806
         shape = (n, m)
-        alpha_shape = (K,) + shape
-        for x, y, z in zip(X, Y, Z):
+        alpha_shape = (K, *shape)
+        for x, y, z in zip(X, Y, Z, strict=False):
             vertex = self.Graph._node[z]
             if "X" in vertex:
                 vertex["X"] += [x]
@@ -1432,8 +1573,8 @@ class Graphpolys:
             else:
                 vertex["X"] = [x]
                 vertex["Y"] = [y]
-        XtX = torch.zeros(K, n, n).double()
-        XtY = torch.zeros(K, n, m).double()
+        XtX = torch.zeros(K, n, n).double()  # noqa: N806
+        XtY = torch.zeros(K, n, m).double()  # noqa: N806
         # Filter out empty nodes
         nodes = [
             [i, node]
@@ -1442,22 +1583,21 @@ class Graphpolys:
         ]
         for i, node in nodes:
             vertex = self.Graph._node[node]
-            X = torch.tensor(vertex["X"]).double()
-            Y = torch.tensor(vertex["Y"]).double()
-            X = torch.tensor(self.poly.get_poly(X)).double()
+            X = torch.tensor(vertex["X"]).double()  # noqa: N806
+            Y = torch.tensor(vertex["Y"]).double()  # noqa: N806
+            X = torch.tensor(self.poly.get_poly(X)).double()  # noqa: N806
             XtX[i] = X @ X.t()
             XtY[i] = X @ Y
             del vertex
-        cache = {
+        return {
             "XtX": XtX,
             "XtY": XtY,
             "n": n,
             "alpha_shape": alpha_shape,
             "shape": shape,
         }
-        return cache
 
-    def _output_to_graph(self, output):
+    def _output_to_graph(self, output):  # noqa: ANN001, ANN202
         alpha = output["alpha"]
         alpha_tilde = output["alpha_tilde"]
         alpha_hat = output["alpha_hat"]
@@ -1473,27 +1613,30 @@ class Graphpolys:
         return self.Graph
 
 
-def _inv(M):
+def _inv(M):  # noqa: ANN001, ANN202, N803
     """Private function to compute inverse of matrix M, where M is a numpy.ndarray."""
-    ll, mm = M.shape
-    M2 = M + 1e-10 * np.eye(ll)
-    L = np.linalg.cholesky(M2)
-    inv_L = np.linalg.inv(L)
-    inv_M = inv_L.T @ inv_L
-    return inv_M
+    ll, _mm = M.shape
+    M2 = M + 1e-10 * np.eye(ll)  # noqa: N806
+    L = np.linalg.cholesky(M2)  # noqa: N806
+    inv_L = np.linalg.inv(L)  # noqa: N806
+    return inv_L.T @ inv_L
 
 
-def evaluate_model_gradients(points, fungrad, format="matrix"):
+def evaluate_model_gradients(points, fungrad, format="matrix"):  # noqa: A002, ANN001, ANN201
     """Evaluates the model gradient at given values.
 
     Parameters
     ----------
     points : numpy.ndarray
-        An ndarray with shape (number_of_observations, dimensions) at which the gradient must be evaluated.
+        An ndarray with shape (number_of_observations, dimensions) at which the gradient
+        must be evaluated.
     fungrad : ~collections.abc.Callable
         A callable argument for the function's gradients.
     format : str, optional
-        The format in which the output is to be provided: ``matrix`` will output a numpy.ndarray of shape (number_of_observations, dimensions) with gradient values, while ``vector`` will stack all the vectors in this matrix to yield a numpy.ndarray with shape (number_of_observations x dimensions, 1).
+        The format in which the output is to be provided: ``matrix`` will output a
+        numpy.ndarray of shape (number_of_observations, dimensions) with gradient
+        values, while ``vector`` will stack all the vectors in this matrix to yield a
+        numpy.ndarray with shape (number_of_observations x dimensions, 1).
 
     Returns:
     -------
@@ -1523,13 +1666,14 @@ def evaluate_model_gradients(points, fungrad, format="matrix"):
     raise ValueError("evalgradients(): Format must be either matrix or vector!")
 
 
-def evaluate_model(points, function):
+def evaluate_model(points, function):  # noqa: ANN001, ANN201
     """Evaluates the model function at given values.
 
     Parameters
     ----------
     points : numpy.ndarray
-        An ndarray with shape (number_of_observations, dimensions) at which the gradient must be evaluated.
+        An ndarray with shape (number_of_observations, dimensions) at which the gradient
+        must be evaluated.
     function : ~collections.abc.Callable
         A callable argument for the function.
 
@@ -1544,43 +1688,46 @@ def evaluate_model(points, function):
     return function_values
 
 
-def vector_to_2D_grid(coefficients, index_set):
-    """Handy function that converts a vector of coefficients into a matrix based on index set values.
+def vector_to_2D_grid(coefficients, index_set):  # noqa: ANN001, ANN201, N802
+    """Handy function that converts a vector of coefficients into a matrix based on.
+
+    index set values.
 
     Parameters
     ----------
     coefficients : numpy.ndarray
-        An ndarray with shape (N, 1) where N corresponds to the number of coefficient values.
+        An ndarray with shape (N, 1) where N corresponds to the number of coefficient
+        values.
     index_set :  numpy.ndarray
         The multi-index set of the basis.
 
     Returns:
     -------
     tuple
-        Tuple (x,y,z,max_order), containing the x,y values of the meshgrid, the coefficient values, and the highest order.
+        Tuple (x,y,z,max_order), containing the x,y values of the meshgrid, the
+        coefficient values, and the highest order.
     """
     max_order = int(np.max(index_set)) + 1
     x, y = np.mgrid[0:max_order, 0:max_order]
     z = np.full(x.shape, float("NaN"))
     indices = index_set.astype(int)
-    l = len(coefficients)
+    l = len(coefficients)  # noqa: E741
     coefficients = np.reshape(coefficients, (1, l))
     z[indices[:, 0], indices[:, 1]] = coefficients
     return x, y, z, max_order
 
 
-def cell2matrix(G, W):
+def cell2matrix(G, W):  # noqa: ANN001, ANN201, D103, N803
     dimensions = len(G)
-    G0 = G[0]  # Which by default has to exist!
-    C0 = G0.T
+    G0 = G[0]  # Which by default has to exist!  # noqa: N806
+    C0 = G0.T  # noqa: N806
     rows, cols = C0.shape
-    BigC = np.zeros((dimensions * rows, cols))
+    BigC = np.zeros((dimensions * rows, cols))  # noqa: N806
     counter = 0
     for i in range(0, dimensions):
-        K = np.dot(W, G[i].T)
+        K = np.dot(W, G[i].T)  # noqa: N806
         for j in range(0, rows):
             for k in range(0, cols):
                 BigC[counter, k] = K[j, k]
             counter = counter + 1
-    BigC = np.asmatrix(BigC)
-    return BigC
+    return np.asmatrix(BigC)

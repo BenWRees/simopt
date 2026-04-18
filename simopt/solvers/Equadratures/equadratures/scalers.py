@@ -1,13 +1,15 @@
 """Classes to scale data.
 
-Some of these classes are called internally by other modules, but they can also be used independently as a pre-processing stage.
+Some of these classes are called internally by other modules, but they can also be used
+independently as a pre-processing stage.
 
-Scalers can fit to one set of data, and used to transform other data sets with the same number of dimensions.
+Scalers can fit to one set of data, and used to transform other data sets with the same
+number of dimensions.
 
 Examples:
 --------
 Fitting scaler implicitly during transform
-    >>> # Define some 1D sample data
+    >>> # Define some 1D sample data  # noqa: RUF002
     >>> X = np.random.RandomState(0).normal(2,0.5,200)
     >>> (X.mean(),X.std())
     >>> (2.0354552465705806, 0.5107113843479977)
@@ -22,7 +24,8 @@ Using the same scaling to transform train and test data
     >>> X = np.random.RandomState(0).uniform(-10,10,size=(50,5))
     >>> y = X[:,0]**2 - X[:,4]
     >>> # Split into train/test
-    >>> X_train, X_test,y_train,y_test = eq.datasets.train_test_split(X,y,train=0.7,random_seed=0)
+    >>> X_train, X_test,y_train,y_test =
+    eq.datasets.train_test_split(X,y,train=0.7,random_seed=0)
     >>> (X_train.min(),X_train.max())
     >>> (-9.906090476149059, 9.767476761184525)
     >>>
@@ -45,58 +48,64 @@ Using the same scaling to transform train and test data
 import numpy as np
 
 
-class scaler_minmax:
+class scaler_minmax:  # noqa: N801
     """Scale the data to have a min/max of -1 to 1."""
 
-    def __init__(self):
+    def __init__(self) -> None:  # noqa: D107
         self.fitted = False
 
-    def fit(self, X):
+    def fit(self, X) -> None:  # noqa: ANN001, N803
         """Fit scaler to data.
 
         Parameters
         ----------
         X : numpy.ndarray
-            Array with shape (number_of_samples, number_of_dimensions) containing data to fit scaler to.
+            Array with shape (number_of_samples, number_of_dimensions) containing data
+            to fit scaler to.
         """
         if X.ndim == 1:
-            X = X.reshape(-1, 1)
+            X = X.reshape(-1, 1)  # noqa: N806
         self.Xmin = np.min(X, axis=0)
         self.Xmax = np.max(X, axis=0)
         self.fitted = True
 
-    def transform(self, X):
-        """Transforms data. Calls :meth:`~equadratures.scalers.scaler_minmax.fit` fit internally if scaler not already fitted.
+    def transform(self, X):  # noqa: ANN001, ANN201, N803
+        """Transforms data. Calls :meth:`~equadratures.scalers.scaler_minmax.fit` fit.
+
+        internally if scaler not already fitted.
 
         Parameters
         ----------
         X : numpy.ndarray
-            Array with shape (number_of_samples, number_of_dimensions) containing data to transform.
+            Array with shape (number_of_samples, number_of_dimensions) containing data
+            to transform.
 
         Returns:
         -------
         numpy.ndarray
-            Array with shape (number_of_samples, number_of_dimensions) containing transformed data.
+            Array with shape (number_of_samples, number_of_dimensions) containing
+            transformed data.
         """
         if X.ndim == 1:
-            X = X.reshape(-1, 1)
+            X = X.reshape(-1, 1)  # noqa: N806
         if not self.fitted:
             self.fit(X)
-        Xtrans = 2.0 * ((X[:, :] - self.Xmin) / (self.Xmax - self.Xmin)) - 1.0
-        return Xtrans
+        return 2.0 * ((X[:, :] - self.Xmin) / (self.Xmax - self.Xmin)) - 1.0
 
-    def untransform(self, X):
+    def untransform(self, X):  # noqa: ANN001, ANN201, N803
         """Untransforms data.
 
         Parameters
         ----------
         X : numpy.ndarray
-            Array with shape (number_of_samples, number_of_dimensions) containing data to untransform.
+            Array with shape (number_of_samples, number_of_dimensions) containing data
+            to untransform.
 
         Returns:
         -------
         numpy.ndarray
-            Array with shape (number_of_samples, number_of_dimensions) containing untransformed data.
+            Array with shape (number_of_samples, number_of_dimensions) containing
+            untransformed data.
 
         Raises:
         ------
@@ -104,67 +113,71 @@ class scaler_minmax:
             scaler has not been fitted
         """
         if X.ndim == 1:
-            X = X.reshape(-1, 1)
+            X = X.reshape(-1, 1)  # noqa: N806
         if not self.fitted:
             raise Exception("scaler has not been fitted")
-        Xuntrans = 0.5 * (X[:, :] + 1) * (self.Xmax - self.Xmin) + self.Xmin
-        return Xuntrans
+        return 0.5 * (X[:, :] + 1) * (self.Xmax - self.Xmin) + self.Xmin
 
 
-class scaler_meanvar:
-    """Scale the data to have a mean of 0 and variance of 1.
-    """
+class scaler_meanvar:  # noqa: N801
+    """Scale the data to have a mean of 0 and variance of 1."""
 
-    def __init__(self):
+    def __init__(self) -> None:  # noqa: D107
         self.fitted = False
 
-    def fit(self, X):
+    def fit(self, X) -> None:  # noqa: ANN001, N803
         """Fit scaler to data.
 
         Parameters
         ----------
         X : numpy.ndarray
-            Array with shape (number_of_samples, number_of_dimensions) containing data to fit scaler to.
+            Array with shape (number_of_samples, number_of_dimensions) containing data
+            to fit scaler to.
         """
         if X.ndim == 1:
-            X = X.reshape(-1, 1)
+            X = X.reshape(-1, 1)  # noqa: N806
         self.Xmean = np.mean(X, axis=0)
         self.Xstd = np.std(X, axis=0)
         self.fitted = True
 
-    def transform(self, X):
-        """Transforms data. Calls :meth:`~equadratures.scalers.scaler_meanvar.fit` fit internally if scaler not already fitted.
+    def transform(self, X):  # noqa: ANN001, ANN201, N803
+        """Transforms data. Calls :meth:`~equadratures.scalers.scaler_meanvar.fit` fit.
+
+        internally if scaler not already fitted.
 
         Parameters
         ----------
         X : numpy.ndarray
-            Array with shape (number_of_samples, number_of_dimensions) containing data to transform.
+            Array with shape (number_of_samples, number_of_dimensions) containing data
+            to transform.
 
         Returns:
         -------
         numpy.ndarray
-            Array with shape (number_of_samples, number_of_dimensions) containing transformed data.
+            Array with shape (number_of_samples, number_of_dimensions) containing
+            transformed data.
         """
         if X.ndim == 1:
-            X = X.reshape(-1, 1)
+            X = X.reshape(-1, 1)  # noqa: N806
         if not self.fitted:
             self.fit(X)
         eps = np.finfo(np.float64).tiny
-        Xtrans = (X[:, :] - self.Xmean) / (self.Xstd + eps)
-        return Xtrans
+        return (X[:, :] - self.Xmean) / (self.Xstd + eps)
 
-    def untransform(self, X):
+    def untransform(self, X):  # noqa: ANN001, ANN201, N803
         """Untransforms data.
 
         Parameters
         ----------
         X : numpy.ndarray
-            Array with shape (number_of_samples, number_of_dimensions) containing data to untransform.
+            Array with shape (number_of_samples, number_of_dimensions) containing data
+            to untransform.
 
         Returns:
         -------
         numpy.ndarray
-            Array with shape (number_of_samples, number_of_dimensions) containing untransformed data.
+            Array with shape (number_of_samples, number_of_dimensions) containing
+            untransformed data.
 
         Raises:
         ------
@@ -172,64 +185,67 @@ class scaler_meanvar:
             scaler has not been fitted
         """
         if X.ndim == 1:
-            X = X.reshape(-1, 1)
+            X = X.reshape(-1, 1)  # noqa: N806
         if not self.fitted:
             raise Exception("scaler has not been fitted")
         eps = np.finfo(np.float64).tiny
-        Xuntrans = X[:, :] * (self.Xstd + eps) + self.Xmean
-        return Xuntrans
+        return X[:, :] * (self.Xstd + eps) + self.Xmean
 
 
-class scaler_custom:
+class scaler_custom:  # noqa: N801
     """Scale the data by the provided offset and divisor.
 
     Parameters
     ----------
     offset : float, numpy.ndarray
-        Offset to subtract from data. Either a float, or array with shape (number_of_samples, number_of_dimensions).
+        Offset to subtract from data. Either a float, or array with shape
+        (number_of_samples, number_of_dimensions).
     div : float, numpy.ndarray
-        Divisor to divide data with. Either a float, or array with shape (number_of_samples, number_of_dimensions).
+        Divisor to divide data with. Either a float, or array with shape
+        (number_of_samples, number_of_dimensions).
     """
 
-    def __init__(self, offset, div):
+    def __init__(self, offset, div) -> None:  # noqa: ANN001, D107
         self.offset = offset
         self.div = div
         self.fitted = True
 
-    def transform(self, X):
+    def transform(self, X):  # noqa: ANN001, ANN201, N803
         """Transforms data.
 
         Parameters
         ----------
         X : numpy.ndarray
-            Array with shape (number_of_samples, number_of_dimensions) containing data to transform.
+            Array with shape (number_of_samples, number_of_dimensions) containing data
+            to transform.
 
         Returns:
         -------
         numpy.ndarray
-            Array with shape (number_of_samples, number_of_dimensions) containing transformed data.
+            Array with shape (number_of_samples, number_of_dimensions) containing
+            transformed data.
         """
         if X.ndim == 1:
-            X = X.reshape(-1, 1)
+            X = X.reshape(-1, 1)  # noqa: N806
         eps = np.finfo(np.float64).tiny
-        Xtrans = (X - self.offset) / (self.div + eps)
-        return Xtrans
+        return (X - self.offset) / (self.div + eps)
 
-    def untransform(self, X):
+    def untransform(self, X):  # noqa: ANN001, ANN201, N803
         """Untransforms data.
 
         Parameters
         ----------
         X : numpy.ndarray
-            Array with shape (number_of_samples, number_of_dimensions) containing data to untransform.
+            Array with shape (number_of_samples, number_of_dimensions) containing data
+            to untransform.
 
         Returns:
         -------
         numpy.ndarray
-            Array with shape (number_of_samples, number_of_dimensions) containing untransformed data.
+            Array with shape (number_of_samples, number_of_dimensions) containing
+            untransformed data.
         """
         if X.ndim == 1:
-            X = X.reshape(-1, 1)
+            X = X.reshape(-1, 1)  # noqa: N806
         eps = np.finfo(np.float64).tiny
-        Xuntrans = X * (self.div + eps) + self.offset
-        return Xuntrans
+        return X * (self.div + eps) + self.offset

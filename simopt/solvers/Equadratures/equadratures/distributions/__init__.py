@@ -1,4 +1,4 @@
-import equadratures.distributions.beta
+import equadratures.distributions.beta  # noqa: D104
 import equadratures.distributions.cauchy
 import equadratures.distributions.chebyshev
 import equadratures.distributions.chi
@@ -14,4 +14,4 @@ import equadratures.distributions.template
 import equadratures.distributions.triangular
 import equadratures.distributions.truncated_gaussian
 import equadratures.distributions.uniform
-import equadratures.distributions.weibull
+import equadratures.distributions.weibull  # noqa: F401

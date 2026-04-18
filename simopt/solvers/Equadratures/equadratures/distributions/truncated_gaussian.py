@@ -3,7 +3,7 @@
 import numpy as np
 from scipy.stats import truncnorm
 
-from equadratures.distributions.gaussian import *
+from equadratures.distributions.gaussian import *  # noqa: F403
 from equadratures.distributions.template import Distribution
 
 RECURRENCE_PDF_SAMPLES = 8000
@@ -11,6 +11,7 @@ RECURRENCE_PDF_SAMPLES = 8000
 
 class TruncatedGaussian(Distribution):
     """The class defines a Truncated-Gaussian object. It is the child of Distribution.
+
     :param double mean:
     Mean of the truncated Gaussian distribution.
     :param double variance:
@@ -21,7 +22,7 @@ class TruncatedGaussian(Distribution):
         Upper bound of the truncated Gaussian distribution.
     """
 
-    def __init__(self, mean, variance, lower, upper):
+    def __init__(self, mean, variance, lower, upper) -> None:  # noqa: ANN001, D107
         if mean is None:
             self.mean = 0.0
         else:
@@ -51,7 +52,7 @@ class TruncatedGaussian(Distribution):
             moments="mvsk"
         )
 
-    def get_description(self):
+    def get_description(self):  # noqa: ANN201
         """A description of the truncated Gaussian.
 
         :param truncated Gaussian self:
@@ -59,7 +60,7 @@ class TruncatedGaussian(Distribution):
         :return:
             A string describing the truncated Gaussian.
         """
-        text = (
+        return (
             "a truncated Gaussian distribution with a center of "
             + str(self.mean)
             + " and a scale of "
@@ -70,9 +71,8 @@ class TruncatedGaussian(Distribution):
             + str(self.upper)
             + "."
         )
-        return text
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """A truncated Gaussian probability distribution.
 
         :param truncated Gaussian self:
@@ -82,40 +82,42 @@ class TruncatedGaussian(Distribution):
         :return:
             An array of N values over the support of the distribution.
         :return:
-            Probability density values along the support of the truncated Gaussian distribution.
+            Probability density values along the support of the truncated Gaussian
+            distribution.
         """
         if points is not None:
             return self.parent.pdf(points)
         raise ValueError("Please digit an input for getPDF method")
 
-    def get_icdf(self, xx):
-        """A truncated gaussian inverse cumulative density function,
+    def get_icdf(self, xx):  # noqa: ANN001, ANN201
+        """A truncated gaussian inverse cumulative density function,.
+
         :param truncnorm:
             An instance of Truncated-Gaussian class.
         :param array xx:
-            A matrix of points at which the inverse of cumulative density function needs to be evaluated.
+            A matrix of points at which the inverse of cumulative density function needs
+            to be evaluated.
         :return:
-            Inverse cumulative density function values of the Truncated Gaussian distributuion.
+            Inverse cumulative density function values of the Truncated Gaussian
+            distributuion.
         """
         return self.parent.ppf(xx)
 
-    def get_samples(self, m=None):
+    def get_samples(self, m=None):  # noqa: ANN001, ANN201
         """Generates samples from the Truncated-Gaussian distribution.
 
         :param trunc-norm self:
             An instance of the Truncated-Gaussian class.
         :param integer m:
-            Number of random samples. If no value is provided, a default of     5e5 is assumed.
+            Number of random samples. If no value is provided, a default of     5e5 is
+            assumed.
         :return:
             A N-by-1 vector that contains the samples.
         """
-        if m is not None:
-            number = m
-        else:
-            number = 500000
+        number = m if m is not None else 500000
         return self.parent.rvs(size=number)
 
-    def get_cdf(self, points=None):
+    def get_cdf(self, points=None):  # noqa: ANN001, ANN201
         """A truncated Gaussian cumulative density function.
 
         :param Exponential self:
@@ -125,7 +127,8 @@ class TruncatedGaussian(Distribution):
         :return:
             An array of N values over the support of the distribution.
         :return:
-            Cumulative density values along the support of the truncated Gaussian distribution.
+            Cumulative density values along the support of the truncated Gaussian
+            distribution.
         """
         if points is not None:
             return self.parent.cdf(points)

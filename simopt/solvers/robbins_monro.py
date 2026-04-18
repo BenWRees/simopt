@@ -121,7 +121,7 @@ class RobbinsMonro(Solver):
         """
         return self.factors["stepsize_coeff"] / n
 
-    def solve(self, problem: Problem) -> None:
+    def solve(self, problem: Problem) -> None:  # ty: ignore[invalid-method-override]
         """Run a single macroreplication of the solver on a problem.
 
         Args:
@@ -146,7 +146,7 @@ class RobbinsMonro(Solver):
         )
 
         self.problem.simulate(self.incumbent_solution, replication_size)
-        self.current_fn_estimate = (self.incumbent_solution.objectives_mean.item())
+        self.current_fn_estimate = self.incumbent_solution.objectives_mean.item()
 
         self.recommended_solns.append(self.incumbent_solution)
         self.intermediate_budgets.append(self.budget.used)
@@ -162,7 +162,6 @@ class RobbinsMonro(Solver):
         # self.iterations = []
 
         while self.budget.remaining > 0:
-
             # Simulate current solution
             # self.problem.simulate(self.incumbent_solution, replication_size)
             observation = self.incumbent_solution.objectives_mean[0]
@@ -188,7 +187,7 @@ class RobbinsMonro(Solver):
                 self.incumbent_x, self.problem
             )
             self.problem.simulate(self.incumbent_solution, replication_size)
-            self.current_fn_estimate = (self.incumbent_solution.objectives_mean.item())
+            self.current_fn_estimate = self.incumbent_solution.objectives_mean.item()
 
             self.iteration_count += 1
 

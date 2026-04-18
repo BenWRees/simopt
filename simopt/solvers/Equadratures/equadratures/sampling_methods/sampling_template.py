@@ -4,13 +4,17 @@ import numpy as np
 
 
 class Sampling:
-    """The class defines a Sampling object. It serves as a template for all sampling methodologies.
+    """The class defines a Sampling object. It serves as a template for all sampling.
 
-    :param list parameters: A list of parameters, where each element of the list is an instance of the Parameter class.
-    :param Basis basis: An instance of the Basis class corresponding to the multi-index set used.
+    methodologies.
+
+    :param list parameters: A list of parameters, where each element of the list is an
+    instance of the Parameter class.
+    :param Basis basis: An instance of the Basis class corresponding to the multi-index
+    set used.
     """
 
-    def __init__(self, parameters, basis, points=None, weights=None):
+    def __init__(self, parameters, basis, points=None, weights=None) -> None:  # noqa: ANN001, D107
         self.parameters = parameters
         self.basis = basis
         self.points = points
@@ -18,12 +22,12 @@ class Sampling:
         if self.weights is None:
             self._set_weights()
 
-    def _set_weights(self):
-        P = self._get_multivariate_orthogonal_polynomial()
+    def _set_weights(self) -> None:
+        P = self._get_multivariate_orthogonal_polynomial()  # noqa: N806
         wts = 1.0 / np.sum(P**2, 0)
         self.weights = wts * 1.0 / np.sum(wts)
 
-    def get_points(self):
+    def get_points(self):  # noqa: ANN201
         """Returns the quadrature points.
 
         :param Sampling self:
@@ -31,7 +35,7 @@ class Sampling:
         """
         return self.points
 
-    def get_weights(self):
+    def get_weights(self):  # noqa: ANN201
         """Returns the quadrature weights.
 
         :param Sampling self:
@@ -39,7 +43,7 @@ class Sampling:
         """
         return self.weights
 
-    def get_points_and_weights(self):
+    def get_points_and_weights(self):  # noqa: ANN201
         """Returns the quadrature points and weights.
 
         :param Sampling self:
@@ -47,7 +51,7 @@ class Sampling:
         """
         return self.points, self.weights
 
-    def _get_multivariate_orthogonal_polynomial(self):
+    def _get_multivariate_orthogonal_polynomial(self):  # noqa: ANN202
         """Utility for evaluating a multivariate orthogonal polynomial at given points.
 
         :param Sampling self:

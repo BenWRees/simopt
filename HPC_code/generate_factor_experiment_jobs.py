@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Generate SLURM job files for factor experiments from a JSON configuration.
+"""Generate SLURM job files for factor experiments from a JSON configuration.
 
 This script reads a configuration file and generates SLURM array job scripts
 for running ASTROMoRF factor experiments (subspace dimensions or polynomial basis types)
@@ -8,7 +7,7 @@ on an HPC cluster.
 
 Usage:
     python generate_factor_experiment_jobs.py factor_experiments_config.json
-    
+
     # Submit all generated jobs
     python generate_factor_experiment_jobs.py factor_experiments_config.json --submit
 """
@@ -26,7 +25,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 def load_config(config_path: str) -> dict:
     """Load experiment configuration from JSON file."""
-    with open(config_path) as f:
+    with open(config_path) as f:  # noqa: PTH123
         return json.load(f)
 
 
@@ -35,20 +34,37 @@ def calculate_n_tasks(experiment: dict) -> int:
     if experiment["factor_type"] == "subspace":
         # Number of subspace dimensions to test
         return len(experiment.get("subspace_dims", list(range(1, 9))))
-    elif experiment["factor_type"] == "basis":
+    if experiment["factor_type"] == "basis":
         # Number of basis types to test
-        default_bases = ["hermite", "legendre", "chebyshev", "monomial", 
-                        "natural", "laguerre", "nfp", "lagrange", "monomial_poly"]
+        default_bases = [
+            "hermite",
+            "legendre",
+            "chebyshev",
+            "monomial",
+            "natural",
+            "laguerre",
+            "nfp",
+            "lagrange",
+            "monomial_poly",
+        ]
         return len(experiment.get("basis_types", default_bases))
-    elif experiment["factor_type"] == "full":
-        # Full factorial: subspace dims × basis types
+    if experiment["factor_type"] == "full":
+        # Full factorial: subspace dims × basis types  # noqa: RUF003
         n_dims = len(experiment.get("subspace_dims", list(range(1, 9))))
-        default_bases = ["hermite", "legendre", "chebyshev", "monomial", 
-                        "natural", "laguerre", "nfp", "lagrange", "monomial_poly"]
+        default_bases = [
+            "hermite",
+            "legendre",
+            "chebyshev",
+            "monomial",
+            "natural",
+            "laguerre",
+            "nfp",
+            "lagrange",
+            "monomial_poly",
+        ]
         n_bases = len(experiment.get("basis_types", default_bases))
         return n_dims * n_bases
-    else:
-        raise ValueError(f"Unknown factor type: {experiment['factor_type']}")
+    raise ValueError(f"Unknown factor type: {experiment['factor_type']}")
 
 
 def generate_slurm_script(
@@ -58,10 +74,9 @@ def generate_slurm_script(
     demo_script_path: Path,
 ) -> Path:
     """Generate a SLURM array job script for an experiment."""
-    
     n_tasks = calculate_n_tasks(experiment)
     exp_name = experiment["name"]
-    
+
     # Build command arguments
     cmd_args = [
         f"--factor {experiment['factor_type']}",
@@ -72,9 +87,9 @@ def generate_slurm_script(
         f"--n-postreps {experiment['n_postreps']}",
         f"--polynomial-degree {experiment.get('polynomial_degree', 2)}",
         f"--output-dir {output_dir / exp_name}",
-        #"--task-id $SLURM_ARRAY_TASK_ID",
+        # "--task-id $SLURM_ARRAY_TASK_ID",
     ]
-    
+
     # Add factor-specific arguments
     if experiment["factor_type"] == "subspace":
         if "subspace_dims" in experiment:
@@ -84,18 +99,18 @@ def generate_slurm_script(
         if "fixed_basis" in experiment:
             # This would be the default basis when testing subspace dims
             pass  # The script handles this with defaults
-            
+
     elif experiment["factor_type"] == "basis":
         if "basis_types" in experiment:
             bases_str = ",".join(experiment["basis_types"])
             cmd_args.append(f"--basis-types {bases_str}")
         if "fixed_subspace_dim" in experiment:
             cmd_args.append(f"--fixed-subspace-dim {experiment['fixed_subspace_dim']}")
-    
+
     # Create log directory
     log_dir = output_dir / exp_name / "logs"
-    
-    slurm_content = f'''#!/bin/bash
+
+    slurm_content = f"""#!/bin/bash
 #SBATCH --job-name={exp_name}
 #SBATCH --partition={slurm_settings.get("partition", "batch")}
 #SBATCH --nodes=1
@@ -132,26 +147,26 @@ source $HOME/miniconda3/bin/activate simopt
 #cd {demo_script_path.parent.parent}
 
 # Run the experiment for this task ID
-python {demo_script_path} {" ".join(cmd_args)} --task-id $SLURM_ARRAY_TASK_ID --generate_csv
+python {demo_script_path} {" ".join(cmd_args)} --task-id $SLURM_ARRAY_TASK_ID
+--generate_csv
 
 exit_code=$?
 
 echo "Task $SLURM_ARRAY_TASK_ID completed with exit code $exit_code"
 echo "End time: $(date)"
 
-exit $exit_code'''
-    
+exit $exit_code"""
+
     # Write SLURM script
     slurm_file = output_dir / f"{exp_name}.slurm"
     slurm_file.parent.mkdir(parents=True, exist_ok=True)
 
-    
-    with open(slurm_file, "w") as f:
+    with open(slurm_file, "w") as f:  # noqa: PTH123
         f.write(slurm_content)
-    
+
     # Make executable
-    os.chmod(slurm_file, 0o755)
-    
+    os.chmod(slurm_file, 0o755)  # noqa: PTH101
+
     return slurm_file
 
 
@@ -160,34 +175,33 @@ def generate_master_submit_script(
     output_dir: Path,
 ) -> Path:
     """Generate a master script to submit all SLURM jobs."""
-    
-    script_content = '''#!/bin/bash
+    script_content = """#!/bin/bash
 # Master script to submit all factor experiment jobs
 # Generated automatically
 
 echo "Submitting factor experiment jobs..."
 echo "=================================="
 
-'''
-    
+"""
+
     for slurm_file in slurm_files:
-        script_content += f'''
+        script_content += f"""
 echo "Submitting {slurm_file.stem}..."
 sbatch {slurm_file}
-'''
-    
-    script_content += '''
+"""
+
+    script_content += """
 echo ""
 echo "=================================="
 echo "All jobs submitted. Use 'squeue -u $USER' to check status."
-'''
-    
+"""
+
     submit_script = output_dir / "submit_all_experiments.sh"
-    with open(submit_script, "w") as f:
+    with open(submit_script, "w") as f:  # noqa: PTH123
         f.write(script_content)
-    
-    os.chmod(submit_script, 0o755)
-    
+
+    os.chmod(submit_script, 0o755)  # noqa: PTH101
+
     return submit_script
 
 
@@ -195,9 +209,12 @@ def generate_results_collector_script(
     experiments: list[dict],
     output_dir: Path,
 ) -> Path:
-    """Generate a Python script to collect and analyze results after experiments complete."""
-    
-    script_content = '''#!/usr/bin/env python3
+    """Generate a Python script to collect and analyze results after experiments.
+
+    complete.
+    """
+    script_content = (
+        '''#!/usr/bin/env python3
 """
 Collect and analyze results from factor experiments.
 
@@ -234,10 +251,14 @@ def collect_results(experiment_dir: Path) -> pd.DataFrame:
 
 
 def main():
-    output_dir = Path("''' + str(output_dir) + '''")
+    output_dir = Path("'''
+        + str(output_dir)
+        + """")
     
     # List of experiment directories
-    experiment_names = ''' + str([exp["name"] for exp in experiments]) + '''
+    experiment_names = """
+        + str([exp["name"] for exp in experiments])
+        + """
     
     for exp_name in experiment_names:
         exp_dir = output_dir / exp_name
@@ -256,18 +277,19 @@ def main():
 
 if __name__ == "__main__":
     main()
-'''
-    
+"""
+    )
+
     collector_script = output_dir / "collect_results.py"
-    with open(collector_script, "w") as f:
+    with open(collector_script, "w") as f:  # noqa: PTH123
         f.write(script_content)
-    
-    os.chmod(collector_script, 0o755)
-    
+
+    os.chmod(collector_script, 0o755)  # noqa: PTH101
+
     return collector_script
 
 
-def main():
+def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(
         description="Generate SLURM job files for factor experiments",
@@ -288,36 +310,36 @@ def main():
         action="store_true",
         help="Submit jobs after generating scripts",
     )
-    
+
     args = parser.parse_args()
-    
+
     # Load configuration
     config = load_config(args.config_file)
     experiments = config.get("experiments", [])
     slurm_settings = config.get("slurm_settings", {})
-    
+
     if not experiments:
         print("No experiments defined in configuration file.")
         return
-    
+
     # Setup paths
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Find the journal_factors_test.py script
     hpc_dir = Path(__file__).parent
     demo_dir = hpc_dir.parent / "demo"
     demo_script = demo_dir / "journal_factors_test.py"
-    
+
     if not demo_script.exists():
         print(f"Error: Could not find {demo_script}")
         return
-    
+
     print(f"Generating SLURM scripts for {len(experiments)} experiments...")
     print(f"Output directory: {output_dir}")
     print(f"Demo script: {demo_script}")
     print()
-    
+
     # Generate SLURM scripts for each experiment
     slurm_files = []
     for experiment in experiments:
@@ -330,29 +352,29 @@ def main():
         slurm_files.append(slurm_file)
         n_tasks = calculate_n_tasks(experiment)
         print(f"    -> {slurm_file.name} ({n_tasks} tasks)")
-    
+
     # Generate master submit script
     submit_script = generate_master_submit_script(slurm_files, output_dir)
     print(f"\nGenerated master submit script: {submit_script}")
-    
+
     # Generate results collector script
     collector_script = generate_results_collector_script(experiments, output_dir)
     print(f"Generated results collector: {collector_script}")
-    
-    print(f"\n{'='*60}")
+
+    print(f"\n{'=' * 60}")
     print("Summary:")
     print(f"  Total experiments: {len(experiments)}")
     print(f"  Total SLURM scripts: {len(slurm_files)}")
     print(f"  Output directory: {output_dir}")
-    print(f"\nTo submit all jobs, run:")
+    print("\nTo submit all jobs, run:")
     print(f"  bash {submit_script}")
-    print(f"\nOr submit individually:")
+    print("\nOr submit individually:")
     for sf in slurm_files:
         print(f"  sbatch {sf}")
-    
+
     # Optionally submit jobs
     if args.submit:
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("Submitting jobs...")
         for slurm_file in slurm_files:
             try:

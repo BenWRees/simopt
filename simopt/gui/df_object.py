@@ -8,6 +8,7 @@ from __future__ import annotations
 import tkinter as tk
 from abc import ABC, abstractmethod
 from ast import literal_eval
+from collections.abc import Callable
 from tkinter import ttk
 from typing import Literal
 
@@ -656,6 +657,7 @@ class DFList(DFFactor):
         super().__init__(name, description)
         self.__default = tk.StringVar(value=str(default))
 
+
 class DFString(DFFactor):
     """Class to store string factors for problems and solvers."""
 
@@ -677,7 +679,7 @@ class DFString(DFFactor):
         self.__default = default
 
     @property
-    def default_eval(self) -> list:
+    def default_eval(self) -> str:
         """Evaluated default value of the factor."""
         try:
             return str(self.default.get())
@@ -702,7 +704,8 @@ class DFString(DFFactor):
         super().__init__(name, description)
         self.__default = tk.StringVar(value=str(default))
 
-#TODO: Change how dictionaries are displayed in tkinter
+
+# TODO: Change how dictionaries are displayed in tkinter
 class DFDict(DFFactor):
     """Class to store dictionary factors for problems and solvers."""
 
@@ -724,11 +727,14 @@ class DFDict(DFFactor):
         self.__default = default
 
     @property
-    def default_eval(self) -> list:
+    def default_eval(self) -> dict:
         """Evaluated default value of the factor."""
         try:
-            return dict(eval(self.default.get()))
-        except ValueError:
+            parsed = literal_eval(self.default.get())
+            if not isinstance(parsed, dict):
+                raise ValueError
+            return dict(parsed)
+        except (ValueError, SyntaxError):
             raise ValueError(
                 f"Default value for {self.name.get()} must be a dictionary."
             ) from None
@@ -749,9 +755,10 @@ class DFDict(DFFactor):
         super().__init__(name, description)
         self.__default = tk.StringVar(value=self.dict_to_str(default))
 
-    #TODO: write function that prints strings in pretty-print format 
-    def dict_to_str(self, factor: dict[str,dict]) -> str : 
+    # TODO: write function that prints strings in pretty-print format
+    def dict_to_str(self, factor: dict[str, dict]) -> str:  # noqa: D102
         return str(list(factor.items()))
+
 
 class DFCallable(DFFactor):
     """Class to store Callable factors for problems and solvers."""
@@ -774,13 +781,16 @@ class DFCallable(DFFactor):
         self.__default = default
 
     @property
-    def default_eval(self) -> list:
+    def default_eval(self) -> Callable:
         """Evaluated default value of the factor."""
         try:
-            return eval(self.default.get())
-        except ValueError:
+            parsed = eval(self.default.get())
+            if not callable(parsed):
+                raise ValueError
+            return parsed
+        except (ValueError, NameError, SyntaxError):
             raise ValueError(
-                f"Default value for {self.name.get()} must be a dictionary."
+                f"Default value for {self.name.get()} must be callable."
             ) from None
 
     def __init__(self, name: str, description: str, default: Callable) -> None:
@@ -799,17 +809,16 @@ class DFCallable(DFFactor):
         super().__init__(name, description)
         self.__default = tk.StringVar(value=self.convert_fn_to_str(default))
 
-    #takes the callable function and changes it to a lambda function that is passed as a string 
-    #TODO: write function that if fn is a lambda function then just print as a string but if its a class method then convert to lambda and turn to string
-    def convert_fn_to_str(self, fn: Callable) -> str : 
+    # takes the callable function and changes it to a lambda function that is passed as a string  # noqa: E501
+    # TODO: write function that if fn is a lambda function then just print as a string but if its a class method then convert to lambda and turn to string  # noqa: E501
+    def convert_fn_to_str(self, fn: Callable) -> str:  # noqa: D102
         return str(fn)
-        # In the case that fn is a instance variable in a class - convert to a lambda function
+        # In the case that fn is a instance variable in a class - convert to a lambda function  # noqa: E501
         # if inspect.ismethod(fn):
         #     if fn.__self__ is obj:  # Bound to instance
         #         fn = lambda x : fn(x)
-        
-        # return inspect.getsource(fn).strip() 
 
+        # return inspect.getsource(fn).strip()
 
 
 def spec_dict_to_df_dict(spec_dict: dict[str, dict]) -> dict[str, DFFactor]:
@@ -849,7 +858,7 @@ def spec_to_df(spec_name: str, spec: dict) -> DFFactor:
         list: DFList,
         str: DFString,
         dict: DFDict,
-        Callable: DFCallable
+        Callable: DFCallable,
     }
 
     # Check to see if we have a non-datafarmable integer

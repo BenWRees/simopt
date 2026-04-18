@@ -122,7 +122,10 @@ class SSContMinCostConfig(BaseModel):
     initial_solution: Annotated[
         tuple[float, ...],
         Field(
-            default=(600, 600),
+            # Use (100, 100) instead of (600, 600) which is near optimal.
+            # This creates a meaningful optimization gap for solvers to close.
+            # Vector represents (s, S-s) so initial (s, S) = (100, 200).
+            default=(300, 300),
             description="initial solution from which solvers start",
         ),
     ]

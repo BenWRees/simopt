@@ -18,7 +18,7 @@ class Chebyshev(Distribution):
     Upper bound of the support of the Chebyshev (arcsine) distribution.
     """
 
-    def __init__(self, lower, upper):
+    def __init__(self, lower, upper) -> None:  # noqa: ANN001, D107
         if lower is None:
             self.lower = 0.0
         else:
@@ -47,7 +47,7 @@ class Chebyshev(Distribution):
         self.shape_parameter_A = -0.5
         self.shape_parameter_B = -0.5
 
-    def get_description(self):
+    def get_description(self):  # noqa: ANN201
         """A description of the Chebyshev (arcsine) distribution.
 
         :param Chebyshev self:
@@ -55,16 +55,15 @@ class Chebyshev(Distribution):
         :return:
             A string describing the Chebyshev (arcsine) distribution.
         """
-        text = (
+        return (
             "is a Chebyshev or arcsine distribution that is characterised by its lower bound, which is"
             + str(self.lower)
             + " and its upper bound, which is"
             + str(self.upper)
             + "."
         )
-        return text
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """A Chebyshev probability density function.
 
         :param Chebyshev self:
@@ -74,13 +73,14 @@ class Chebyshev(Distribution):
         :return:
             An array of N the support of the Chebyshev (arcsine) distribution.
         :return:
-            Probability density values along the support of the Chebyshev (arcsine) distribution.
+            Probability density values along the support of the Chebyshev (arcsine)
+            distribution.
         """
         if points is not None:
             return self.parent.pdf(points)
         raise ValueError("Please digit an input for getPDF method")
 
-    def get_cdf(self, points=None):
+    def get_cdf(self, points=None):  # noqa: ANN001, ANN201
         """A Chebyshev cumulative density function.
 
         :param Chebyshev self:
@@ -88,15 +88,17 @@ class Chebyshev(Distribution):
         :param points:
             Matrix of points for defining the cumulative density function.
         :return:
-            An array of N values over the support of the Chebyshev (arcsine) distribution.
+            An array of N values over the support of the Chebyshev (arcsine)
+            distribution.
         :return:
-            Cumulative density values along the support of the Chebyshev (arcsine) distribution.
+            Cumulative density values along the support of the Chebyshev (arcsine)
+            distribution.
         """
         if points is not None:
             return self.parent.cdf(points)
         raise ValueError("Please digit an input for getCDF method")
 
-    def get_recurrence_coefficients(self, order):
+    def get_recurrence_coefficients(self, order):  # noqa: ANN001, ANN201
         """Recurrence coefficients for the Chebyshev distribution.
 
         :param Chebyshev self:
@@ -106,28 +108,28 @@ class Chebyshev(Distribution):
         :return:
             Recurrence coefficients associated with the Chebyshev distribution.
         """
-        ab = jacobi_recurrence_coefficients(
+        return jacobi_recurrence_coefficients(
             self.shape_parameter_A,
             self.shape_parameter_B,
             self.lower,
             self.upper,
             order,
         )
-        return ab
 
-    def get_icdf(self, xx):
+    def get_icdf(self, xx):  # noqa: ANN001, ANN201
         """A Arcisine inverse cumulative density function.
 
         :param Arcsine self:
             An instance of Arcisine class.
         :param xx:
-            A matrix of points at which the inverse cumulative density function needs to be evaluated.
+            A matrix of points at which the inverse cumulative density function needs to
+            be evaluated.
         :return:
             Inverse cumulative density function values of the Arcisine distribution.
         """
         return self.parent.ppf(xx)
 
-    def get_samples(self, m=None):
+    def get_samples(self, m=None):  # noqa: ANN001, ANN201
         """Generates samples from the Arcsine distribution.
 
         :param arcsine self:
@@ -136,8 +138,5 @@ class Chebyshev(Distribution):
             Number of random samples. If not provided, a default of 5e05 is assumed.
 
         """
-        if m is not None:
-            number = m
-        else:
-            number = 500000
+        number = m if m is not None else 500000
         return self.parent.rvs(size=number)

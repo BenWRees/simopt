@@ -2,15 +2,21 @@
 
 import contextlib
 from abc import ABC, abstractmethod
-from typing import Annotated, ClassVar
+from typing import Annotated, Any, ClassVar, cast
 
 import pandas as pd
 from boltons.typeutils import classproperty
 from pydantic import BaseModel, Field
 
 from mrg32k3a.mrg32k3a import MRG32k3a
-from simopt.problem import Problem, Solution
-from simopt.problem_types import ConstraintType, ObjectiveType, VariableType
+from simopt.multistage_problem import MultistageProblem
+from simopt.problem import ProblemLike, Solution
+from simopt.problem_types import (
+    ConstraintType,
+    ObjectiveType,
+    SolverProblemType,
+    VariableType,
+)
 from simopt.utils import get_specifications
 
 
@@ -108,6 +114,9 @@ class Solver(ABC):
     variable_type: ClassVar[VariableType]
     """Description of variable types."""
 
+    supported_problem_type: ClassVar[SolverProblemType] = SolverProblemType.BOTH
+    """Problem class support (Problem, MultistageProblem, or both)."""
+
     gradient_needed: ClassVar[bool]
     """True if gradient of objective function is needed, otherwise False."""
 
@@ -129,9 +138,10 @@ class Solver(ABC):
 
         self.recommended_solns = []
         self.intermediate_budgets = []
-        self.fn_estimates = [] 
+        self.fn_estimates = []
         self.budget_history = []
         self.iterations = []
+        self.policy_solutions: list = []
 
     def __eq__(self, other: object) -> bool:
         """Check if two solvers are equivalent.
@@ -184,21 +194,15 @@ class Solver(ABC):
         self.rng_list = rng_list
 
     @abstractmethod
-    def solve(self, problem: Problem) -> None:
+    def solve(self, problem: ProblemLike) -> None:
         """Run a single macroreplication of a solver on a problem.
 
         Args:
-            problem (Problem): Simulation-optimization problem to solve.
-
-        Returns:
-            tuple:
-                - list [Solution]: List of solutions recommended throughout the budget.
-                - list [int]: List of intermediate budgets when recommended solutions
-                    change.
+            problem: Simulation-optimization problem to solve.
         """
         raise NotImplementedError
 
-    def run(self, problem: Problem) -> tuple[pd.DataFrame, pd.DataFrame | None]:
+    def run(self, problem: ProblemLike) -> tuple[pd.DataFrame, pd.DataFrame | None]:
         """Run the solver on a problem.
 
         Args:
@@ -207,29 +211,91 @@ class Solver(ABC):
         Returns:
             tuple[pd.DataFrame, pd.DataFrame | None]: A tuple containing:
                 - Solution DataFrame with columns: step, budget, solution
-                - Iteration DataFrame with columns: iteration, budget_history, fn_estimate
+                - Iteration DataFrame with columns: iteration, budget_history,
+                fn_estimate
                   (or None if iteration data is not available)
         """
+        if not self.supports_problem(problem):
+            expected = self.supported_problem_type.display_name()
+            error_msg = (
+                f"{self.name} supports {expected} instances; "
+                f"got {type(problem).__name__}."
+            )
+            raise ValueError(error_msg)
+
         self.budget = Budget(problem.factors["budget"])
         with contextlib.suppress(BudgetExhaustedError):
             self.solve(problem)
 
+        # Auto-build policy solutions for multistage runs when a solver
+        # supports multistage problems but does not populate them directly.
+        if (
+            not self.policy_solutions
+            and self.supported_problem_type
+            in (
+                SolverProblemType.BOTH,
+                SolverProblemType.MULTISTAGE,
+            )
+            and isinstance(problem, MultistageProblem)
+            and self.recommended_solns
+        ):
+            # Import locally to avoid import cycles during module initialization.
+
+            def _stage0_decision(x: object) -> tuple[float, ...]:
+                if isinstance(x, tuple | list):
+                    if x and isinstance(x[0], tuple | list):
+                        nested = cast(tuple | list, x[0])
+                        return tuple(float(cast(Any, v)) for v in nested)
+                    base = cast(tuple | list, x)
+                    return tuple(float(cast(Any, v)) for v in base)
+                return ()
+
+            n_stages = problem.model.n_stages
+            auto_policy_solutions = []
+            for rec_sol in self.recommended_solns:
+                stage0_x = _stage0_decision(rec_sol.x)
+                if not stage0_x:
+                    continue
+
+                policy_fn = problem.build_policy(self, stage0_x)
+                decisions = tuple(
+                    stage0_x if t == 0 else tuple(0.0 for _ in stage0_x)
+                    for t in range(n_stages)
+                )
+                policy_solution = problem.create_policy_solution(
+                    decisions,
+                    policy=policy_fn,
+                )
+                policy_solution.attach_rngs(
+                    [
+                        MRG32k3a(s_ss_sss_index=[0, i, 0])
+                        for i in range(problem.model.n_rngs)
+                    ],
+                    copy=False,
+                )
+                auto_policy_solutions.append(policy_solution)
+
+            if auto_policy_solutions:
+                self.policy_solutions = auto_policy_solutions
+
         # Capture solution-level data
         recommended_solns = self.recommended_solns
         intermediate_budgets = self.intermediate_budgets
-        
+        policy_solutions = self.policy_solutions
+
         # Capture iteration-level data
         budget_history = self.budget_history
         fn_estimates = self.fn_estimates
         iterations = self.iterations
-        
+
         # Reset for next run
         self.recommended_solns = []
         self.intermediate_budgets = []
         self.budget_history = []
         self.fn_estimates = []
         self.iterations = []
-        
+        self.policy_solutions = []
+
         # Build the solution DataFrame
         solution_df = pd.DataFrame(
             {
@@ -238,8 +304,13 @@ class Solver(ABC):
                 "solution": recommended_solns,
             }
         )
-        solution_df["solution"] = solution_df["solution"].apply(lambda solution: solution.x)
-        
+        solution_df["solution"] = solution_df["solution"].apply(
+            lambda solution: solution.x
+        )
+
+        if policy_solutions and len(policy_solutions) == len(recommended_solns):
+            solution_df["policy_solution"] = policy_solutions
+
         # Build the iteration DataFrame (if data is available)
         iteration_df = None
         if iterations and budget_history and fn_estimates:
@@ -253,7 +324,7 @@ class Solver(ABC):
 
         return solution_df, iteration_df
 
-    def create_new_solution(self, x: tuple, problem: Problem) -> Solution:
+    def create_new_solution(self, x: tuple, problem: ProblemLike) -> Solution:
         """Create a new solution object with attached RNGs.
 
         Args:
@@ -274,3 +345,12 @@ class Solver(ABC):
                 for _ in range(problem.model.n_rngs):
                     rng.advance_substream()
         return new_solution
+
+    def supports_problem(self, problem: ProblemLike) -> bool:
+        """Return whether this solver supports the concrete problem class."""
+        is_multistage = isinstance(problem, MultistageProblem)
+        if self.supported_problem_type == SolverProblemType.BOTH:
+            return True
+        if self.supported_problem_type == SolverProblemType.MULTISTAGE:
+            return is_multistage
+        return not is_multistage

@@ -1,5 +1,7 @@
 """The samples template."""
 
+from typing import NoReturn
+
 from equadratures.sampling_methods.induced import Induced
 from equadratures.sampling_methods.montecarlo import Montecarlo
 from equadratures.sampling_methods.sparsegrid import Sparsegrid
@@ -8,12 +10,15 @@ from equadratures.sampling_methods.userdefined import Userdefined
 
 
 class Quadrature:
-    """The class defines a Sampling object. It serves as a template for all sampling methodologies.
+    """The class defines a Sampling object. It serves as a template for all sampling.
+
+    methodologies.
 
     Parameters
     ----------
     parameters : list
-        A list of parameters, where each element of the list is an instance of the Parameter class.
+        A list of parameters, where each element of the list is an instance of the
+        Parameter class.
     basis : Basis
         An instance of the Basis class corresponding to the multi-index set used.
     points : numpy.ndarray
@@ -26,7 +31,15 @@ class Quadrature:
         Description needed.
     """
 
-    def __init__(self, parameters, basis, points, mesh, corr=None, oversampling=14.0):
+    def __init__(  # noqa: D107
+        self,
+        parameters,  # noqa: ANN001
+        basis,  # noqa: ANN001
+        points,  # noqa: ANN001
+        mesh,  # noqa: ANN001
+        corr=None,  # noqa: ANN001
+        oversampling=14.0,  # noqa: ANN001
+    ) -> None:
         self.parameters = parameters
         self.basis = basis
         self.points = points
@@ -48,7 +61,7 @@ class Quadrature:
         else:
             error_message()
 
-    def get_points(self):
+    def get_points(self):  # noqa: ANN201
         """Returns the quadrature points.
 
         Returns:
@@ -58,7 +71,7 @@ class Quadrature:
         """
         return self.samples.points
 
-    def get_weights(self):
+    def get_weights(self):  # noqa: ANN201
         """Returns the quadrature weights.
 
         Returns:
@@ -68,16 +81,17 @@ class Quadrature:
         """
         return self.samples.weights
 
-    def get_points_and_weights(self):
+    def get_points_and_weights(self):  # noqa: ANN201
         """Returns the quadrature points and weights.
 
         Returns:
         -------
         tuple
-            Tuple (points,weights) containing two numpy.ndarray's; the quadrature points and weights.
+            Tuple (points,weights) containing two numpy.ndarray's; the quadrature points
+            and weights.
         """
         return self.samples.points, self.samples.weights
 
 
-def error_message():
+def error_message() -> NoReturn:  # noqa: D103
     raise ValueError("Oh no. Something went wrong in quadrature.py!")

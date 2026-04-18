@@ -7,9 +7,9 @@ import pickle
 from pathlib import Path
 
 import simopt.directory as directory
-from simopt.base import Problem, Solver
+from simopt.base import ProblemLike, Solver
 
-from .post_normalize import post_normalize
+from .post_normalize import post_normalize, post_normalize_policy
 from .single import EXPERIMENT_DIR, ProblemSolver
 
 # Workaround for AutoAPI
@@ -61,12 +61,12 @@ class ProblemsSolvers:
         self.__solvers = solvers
 
     @property
-    def problems(self) -> list[Problem]:
+    def problems(self) -> list[ProblemLike]:
         """List of problems."""
         return self.__problems
 
     @problems.setter
-    def problems(self, problems: list[Problem]) -> None:
+    def problems(self, problems: list[ProblemLike]) -> None:
         self.__problems = problems
 
     @property
@@ -110,13 +110,17 @@ class ProblemsSolvers:
         self.__experiments = experiments
 
     @property
-    def file_name_path(self) -> Path:
+    def file_name_path(self) -> Path | None:
         """Path to the .pickle file for saving the ProblemsSolvers object."""
         return self.__file_name_path
 
     @file_name_path.setter
-    def file_name_path(self, file_name_path: Path) -> None:
-        self.__file_name_path = file_name_path
+    def file_name_path(self, file_name_path: Path | str | None) -> None:
+        """Set the file path, coercing strings to pathlib.Path."""
+        if file_name_path is None:
+            self.__file_name_path = None
+        else:
+            self.__file_name_path = Path(file_name_path)
 
     @property
     def create_pair_pickles(self) -> bool:
@@ -148,9 +152,9 @@ class ProblemsSolvers:
         problem_renames: list[str] | None = None,
         fixed_factors_filename: str | None = None,
         solvers: list[Solver] | None = None,
-        problems: list[Problem] | None = None,
+        problems: list[ProblemLike] | None = None,
         experiments: list[list[ProblemSolver]] | None = None,
-        file_name_path: Path | None = None,
+        file_name_path: Path | str | None = None,
         create_pair_pickles: bool = False,
         experiment_name: str | None = None,
     ) -> None:
@@ -200,7 +204,7 @@ class ProblemsSolvers:
 
         if experiments is not None:  # Method #3
             self.experiments = experiments
-            self.solvers = [
+            self.solvers = [  # means that each inner list in experiments should have the same solver, so we can just take the first one in each inner list to get the solvers  # noqa: E501
                 experiments[idx][0].solver for idx in range(len(experiments))
             ]
             self.problems = [experiment.problem for experiment in experiments[0]]
@@ -353,6 +357,7 @@ class ProblemsSolvers:
                 self.all_solver_fixed_factors = all_factors.all_solver_fixed_factors
                 self.all_problem_fixed_factors = all_factors.all_problem_fixed_factors
                 self.all_model_fixed_factors = all_factors.all_model_fixed_factors
+
             # Create all problem-solver pairs (i.e., instances of ProblemSolver class).
             self.experiments = []
             for solver_idx in range(self.n_solvers):
@@ -528,17 +533,121 @@ class ProblemsSolvers:
             error_msg = "Number of postreplications must be positive."
             raise ValueError(error_msg)
 
-        for problem_idx in range(self.n_problems):
-            experiments_same_problem = [
-                self.experiments[solver_idx][problem_idx]
-                for solver_idx in range(self.n_solvers)
-            ]
+        # Group ALL experiments by problem name to ensure every solver for the
+        # same problem is normalized together with a common x*.  The previous
+        # approach indexed by position (problem_idx), which silently gave each
+        # solver its own x* when pickle load order differed across solvers.
+        problem_groups: dict[str, list[ProblemSolver]] = {}
+        for solver_experiments in self.experiments:
+            for experiment in solver_experiments:
+                problem_groups.setdefault(experiment.problem.name, []).append(
+                    experiment
+                )
+
+        for _problem_name, experiments_same_problem in problem_groups.items():
             post_normalize(
                 experiments=experiments_same_problem,
                 n_postreps_init_opt=n_postreps_init_opt,
                 crn_across_init_opt=crn_across_init_opt,
             )
         # Save ProblemsSolvers object to .pickle file.
+        self.record_group_experiment_results()
+
+    def post_replicate_policy(
+        self,
+        n_postreps: int,
+        crn_across_budget: bool = True,
+        crn_across_macroreps: bool = False,
+    ) -> None:
+        """Run policy postreplications for each problem-solver pair.
+
+        This is the policy counterpart of :meth:`post_replicate`.  For each
+        experiment whose problem is a ``MultistageProblem`` and whose solver
+        produced policy solutions, it calls
+        :meth:`~ProblemSolver.post_replicate_policy`.  Experiments without
+        policy solutions are post-replicated with the standard fixed-decision
+        method instead.
+
+        Args:
+            n_postreps: Number of postreplications per recommended solution.
+            crn_across_budget: Use CRN across budget checkpoints.
+            crn_across_macroreps: Use CRN across macroreplications.
+        """
+        if n_postreps <= 0:
+            raise ValueError("Number of postreplications must be positive.")
+
+        for solver_index in range(self.n_solvers):
+            for problem_index in range(self.n_problems):
+                experiment = self.experiments[solver_index][problem_index]
+                if experiment.has_postreplicated:
+                    continue
+                s_on_p = f"{experiment.solver.name} on {experiment.problem.name}"
+                if experiment.all_policy_solutions:
+                    logging.debug(f"Policy post-processing {s_on_p}.")
+                    experiment.post_replicate_policy(
+                        n_postreps, crn_across_budget, crn_across_macroreps
+                    )
+                else:
+                    logging.debug(f"Standard post-processing {s_on_p}.")
+                    experiment.post_replicate(
+                        n_postreps, crn_across_budget, crn_across_macroreps
+                    )
+        self.record_group_experiment_results()
+
+    def post_normalize_policy(
+        self, n_postreps_init_opt: int, crn_across_init_opt: bool = True
+    ) -> None:
+        """Build progress curves using policy evaluation where available.
+
+        For experiments on ``MultistageProblem`` instances that have policy
+        solutions, uses :func:`post_normalize_policy`.  Other experiments
+        fall back to the standard :func:`post_normalize`.
+
+        Args:
+            n_postreps_init_opt: Postreplications at initial and optimal policies.
+            crn_across_init_opt: Use CRN for x0/x* evaluation.
+        """
+        if n_postreps_init_opt <= 0:
+            raise ValueError("Number of postreplications must be positive.")
+
+        problem_groups: dict[str, list[ProblemSolver]] = {}
+        for solver_experiments in self.experiments:
+            for experiment in solver_experiments:
+                problem_groups.setdefault(experiment.problem.name, []).append(
+                    experiment
+                )
+
+        for _problem_name, experiments_same_problem in problem_groups.items():
+            # Check if ANY experiment in this group has policy solutions.
+            has_policies = any(
+                exp.all_policy_solutions for exp in experiments_same_problem
+            )
+            if has_policies:
+                # Split into policy and non-policy experiments.
+                policy_exps = [
+                    e for e in experiments_same_problem if e.all_policy_solutions
+                ]
+                standard_exps = [
+                    e for e in experiments_same_problem if not e.all_policy_solutions
+                ]
+                if policy_exps:
+                    post_normalize_policy(
+                        experiments=policy_exps,
+                        n_postreps_init_opt=n_postreps_init_opt,
+                        crn_across_init_opt=crn_across_init_opt,
+                    )
+                if standard_exps:
+                    post_normalize(
+                        experiments=standard_exps,
+                        n_postreps_init_opt=n_postreps_init_opt,
+                        crn_across_init_opt=crn_across_init_opt,
+                    )
+            else:
+                post_normalize(
+                    experiments=experiments_same_problem,
+                    n_postreps_init_opt=n_postreps_init_opt,
+                    crn_across_init_opt=crn_across_init_opt,
+                )
         self.record_group_experiment_results()
 
     def check_postreplicate(self) -> bool:
@@ -569,6 +678,8 @@ class ProblemsSolvers:
         """Saves a ProblemsSolvers object to a .pickle file in the outputs directory."""
         output_dir = EXPERIMENT_DIR / "outputs"
         output_dir.mkdir(parents=True, exist_ok=True)
+        if self.file_name_path is None:
+            raise RuntimeError("file_name_path is not set.")
         with self.file_name_path.open("wb") as file:
             pickle.dump(self, file, pickle.HIGHEST_PROTOCOL)
 
@@ -577,6 +688,8 @@ class ProblemsSolvers:
 
         The file is saved in the 'logs/' folder next to the experiment's pickle file.
         """
+        if self.file_name_path is None:
+            raise RuntimeError("file_name_path is not set.")
         # Create a new text file in experiment/{date/time of launch}/logs folder
         # with correct name.
         log_dir = self.file_name_path.parent.parent / "logs"

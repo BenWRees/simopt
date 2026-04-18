@@ -14,12 +14,15 @@ the solver can be found `here <https://simopt.readthedocs.io/en/latest/astrodf.h
 This version does not require a delta_max, instead it estimates the maximum step size
 using get_random_solution(). Parameter tuning on delta_max is therefore not needed and
 removed from this version as well.
-- Delta_max is so longer a factor, instead the maximum step size is estimated using get_random_solution().
-- Parameter tuning on delta_max is therefore not needed and removed from this version as well.
+- Delta_max is so longer a factor, instead the maximum step size is estimated using
+get_random_solution().
+- Parameter tuning on delta_max is therefore not needed and removed from this version as
+well.
 - No upper bound on sample size may be better - testing
-- It seems for SAN we always use pattern search - why? because the problem is convex and model may be misleading at the beginning
+- It seems for SAN we always use pattern search - why? because the problem is convex and
+model may be misleading at the beginning
 - Added sufficient reduction for the pattern search
-"""  # noqa: E501
+"""
 
 # TODO: check if bullet points can be indented and ignore tag removed
 
@@ -43,9 +46,7 @@ from simopt.base import (
     SolverConfig,
     VariableType,
 )
-
 from simopt.solver import BudgetExhaustedError
-
 
 
 class ASTRODFConfig(SolverConfig):
@@ -228,7 +229,9 @@ class ASTRODF(Solver):
         return rotate_matrix
 
     def evaluate_model(self, x_k: np.ndarray, q: np.ndarray) -> float:
-        """Evaluate a local quadratic model using linear interpolation and a diagonal Hessian.
+        """Evaluate a local quadratic model using linear interpolation and a diagonal.
+
+        Hessian.
 
         Args:
                 x_k (np.ndarray): The point at which to evaluate the model
@@ -237,7 +240,7 @@ class ASTRODF(Solver):
 
         Returns:
                 np.ndarray: The evaluated model value as a NumPy array.
-        """  # noqa: E501
+        """
         xk_arr = np.array(x_k).flatten()
         x_val = np.hstack(([1], xk_arr, xk_arr**2))
         return np.matmul(x_val, q).item()
@@ -360,7 +363,8 @@ class ASTRODF(Solver):
                 solution (Solution): The solution object being sampled.
                 pilot_run (int): The number of initial pilot runs.
                 delta_k (float): The current trust-region radius.
-                compute_kappa (bool): Whether or not to compute kappa dynamically (needed in
+                compute_kappa (bool): Whether or not to compute kappa dynamically
+                (needed in
                         the first iteration).
         """
         sample_size = solution.n_reps if solution.n_reps > 0 else pilot_run
@@ -517,7 +521,7 @@ class ASTRODF(Solver):
                 # Append the function estimate to the list
                 fval.append(-1 * self.problem.minmax[0] * adapt_soln.objectives_mean)
                 interpolation_solns.append(adapt_soln)
-            
+
             # construct the model and obtain the model coefficients
             q, grad, hessian = self.get_model_coefficients(var_z, fval, self.problem)
 
@@ -560,7 +564,8 @@ class ASTRODF(Solver):
 
         Returns:
                 tuple[np.ndarray, np.ndarray, np.ndarray]: A tuple containing:
-                        - q (np.ndarray): Coefficients of the fitted local quadratic model.
+                        - q (np.ndarray): Coefficients of the fitted local quadratic
+                        model.
                         - y_mean (np.ndarray): Mean of the y_var design points.
                         - fval_mean (np.ndarray): Mean of the function values.
         """
@@ -755,8 +760,10 @@ class ASTRODF(Solver):
             )
             self.recommended_solns.append(self.incumbent_solution)
             self.intermediate_budgets.append(self.budget.used)
-            self.locked_incumbent_objective = self.incumbent_solution.objectives_mean.item()
-            #Store the first iteration of fn_estimates, budget_history, iterations
+            self.locked_incumbent_objective = (
+                self.incumbent_solution.objectives_mean.item()
+            )
+            # Store the first iteration of fn_estimates, budget_history, iterations
             self.fn_estimates.append(self.locked_incumbent_objective)
             self.budget_history.append(self.budget.used)
             self.iterations.append(self.iteration_count)
@@ -1033,11 +1040,11 @@ class ASTRODF(Solver):
         self.kappa = None
 
     # TODO: add in the function estimates, budget history, and iterations
-    def solve(self, problem: Problem) -> None:  # noqa: D102
+    def solve(self, problem: Problem) -> None:  # noqa: D102  # ty: ignore[invalid-method-override]
         self.problem = problem
         self._initialize_solving()
 
-        try :
+        try:
             while self.budget.remaining > 0:
                 self.iterate()
                 if self.iteration_count > 1:
@@ -1052,8 +1059,8 @@ class ASTRODF(Solver):
                     self.record_update += 1
 
         except BudgetExhaustedError:
-            #record final iteration-level data
-            if self.record_update < self.iteration_count :
+            # record final iteration-level data
+            if self.record_update < self.iteration_count:
                 self.fn_estimates.append(self.locked_incumbent_objective)
                 self.budget_history.append(self.budget.used)
                 self.iterations.append(self.iteration_count)

@@ -10,20 +10,20 @@ from equadratures.sampling_methods.tensorgrid import Tensorgrid
 class Sparsegrid(Sampling):
     """The class defines a Tensorgrid sampling object.
 
-    :param list parameters: A list of parameters, where each element of the list is an instance of the Parameter class.
-    :param Basis basis: An instance of the Basis class corresponding to the multi-index set used.
+    :param list parameters: A list of parameters, where each element of the list is an
+    instance of the Parameter class.
+    :param Basis basis: An instance of the Basis class corresponding to the multi-index
+    set used.
     """
 
-    def __init__(self, parameters, basis):
+    def __init__(self, parameters, basis) -> None:  # noqa: ANN001, D107
         self.parameters = parameters
         self.basis = basis
         self.dimensions = len(self.parameters)
         self._set_sparsegrid_quadrature_rule()
-        super(Sparsegrid, self).__init__(
-            self.parameters, self.basis, self.points, self.weights
-        )
+        super().__init__(self.parameters, self.basis, self.points, self.weights)
 
-    def _set_sparsegrid_quadrature_rule(self, orders=None):
+    def _set_sparsegrid_quadrature_rule(self, orders=None) -> None:  # noqa: ANN001
         """Generates a sparse grid quadrature rule based on the parameters in Poly.
 
         :param Poly self:
@@ -31,13 +31,15 @@ class Sparsegrid(Sampling):
         :param list orders:
             A list of the highest polynomial orders along each dimension.
         :return:
-            **x**: A numpy.ndarray of sampled quadrature points with shape (number_of_samples, dimension).
+            **x**: A numpy.ndarray of sampled quadrature points with shape
+            (number_of_samples, dimension).
 
-            **w**: A numpy.ndarray of the corresponding quadrature weights with shape (number_of_samples, 1).
+            **w**: A numpy.ndarray of the corresponding quadrature weights with shape
+            (number_of_samples, 1).
         """
-        sparse_indices, sparse_factors, not_used = self.basis.get_basis()
+        sparse_indices, sparse_factors, _not_used = self.basis.get_basis()
         rows = len(sparse_indices)
-        cols = len(sparse_indices[0])
+        len(sparse_indices[0])
 
         # For storage we use dictionaries
         points_store = {}
@@ -46,8 +48,8 @@ class Sparsegrid(Sampling):
         self.tensor_product_list = []
         for i in range(0, rows):
             orders = sparse_indices[i, :]
-            myBasis = Basis("tensor-grid")
-            myTensor = Tensorgrid(
+            myBasis = Basis("tensor-grid")  # noqa: N806
+            myTensor = Tensorgrid(  # noqa: N806
                 parameters=self.parameters, basis=myBasis, orders=orders.astype(int)
             )
             self.tensor_product_list.append(myTensor)

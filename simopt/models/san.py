@@ -61,7 +61,7 @@ class SANConfig(BaseModel):
     arc_means: Annotated[
         tuple[float, ...],
         Field(
-            default=(1.0,) * NUM_ARCS,
+            default=(8.0,) * NUM_ARCS,
             description="mean task durations for each arc",
         ),
     ]
@@ -117,7 +117,7 @@ class SANLongestPathConfig(BaseModel):
     initial_solution: Annotated[
         tuple[float, ...],
         Field(
-            default_factory=lambda: (8,) * NUM_ARCS,
+            default_factory=lambda: (8.0,) * NUM_ARCS,
             description="initial solution",
         ),
     ]

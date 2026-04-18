@@ -15,7 +15,7 @@ class Chi(Distribution):
     Degrees of freedom for the chi-squared distribution.
     """
 
-    def __init__(self, dofs):
+    def __init__(self, dofs) -> None:  # noqa: ANN001, D107
         if dofs is None:
             self.dofs = 1
         else:
@@ -41,7 +41,7 @@ class Chi(Distribution):
         )
         self.parent = chi(self.dofs)
 
-    def get_description(self):
+    def get_description(self):  # noqa: ANN201
         """A description of the Chi-squared distribution.
 
         :param Chi-squared self:
@@ -49,14 +49,13 @@ class Chi(Distribution):
         :return:
             A string describing the Chi-squared distribution.
         """
-        text = (
+        return (
             "is a chi distribution which is characterised by its degrees of freedom, which here is"
             + str(self.dofs)
             + "."
         )
-        return text
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """A Chi  probability density function.
 
         :param Chi  self:
@@ -72,7 +71,7 @@ class Chi(Distribution):
             return self.parent.pdf(points)
         raise ValueError("Please digit an input for get_pdf method")
 
-    def get_cdf(self, points=None):
+    def get_cdf(self, points=None):  # noqa: ANN001, ANN201
         """A Chi cumulative density function.
 
         :param Chi self:
@@ -88,30 +87,29 @@ class Chi(Distribution):
             return self.parent.cdf(points)
         raise ValueError("Please digit an input for get_cdf method")
 
-    def get_icdf(self, xx):
+    def get_icdf(self, xx):  # noqa: ANN001, ANN201
         """A Chi inverse cumulative density function.
 
         :param Chi:
             An instance of Chi class
         :param matrix xx:
-            A matrix of points at which the inverse cumulative density function need to be evaluated.
+            A matrix of points at which the inverse cumulative density function need to
+            be evaluated.
         :return:
             Inverse cumulative density function values of the Chi distribution.
         """
         return self.parent.ppf(xx)
 
-    def get_samples(self, m=None):
+    def get_samples(self, m=None):  # noqa: ANN001, ANN201
         """Generates samples from the Chi distribution.
 
         :param Chi self:
             An instance of Chi class
         :param integer m:
-            Number of random samples. If no value is provided, a default of 5e05 is assumed.
+            Number of random samples. If no value is provided, a default of 5e05 is
+            assumed.
         :return:
             A N-by-1 vector that contains the samples.
         """
-        if m is not None:
-            number = m
-        else:
-            number = 500000
+        number = m if m is not None else 500000
         return self.parent.rvs(size=number)

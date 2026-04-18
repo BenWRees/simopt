@@ -1,5 +1,5 @@
 # type: ignore
-"""Local linear models for use in other functions"""
+"""Local linear models for use in other functions."""
 
 import numpy as np
 import scipy.linalg
@@ -16,18 +16,18 @@ __all__ = ["local_linear", "local_linear_grads", "perplexity_bandwidth"]
 
 
 @lru_cache(maxsize=10)
-def _compute_p1(M, perplexity):
-    r"""The constant appearing in VC13, eq. 9"""
+def _compute_p1(M, perplexity):  # noqa: ANN001, ANN202, N803
+    r"""The constant appearing in VC13, eq. 9."""
+
     # res = root_scalar(lambda x: np.log(min(np.sqrt(2*M), perplexity)) - 2*(1 - x)*np.log(M/(2*(1 - x))), bracket = [3./4,1 - 1e-14],)
     # p1 = res.root
     # Instead we solve in terms of x = 2*(1-p1)
     # x * log(N/x) = x * log(N) - x*log(x)
     # and xlogy(x, x) = x * log(x)
-    fun = (
-        lambda x: x * np.log(M)
-        - xlogy(x, x)
-        - np.log(np.min([np.sqrt(2 * M), perplexity]))
-    )
+    def fun(x):  # noqa: ANN001, ANN202
+        return (
+            x * np.log(M) - xlogy(x, x) - np.log(np.min([np.sqrt(2 * M), perplexity]))
+        )
 
     try:
         res = root_scalar(fun, bracket=[0, 0.5])
@@ -38,13 +38,12 @@ def _compute_p1(M, perplexity):
         elif np.isclose(fun(0), 0):
             x = 0
         else:
-            raise ValueError
+            raise ValueError  # noqa: B904
 
-    p1 = 1.0 - x / 2.0
-    return p1
+    return 1.0 - x / 2.0
 
 
-def log_entropy(beta, d):
+def log_entropy(beta, d):  # noqa: ANN001, ANN202
     p = np.exp(-beta * d)
     sum_p = np.sum(p)
     # Shannon entropy H = np.sum(-p*np.log2(p))
@@ -52,8 +51,8 @@ def log_entropy(beta, d):
     return beta * np.sum(p * d / sum_p) + np.log(sum_p)
 
 
-def perplexity_bandwidth(d, perplexity):
-    r"""Compute the bandwidth such that the exponential kernel has the desired perplexity
+def perplexity_bandwidth(d, perplexity):  # noqa: ANN001, ANN201
+    r"""Compute the bandwidth such that the exponential kernel has the desired perplexity.  # noqa: E501.
 
     Parameters
     ----------
@@ -67,18 +66,18 @@ def perplexity_bandwidth(d, perplexity):
     bandwidth: float
             Bandwidth of Gaussian kernel (includes 1/2 factor)
     """
-    M = len(d)
+    M = len(d)  # noqa: N806
     # TODO: Is perplexity necessarily in this interval
     # perplexity = min(M, perplexity)
 
     p1 = _compute_p1(M, perplexity)
     # Compute upper and lower bounds of beta from [VC13, eq. (7) (8)]
     # These are constants appearing the bounds
-    dM = np.max(d)
+    dM = np.max(d)  # noqa: N806
     d1 = np.min(d[d > 0])
     delta2 = d - d1
     delta2 = np.min(delta2[delta2 > 0])
-    deltaM = dM - d1
+    deltaM = dM - d1  # noqa: N806
 
     # lower bound VC13 (7)
     beta1 = max(
@@ -116,25 +115,32 @@ def perplexity_bandwidth(d, perplexity):
     return beta
 
 
-def local_linear(X, fX, perplexity=None, bandwidth: float | None | str = None, Xt=None):
-    r"""Construct local linear models at specified points
+def local_linear(X, fX, perplexity=None, bandwidth: float | None | str = None, Xt=None):  # noqa: ANN001, ANN201, N803
+    r"""Construct local linear models at specified points.
 
-    In several dimension reduction settings we want to estimate gradients using only samples.
-    If we had freedom to place these samples anywhere we wanted, we would use a finite difference
-    approach.  As this is often not the case, we need some way to estimate gradients given a
+    In several dimension reduction settings we want to estimate gradients using only
+    samples.
+    If we had freedom to place these samples anywhere we wanted, we would use a finite
+    difference
+    approach.  As this is often not the case, we need some way to estimate gradients
+    given a
     fixed and arbitrary set of data.
 
     Local linear models provide one approach for estimating the gradient.
-    This approach constructs a local linear model centered around each :math:`\mathbf{x}_t`
+    This approach constructs a local linear model centered around each
+    :math:`\mathbf{x}_t`
     with weights depending on the distance between points
 
     .. math::
             \min_{a_0\in \mathbb{R}, \mathbf{a}\in \mathbb{R}^m}
-                    \sum_{i=1}^M [(a_0 + \mathbf{a}^\top \mathbf{x}_i) - f(\mathbf{x}_i)]^2 e^{-\beta_t \| \mathbf{x}_i - \mathbf{x}_t\|_2^2}.
+                    \sum_{i=1}^M [(a_0 + \mathbf{a}^\top \mathbf{x}_i) -
+                    f(\mathbf{x}_i)]^2 e^{-\beta_t \| \mathbf{x}_i -
+                    \mathbf{x}_t\|_2^2}.
 
     The choice of :math:`\beta_t` is critical. Here we provide two main options.
     By default, we choose :math:`\beta_t` for each :math:`\mathbf{x}_t`
-    such that the perplexity corresponds to :math:`m+1`; other values of perplexity are avalible setting :code:`perplexity`.
+    such that the perplexity corresponds to :math:`m+1`; other values of perplexity are
+    avalible setting :code:`perplexity`.
     The other option is to specify the bandwidth :math:`\beta` explicitly.
 
 
@@ -159,14 +165,14 @@ def local_linear(X, fX, perplexity=None, bandwidth: float | None | str = None, X
             Matrix of coefficients of linear model;
             A[:,0] is the constant term and A[:,1:m+1] is the linear coefficients.
     """
-    M, m = X.shape
-    fX = fX.flatten()
+    M, m = X.shape  # noqa: N806
+    fX = fX.flatten()  # noqa: N806
     assert len(fX) == M, (
         "Number of function evaluations does not match number of samples"
     )
 
     if Xt is None:
-        Xt = X
+        Xt = X  # noqa: N806
 
     if perplexity is None and bandwidth is None:
         perplexity = min(m + 1, M)
@@ -182,17 +188,17 @@ def local_linear(X, fX, perplexity=None, bandwidth: float | None | str = None, X
             bandwidth = 2.34 * M ** (-1.0 / (max(M, 3) + 6))
 
     # Storage for the gradients
-    grads = np.zeros((len(Xt), m))
-    Y = np.hstack([np.ones((M, 1)), X])
+    np.zeros((len(Xt), m))
+    Y = np.hstack([np.ones((M, 1)), X])  # noqa: N806
 
     # Coefficients in linear models
-    A = np.zeros((M, m + 1))
+    A = np.zeros((M, m + 1))  # noqa: N806
     for i, xi in enumerate(Xt):
         d = cdist(X, xi.reshape(1, -1), "sqeuclidean").flatten()
         if perplexity:
             beta = perplexity_bandwidth(d, perplexity)
         # this has been added due to Python's new type safety
-        elif type(bandwidth) == float:
+        elif type(bandwidth) == float:  # noqa: E721
             beta = 0.5 * bandwidth
         else:
             beta = 0.5
@@ -213,7 +219,7 @@ def local_linear(X, fX, perplexity=None, bandwidth: float | None | str = None, X
     return A
 
 
-def local_linear_grads(X, fX, perplexity=None, bandwidth=None, Xt=None):
-    r"""Estimates the gradient from a local linear model"""
-    A = local_linear(X, fX, perplexity=perplexity, bandwidth=bandwidth, Xt=Xt)
+def local_linear_grads(X, fX, perplexity=None, bandwidth=None, Xt=None):  # noqa: ANN001, ANN201, N803
+    r"""Estimates the gradient from a local linear model."""
+    A = local_linear(X, fX, perplexity=perplexity, bandwidth=bandwidth, Xt=Xt)  # noqa: N806
     return A[:, 1:]

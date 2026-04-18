@@ -19,7 +19,7 @@ class Triangular(Distribution):
         Mode of the distribution.
     """
 
-    def __init__(self, lower=None, upper=None, mode=None):
+    def __init__(self, lower=None, upper=None, mode=None) -> None:  # noqa: ANN001, D107
         self.lower = lower  # loc
         self.upper = upper
         self.mode = mode
@@ -44,13 +44,13 @@ class Triangular(Distribution):
             )
             self.parent = triang(loc=self.lower, scale=self.scale, c=self.shape)
 
-    def get_description(self):
+    def get_description(self):  # noqa: ANN201
         """Returns the description of the distribution.
 
         :param Distribution self:
                 An instance of the distribution class.
         """
-        text = (
+        return (
             "is a triangular distribution with a mode of "
             + str(self.mode)
             + " over the support "
@@ -59,9 +59,8 @@ class Triangular(Distribution):
             + str(self.upper)
             + "."
         )
-        return text
 
-    def get_cdf(self, points=None):
+    def get_cdf(self, points=None):  # noqa: ANN001, ANN201
         """Returns the CDF of the distribution.
 
         :param Distribution self:
@@ -71,7 +70,7 @@ class Triangular(Distribution):
             return self.parent.cdf(points)
         raise ValueError("Please digit an input for getCDF method")
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """Returns the PDF of the distribution.
 
         :param Distribution self:
@@ -81,7 +80,7 @@ class Triangular(Distribution):
             return self.parent.pdf(points)
         raise ValueError("Please digit an input for get_pdf method")
 
-    def get_icdf(self, xx):
+    def get_icdf(self, xx):  # noqa: ANN001, ANN201
         """An inverse cumulative density function.
 
         :param Distribution self:
@@ -93,18 +92,16 @@ class Triangular(Distribution):
         """
         return self.parent.ppf(xx)
 
-    def get_samples(self, m=None):
+    def get_samples(self, m=None):  # noqa: ANN001, ANN201
         """Generates samples from the distribution.
 
         :param Distribution self:
             An instance of the distribution class.
         :param integer m:
-            Number of random samples. If no value is provided, a default of 5e5 is assumed.
+            Number of random samples. If no value is provided, a default of 5e5 is
+            assumed.
         :return:
             A N-by-1 vector that contains the samples.
         """
-        if m is not None:
-            number = m
-        else:
-            number = 500000
+        number = m if m is not None else 500000
         return self.parent.rvs(size=number)

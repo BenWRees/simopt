@@ -1,6 +1,6 @@
 # This module is constructed out of the psdr library (https://github.com/jeffrey-hokanson/PSDR)
 # type: ignore
-"""Ridge function approximation from function values"""
+"""Ridge function approximation from function values."""
 # (c) 2017 Jeffrey M. Hokanson (jeffrey@hokanson.us)
 
 import warnings
@@ -13,7 +13,7 @@ import scipy.special
 from simopt.base import Problem
 from simopt.solvers.GeometryImprovement import GeometryImprovement
 
-from .basis import *
+from .basis import *  # noqa: F403
 from .basis import Basis
 from .gauss_newton import gauss_newton
 from .local_linear import local_linear_grads
@@ -23,22 +23,22 @@ from .seqlp import sequential_lp
 
 
 # From .misc
-def merge(x, y):
+def merge(x, y):  # noqa: ANN001, ANN201, D103
     z = x.copy()
     z.update(y)
     return z
 
 
-def check_sample_inputs(X, fX, grads):
+def check_sample_inputs(X, fX, grads):  # noqa: ANN001, ANN201, D103, N803
     if X is not None and fX is not None:
-        X = np.array(X)
-        fX = np.array(fX).flatten()
+        X = np.array(X)  # noqa: N806
+        fX = np.array(fX).flatten()  # noqa: N806
         assert len(X) == len(fX), (
             "Number of samples doesn't match number of evaluations"
         )
     else:
-        X = None
-        fX = None
+        X = None  # noqa: N806
+        fX = None  # noqa: N806
 
     if grads is not None:
         grads = np.array(grads)
@@ -47,62 +47,66 @@ def check_sample_inputs(X, fX, grads):
                 "Dimensions of gradients doesn't match dimension of samples"
             )
 
+    if X is None and grads is None:
+        msg = "At least one of X or grads must be provided"
+        raise ValueError(msg)
     if X is None:
-        X = np.zeros((0, grads.shape[1]))
-        fX = np.zeros((0,))
+        X = np.zeros((0, grads.shape[1]))  # noqa: N806
+        fX = np.zeros((0,))  # noqa: N806
     if grads is None:
         grads = np.zeros((0, X.shape[1]))
     return X, fX, grads
 
 
 # from .initialisation
-def initialize_subspace(X=None, fX=None, grads=None, n_grads=100):
-    r"""Construct an initial estimate of the desired subspace"""
-    X, fX, grads = check_sample_inputs(X, fX, grads)
+def initialize_subspace(X=None, fX=None, grads=None, n_grads=100):  # noqa: ANN001, ANN201, N803
+    r"""Construct an initial estimate of the desired subspace."""
+    X, fX, grads = check_sample_inputs(X, fX, grads)  # noqa: N806
     n_grads = max(n_grads, X.shape[1])
     # If we don't have enough grads and we have enough samples to estimate gradients
     if len(grads) < n_grads and X.shape[0] >= X.shape[1] + 1:
         # Pick a random subset to estimate the gradient at
-        I = np.random.permutation(X.shape[0])[: n_grads - len(grads)]
+        I = np.random.permutation(X.shape[0])[: n_grads - len(grads)]  # noqa: E741, N806
         grad_est = local_linear_grads(X, fX, Xt=X[I])
         all_grads = np.vstack([grads, grad_est])
     else:
         all_grads = grads
 
     # Compute SVD
-    U, s, VH = scipy.linalg.svd(all_grads.T, full_matrices=False, compute_uv=True)
+    U, _s, _VH = scipy.linalg.svd(all_grads.T, full_matrices=False, compute_uv=True)  # noqa: N806
     return U
 
 
 class PolynomialRidgeFunction(RidgeFunction):
-    r"""A polynomial ridge function"""
+    r"""A polynomial ridge function."""
 
-    def __init__(self, basis, coef, U):
+    def __init__(self, basis, coef, U) -> None:  # noqa: ANN001, D107, N803
         self.Basis = basis
         self.coef = np.copy(coef)
         self._U = np.array(U)
         self.problem = None
 
-    def V(self, X, dim, U=None):
-        """Build the Vandermonde Matrix out of the current sample points
+    def V(self, X, dim, U=None):  # noqa: ANN001, ANN201, D417, N802, N803
+        """Build the Vandermonde Matrix out of the current sample points.
 
         Args:
                 X (np.ndarray): a numpy matrix of M sample points of dimension IR^m
-                U (np.ndarray, None): The active subspace basis matrix. Defaults to None.
+                U (np.ndarray, None): The active subspace basis matrix. Defaults to
+                None.
 
         Returns:
                 np.ndarray: The vandermonde matrix computed from the samples X.
         """
         if U is None:
-            U = self._U
+            U = self._U  # noqa: N806
         if len(X.shape) == 1:
-            X = X.reshape(-1, 1)
-        X = np.array(X)
-        Y = U.T @ X
+            X = X.reshape(-1, 1)  # noqa: N806
+        X = np.array(X)  # noqa: N806
+        Y = U.T @ X  # noqa: N806
         return self.Basis.V(Y, dim)
 
-    def DV(self, X, dim, U=None):
-        """Column-wise derivative of the vandermonde matrix
+    def DV(self, X, dim, U=None):  # noqa: ANN001, ANN201, D417, N802, N803
+        """Column-wise derivative of the vandermonde matrix.
 
         Args:
                 X (_type_): _description_
@@ -112,48 +116,47 @@ class PolynomialRidgeFunction(RidgeFunction):
                 _type_: _description_
         """
         if U is None:
-            U = self._U
+            U = self._U  # noqa: N806
 
-        Y = (U.T @ X.T).T
+        Y = (U.T @ X.T).T  # noqa: N806
         return self.Basis.DV(Y, dim)
 
-    def DDV(self, X, dim, U=None):
+    def DDV(self, X, dim, U=None):  # noqa: ANN001, ANN201, D102, N802, N803
         if U is None:
-            U = self._U
-        Y = (U.T @ X.T).T
+            U = self._U  # noqa: N806
+        Y = (U.T @ X.T).T  # noqa: N806
         return self.Basis.DDV(Y, dim)
 
-    def eval(self, X, dim, **kwargs):
-        Vc = self.V(X, dim) @ self.coef
-        return Vc
+    def eval(self, X, dim, **kwargs):  # noqa: ANN001, ANN003, ANN201, ARG002, D102, N803
+        return self.V(X, dim) @ self.coef
 
-    def grad(self, X, dim):
+    def grad(self, X, dim):  # noqa: ANN001, ANN201, D102, N803
         if len(X.shape) == 1:
             one_d = True
-            X = X.reshape(1, -1)
+            X = X.reshape(1, -1)  # noqa: N806
         else:
             one_d = False
 
-        DV = self.DV(X, dim)
+        DV = self.DV(X, dim)  # noqa: N806
         # Compute gradient on projected space
-        Df = np.tensordot(DV, self.coef, axes=(1, 0))
+        Df = np.tensordot(DV, self.coef, axes=(1, 0))  # noqa: N806
         # Inflate back to whole space
-        Df = Df.dot(self._U.T)
+        Df = Df.dot(self._U.T)  # noqa: N806
         if one_d:
             return Df.reshape(X.shape[1])
         return Df
 
-    def hessian(self, X, dim):
+    def hessian(self, X, dim):  # noqa: ANN001, ANN201, D102, N803
         if len(X.shape) == 1:
             one_d = True
-            X = X.reshape(1, -1)
+            X = X.reshape(1, -1)  # noqa: N806
         else:
             one_d = False
 
-        DDV = self.DDV(X, dim)
-        DDf = np.tensordot(DDV, self.coef, axes=(1, 0))
+        DDV = self.DDV(X, dim)  # noqa: N806
+        DDf = np.tensordot(DDV, self.coef, axes=(1, 0))  # noqa: N806
         # Inflate back to proper dimensions
-        DDf = np.tensordot(
+        DDf = np.tensordot(  # noqa: N806
             np.tensordot(DDf, self._U, axes=(2, 1)), self._U, axes=(1, 1)
         )
         if one_d:
@@ -161,30 +164,29 @@ class PolynomialRidgeFunction(RidgeFunction):
         return DDf
 
     @property
-    def profile(self):
+    def profile(self):  # noqa: ANN201, D102
         return PolynomialFunction(self.Basis, self.coef)
 
 
 ################################################################################
 # Two types of custom errors raised by PolynomialRidgeApproximation
 ################################################################################
-class UnderdeterminedException(Exception):
+class UnderdeterminedException(Exception):  # noqa: D101, N818
     pass
 
 
-class IllposedException(Exception):
+class IllposedException(Exception):  # noqa: D101, N818
     pass
 
 
-def orth(U):
-    """Orthgonalize, but keep directions"""
-    U, R = np.linalg.qr(U, mode="reduced")
-    U = np.dot(U, np.diag(np.sign(np.diag(R))))
-    return U
+def orth(U):  # noqa: ANN001, ANN201, N803
+    """Orthgonalize, but keep directions."""
+    U, R = np.linalg.qr(U, mode="reduced")  # noqa: N806
+    return np.dot(U, np.diag(np.sign(np.diag(R))))
 
 
-def inf_norm_fit(A, b):
-    r"""Solve inf-norm linear optimization problem
+def inf_norm_fit(A, b):  # noqa: ANN001, ANN201, N803
+    r"""Solve inf-norm linear optimization problem.
 
     .. math::
 
@@ -200,8 +202,8 @@ def inf_norm_fit(A, b):
         return x.value
 
 
-def one_norm_fit(A, b):
-    r"""Solve 1-norm linear optimization problem
+def one_norm_fit(A, b):  # noqa: ANN001, ANN201, N803
+    r"""Solve 1-norm linear optimization problem.
 
     .. math::
 
@@ -217,8 +219,8 @@ def one_norm_fit(A, b):
         return x.value
 
 
-def two_norm_fit(A, b):
-    r"""Solve 2-norm linear optimization problem
+def two_norm_fit(A, b):  # noqa: ANN001, ANN201, N803
+    r"""Solve 2-norm linear optimization problem.
 
     .. math::
 
@@ -229,8 +231,8 @@ def two_norm_fit(A, b):
     # return scipy.linalg.lstsq(A, b)[0]
 
 
-def bound_fit(A, b, norm=2):
-    r"""Solve a norm constrained problem
+def bound_fit(A, b, norm=2):  # noqa: ANN001, ANN201, N803
+    r"""Solve a norm constrained problem.
 
     .. math::
 
@@ -259,24 +261,27 @@ def bound_fit(A, b, norm=2):
 
 
 class PolynomialRidgeApproximation(PolynomialRidgeFunction):
-    r"""Constructs a ridge approximation using a total degree approximation
+    r"""Constructs a ridge approximation using a total degree approximation.
 
     Given a basis of total degree polynomials :math:`\lbrace \psi_j \rbrace_{j=1}^N`
     on :math:`\mathbb{R}^n`, this class constructs a polynomial ridge function 
-    that minimizes the mismatch on a set of points :math:`\lbrace \mathbf{x}_i\rbrace_{i=1}^M \subset \mathbb{R}^m`
+    that minimizes the mismatch on a set of points :math:`\lbrace
+    \mathbf{x}_i\rbrace_{i=1}^M \subset \mathbb{R}^m`
     in a :math:`p`-norm:
 
     .. math::
 
-    \min_{\mathbf{U} \in \mathbb{R}^{m\times n}, \  \mathbf{U}^\top \mathbf{U} = \mathbf I, \
-			\mathbf{c}\in \mathbb{R}^N }
+    \min_{\mathbf{U} \in \mathbb{R}^{m\times n}, \  \mathbf{U}^\top \mathbf{U} = \mathbf
+    I, \
+    \mathbf{c}\in \mathbb{R}^N }
     \sqrt[p]{ \sum_{i=1}^M  \left|f(\mathbf{x}_i) - 
 				\sum_{j=1}^N c_j \psi_j(\mathbf{U}^\top \mathbf{x}_i) \right|^p}
 
     This approach assumes :math:`\mathbf{U}` is an element of the Grassmann manifold
     obeying the orthogonality constraint.  
 
-    For the 2-norm (:math:`p=2`) this implementation uses Variable Projection following [HC18]_ 
+    For the 2-norm (:math:`p=2`) this implementation uses Variable Projection following
+    [HC18]_
     to remove the solution of the linear coefficients :math:`\mathbf{c}`,
     leaving an optimization problem posed over the Grassmann manifold alone.
 
@@ -305,7 +310,8 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
     If 'lower' or 'upper' construct a lower or upper bound
 
     rotate: bool
-    If True, rotate the U matrix to align to the active subspace with average increasing gradients
+    If True, rotate the U matrix to align to the active subspace with average increasing
+    gradients
 
     References:
     ----------
@@ -315,10 +321,10 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
     """
 
     @property
-    def dim(self):
+    def dim(self):  # noqa: ANN201, D102
         return self._U.shape[0]
 
-    def __init__(
+    def __init__(  # noqa: D107
         self,
         degree: int,
         subspace_dimension: int,
@@ -326,12 +332,12 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
         basis: Basis,
         geometry_instance: GeometryImprovement,
         norm: int = 2,
-        n_init=1,
-        scale=True,
-        keep_data=True,
-        rotate=True,
-        **kwargs,
-    ):
+        n_init=1,  # noqa: ANN001, ARG002
+        scale=True,  # noqa: ANN001
+        keep_data=True,  # noqa: ANN001
+        rotate=True,  # noqa: ANN001
+        **kwargs,  # noqa: ANN003
+    ) -> None:
         self.kwargs = kwargs
         self.rotate = rotate
         assert isinstance(degree, int)
@@ -400,38 +406,38 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
         # super().__init__(basis = self.Basis(self.degree), coef = None, U = None)
 
-    def __len__(self):
+    def __len__(self) -> int:  # noqa: D105
         return self.U.shape[0]
 
-    def __str__(self):
-        return "<PolynomialRidgeApproximation degree %d, subspace dimension %d>" % (
+    def __str__(self) -> str:  # noqa: D105
+        return "<PolynomialRidgeApproximation degree %d, subspace dimension %d>" % (  # noqa: UP031
             self.degree,
             self.subspace_dimension,
         )
 
-    def fit_fixed_subspace(self, X, fX, U, dim):
-        r""" """
-        assert U.shape[0] == X.shape[1], "U has %d rows, expected %d based on X" % (
+    def fit_fixed_subspace(self, X, fX, U, dim) -> None:  # noqa: ANN001, N803
+        r""" """  # noqa: D419
+        assert U.shape[0] == X.shape[1], "U has %d rows, expected %d based on X" % (  # noqa: UP031
             U.shape[0],
             X.shape[1],
         )
         assert U.shape[1] == self.subspace_dimension, (
-            "U has %d columns; expected %d" % (U.shape[1], dim)
+            "U has %d columns; expected %d" % (U.shape[1], dim)  # noqa: UP031
         )
         self._finish(X, fX, U, dim)
 
     def fit(
         self,
-        X,
-        fX,
-        x,
-        f,
-        delta_k,
-        interpolation_sols,
-        subspace_dimension,
-        visited_pts_list,
-        U0=None,
-    ):
+        X,  # noqa: ANN001, N803
+        fX,  # noqa: ANN001, N803
+        x,  # noqa: ANN001
+        f,  # noqa: ANN001
+        delta_k,  # noqa: ANN001
+        interpolation_sols,  # noqa: ANN001
+        subspace_dimension,  # noqa: ANN001
+        visited_pts_list,  # noqa: ANN001
+        U0=None,  # noqa: ANN001, N803
+    ) -> None:
         r"""Given samples, fit the polynomial ridge approximation.
 
         Parameters
@@ -445,8 +451,8 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
         kwargs = self.kwargs
         self.subspace_dimension = subspace_dimension
 
-        X = np.array(X)
-        fX = np.array(fX).flatten()
+        X = np.array(X)  # noqa: N806
+        fX = np.array(fX).flatten()  # noqa: N806
 
         # print(f'shape of X is {X.shape}, shape of fX is {fX.shape}, subspace dimension is {subspace_dimension}, degree is {self.degree}')
 
@@ -476,22 +482,22 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
         if U0 is not None:
             # Check that U0 has the right shape
-            U0 = np.array(U0)
+            U0 = np.array(U0)  # noqa: N806
             assert U0.shape[0] == X.shape[1], (
-                "U0 has %d rows, expected %d based on X" % (U0.shape[0], X.shape[1])
+                "U0 has %d rows, expected %d based on X" % (U0.shape[0], X.shape[1])  # noqa: UP031
             )
             assert U0.shape[1] == subspace_dimension, (
-                "U0 has %d columns; expected %d"
+                "U0 has %d columns; expected %d"  # noqa: UP031
                 % (U0.shape[1], self.subspace_dimension)
             )
         else:
-            U0 = initialize_subspace(X=X, fX=fX)[:, :subspace_dimension]
+            U0 = initialize_subspace(X=X, fX=fX)[:, :subspace_dimension]  # noqa: N806
 
         # Orthogonalize just to make sure the starting value satisfies constraints
-        U0 = orth(U0)
+        U0 = orth(U0)  # noqa: N806
 
-        prev_U = np.zeros(U0.shape)
-        U = np.copy(U0)
+        prev_U = np.zeros(U0.shape)  # noqa: N806
+        U = np.copy(U0)  # noqa: N806
         k = 0
 
         # * undergo geometry improvement on X, by calculating coefficients and checking they meet criticality conditions
@@ -499,7 +505,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
             # print(f'iteration {k} of fitting the ridge function')
             while True:
                 self.coef = self._fit_coef(X, fX, U0, subspace_dimension)
-                Y = (U0.T @ X.T).T
+                Y = (U0.T @ X.T).T  # noqa: N806
                 if (
                     delta_k
                     <= np.linalg.norm(self.profile.grad(Y, subspace_dimension)) * 1000
@@ -507,39 +513,37 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
                     self.delta_k = delta_k
                     self.interpolation_sols = interpolation_sols
                     break
-                X, fX, interpolation_sols, visited_pts_list, delta_k = (
+                X, fX, interpolation_sols, visited_pts_list, delta_k = (  # noqa: N806
                     self.geometry_improvement.improve_geometry(
                         x, f, delta_k, U0, visited_pts_list, X, fX
                     )
                 )
 
             # TODO Implement multiple initializations
-            if self.norm == 2 and self.bound == None:
+            if self.norm == 2 and self.bound is None:
                 self._fit_varpro(X, fX, U0, subspace_dimension, **kwargs)
-                prev_U = np.copy(U)
-                U = self._U
+                prev_U = np.copy(U)  # noqa: N806
+                U = self._U  # noqa: N806
                 k += 1
 
             else:
                 self._fit_alternating(X, fX, U0, subspace_dimension, **kwargs)
-                prev_U = np.copy(U)
-                U = self._U
+                prev_U = np.copy(U)  # noqa: N806
+                U = self._U  # noqa: N806
                 k += 1
 
     ################################################################################
     # Specialized Affine fits
-    def _fit_affine(self, X, fX):
-        r"""Solves the affine"""
+    def _fit_affine(self, X, fX):  # noqa: ANN001, ANN202, N803
+        r"""Solves the affine."""
         # Normalize the domain
         # lb = np.min(X, axis = 0)
-        lb = self.problem.lower_bounds
         # ub = np.max(X, axis = 0)
-        ub = self.problem.upper_bounds
         # dom = BoxDomain(lb, ub)
-        XX = np.hstack([self.normalize(X, self.problem), np.ones((X.shape[0], 1))])
+        XX = np.hstack([self.normalize(X, self.problem), np.ones((X.shape[0], 1))])  # noqa: N806
 
         # Normalize the output
-        fX = (fX - np.min(fX)) / (np.max(fX) - np.min(fX))
+        fX = (fX - np.min(fX)) / (np.max(fX) - np.min(fX))  # noqa: N806
         b = np.zeros(fX.shape)
         if self.bound is None:
             if self.norm == 1:
@@ -554,19 +558,19 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
         elif self.bound == "upper":
             b = bound_fit(-XX, -fX, norm=self.norm)
 
-        U = b[0:-1].reshape(-1, 1)
+        U = b[0:-1].reshape(-1, 1)  # noqa: N806
         # Correct for transform
-        U = self.normalize_der(self.problem).dot(U)
+        U = self.normalize_der(self.problem).dot(U)  # noqa: N806
         # Force to have unit norm
-        U /= np.linalg.norm(U)
+        U /= np.linalg.norm(U)  # noqa: N806
         return U
 
-    def _fit_coef(self, X, fX, U, dim):
-        r"""Returns the linear coefficients"""
-        Y = (U.T @ X.T).T
+    def _fit_coef(self, X, fX, U, dim):  # noqa: ANN001, ANN202, N803
+        r"""Returns the linear coefficients."""
+        Y = (U.T @ X.T).T  # noqa: N806
         # print(f'shape of Y is {Y.shape}')
         # self.basis = self.Basis(self.degree, X = Y)
-        V = self.Basis.V(Y, dim)
+        V = self.Basis.V(Y, dim)  # noqa: N806
         # print(f'V has shape {V.shape}, fX has shape {fX.shape}')
         c = np.zeros(fX.shape)
         if self.bound is None:
@@ -585,9 +589,9 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
         return c
 
-    def _finish(self, X, fX, U, dim):
-        r"""Given final U, rotate and find coefficients"""
-        Y = (U.T @ X.T).T
+    def _finish(self, X, fX, U, dim) -> None:  # noqa: ANN001, N803
+        r"""Given final U, rotate and find coefficients."""
+        Y = (U.T @ X.T).T  # noqa: N806
         # Step 1: Apply active subspaces to the profile function at samples X
         # to rotate onto the most important directions
         if U.shape[1] > 1 and self.rotate:
@@ -595,8 +599,8 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
             self.coef = self._fit_coef(X, fX, U, dim)
             grads = self.profile.grad(Y, dim)
             # We only need the short-form SVD
-            Ur = scipy.linalg.svd(grads.T, full_matrices=False)[0]
-            U = U @ Ur
+            Ur = scipy.linalg.svd(grads.T, full_matrices=False)[0]  # noqa: N806
+            U = U @ Ur  # noqa: N806
 
         self._U = U
 
@@ -604,7 +608,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
         if self.rotate:
             self.coef = self._fit_coef(X, fX, U, dim)
             grads = self.profile.grad(Y, dim)
-            self._U = U = U.dot(np.diag(np.sign(np.mean(grads, axis=0))))
+            self._U = U = U.dot(np.diag(np.sign(np.mean(grads, axis=0))))  # noqa: N806
 
         # Step 3: final fit
         self.coef = self._fit_coef(X, fX, U, dim)
@@ -613,51 +617,50 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
     # VarPro based solution for the 2-norm without bound constraints
     ################################################################################
 
-    def _varpro_residual(self, X, fX, U_flat, dim):
-        U = U_flat.reshape(X.shape[1], -1)
+    def _varpro_residual(self, X, fX, U_flat, dim):  # noqa: ANN001, ANN202, N803
+        U = U_flat.reshape(X.shape[1], -1)  # noqa: N806
         # V = self.V(X, U)
-        Y = (U.T @ X.T).T
+        Y = (U.T @ X.T).T  # noqa: N806
         # self.basis = self.Basis(self.degree, Y)
-        V = self.Basis.V(Y, dim)
+        V = self.Basis.V(Y, dim)  # noqa: N806
         if self.basis_name == "ArnoldiPolynomialBasis":
             # In this case, V is orthonormal
             c = V.T @ fX
         else:
             c = scipy.linalg.lstsq(V, fX)[0].flatten()
-        r = fX - V.dot(c)
-        return r
+        return fX - V.dot(c)
 
-    def _varpro_jacobian(self, X, fX, U_flat, dim):
+    def _varpro_jacobian(self, X, fX, U_flat, dim):  # noqa: ANN001, ANN202, N803
         # Get dimensions
-        M, m = X.shape
-        U = U_flat.reshape(X.shape[1], -1)
+        M, m = X.shape  # noqa: N806
+        U = U_flat.reshape(X.shape[1], -1)  # noqa: N806
         m, n = U.shape
 
-        Y = (U.T @ X.T).T
+        Y = (U.T @ X.T).T  # noqa: N806
         # self.basis = self.Basis(self.degree, Y)
-        V = self.Basis.V(Y, dim)
-        DV = self.Basis.DV(Y, dim)
+        V = self.Basis.V(Y, dim)  # noqa: N806
+        DV = self.Basis.DV(Y, dim)  # noqa: N806
 
-        if isinstance(self.Basis, ArnoldiPolynomialBasis):
+        if isinstance(self.Basis, ArnoldiPolynomialBasis):  # noqa: F405
             # In this case, V is orthonormal
             c = V.T @ fX
-            Y = np.copy(V)
+            Y = np.copy(V)  # noqa: N806
             s = np.ones(V.shape[1])
-            ZT = np.eye(V.shape[1])
+            ZT = np.eye(V.shape[1])  # noqa: N806
         else:
             c = scipy.linalg.lstsq(V, fX)[0].flatten()
-            Y, s, ZT = scipy.linalg.svd(V, full_matrices=False)
+            Y, s, ZT = scipy.linalg.svd(V, full_matrices=False)  # noqa: N806
             s = np.array([np.inf if x == 0.0 else x for x in s])
 
         r = fX - V.dot(c)
 
-        N = V.shape[1]
-        J1 = np.zeros((M, m, n))
-        J2 = np.zeros((N, m, n))
+        N = V.shape[1]  # noqa: N806
+        J1 = np.zeros((M, m, n))  # noqa: N806
+        J2 = np.zeros((N, m, n))  # noqa: N806
 
         for ell in range(n):
             for k in range(m):
-                DVDU_k = X[:, k, None] * DV[:, :, ell]
+                DVDU_k = X[:, k, None] * DV[:, :, ell]  # noqa: N806
 
                 # This is the first term in the VARPRO Jacobian minus the projector out fron
                 J1[:, k, ell] = DVDU_k.dot(c)
@@ -665,41 +668,40 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
                 J2[:, k, ell] = DVDU_k.T.dot(r)
 
         # Project against the range of V
-        J1 -= np.tensordot(Y, np.tensordot(Y.T, J1, (1, 0)), (1, 0))
+        J1 -= np.tensordot(Y, np.tensordot(Y.T, J1, (1, 0)), (1, 0))  # noqa: N806
         # Apply V^- by the pseudo inverse
-        J2 = np.tensordot(np.diag(1.0 / s), np.tensordot(ZT, J2, (1, 0)), (1, 0))
-        J = -(J1 + np.tensordot(Y, J2, (1, 0)))
+        J2 = np.tensordot(np.diag(1.0 / s), np.tensordot(ZT, J2, (1, 0)), (1, 0))  # noqa: N806
+        J = -(J1 + np.tensordot(Y, J2, (1, 0)))  # noqa: N806
         return J.reshape(J.shape[0], -1)
 
-    def _grassmann_trajectory(self, U_flat, Delta_flat, t):
-        Delta = Delta_flat.reshape(-1, self.subspace_dimension)
-        U = U_flat.reshape(-1, self.subspace_dimension)
-        Y, s, ZT = scipy.linalg.svd(Delta, full_matrices=False, lapack_driver="gesvd")
-        UZ = np.dot(U, ZT.T)
-        U_new = np.dot(UZ, np.diag(np.cos(s * t))) + np.dot(Y, np.diag(np.sin(s * t)))
-        U_new = orth(U_new).flatten()
-        return U_new
+    def _grassmann_trajectory(self, U_flat, Delta_flat, t):  # noqa: ANN001, ANN202, N803
+        Delta = Delta_flat.reshape(-1, self.subspace_dimension)  # noqa: N806
+        U = U_flat.reshape(-1, self.subspace_dimension)  # noqa: N806
+        Y, s, ZT = scipy.linalg.svd(Delta, full_matrices=False, lapack_driver="gesvd")  # noqa: N806
+        UZ = np.dot(U, ZT.T)  # noqa: N806
+        U_new = np.dot(UZ, np.diag(np.cos(s * t))) + np.dot(Y, np.diag(np.sin(s * t)))  # noqa: N806
+        return orth(U_new).flatten()
 
-    def _fit_varpro(self, X, fX, U0, dim, **kwargs):
-        def gn_solver(J_flat, r):
-            Y, s, ZT = scipy.linalg.svd(
+    def _fit_varpro(self, X, fX, U0, dim, **kwargs) -> None:  # noqa: ANN001, ANN003, N803
+        def gn_solver(J_flat, r):  # noqa: ANN001, ANN202, N803
+            Y, s, ZT = scipy.linalg.svd(  # noqa: N806
                 J_flat, full_matrices=False, lapack_driver="gesvd"
             )
             # Apply the pseudoinverse
             n = dim
-            Delta_flat = -ZT[: -(n**2), :].T.dot(
-                np.diag(1 / s[: -(n**2)]).dot(Y[:, : -(n**2)].T.dot(r))
-            )
+            Delta_flat = -ZT[  # noqa: N806
+                : -(n**2), :
+            ].T.dot(np.diag(1 / s[: -(n**2)]).dot(Y[:, : -(n**2)].T.dot(r)))
             return Delta_flat, s  # s[:-n**2] #!changed to giving all of s
 
-        def jacobian(U_flat):
+        def jacobian(U_flat):  # noqa: ANN001, ANN202, N803
             return self._varpro_jacobian(X, fX, U_flat, dim)
 
-        def residual(U_flat):
+        def residual(U_flat):  # noqa: ANN001, ANN202, N803
             return self._varpro_residual(X, fX, U_flat, dim)
 
-        U0_flat = U0.flatten()
-        U_flat, info, iterations = gauss_newton(
+        U0_flat = U0.flatten()  # noqa: N806
+        U_flat, _info, iterations = gauss_newton(  # noqa: N806
             residual,
             jacobian,
             U0_flat,
@@ -710,7 +712,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
         )  #!Changed gnsolver argument from None to gn_solver
 
         self.iterations = iterations
-        U = U_flat.reshape(-1, self.subspace_dimension)
+        U = U_flat.reshape(-1, self.subspace_dimension)  # noqa: N806
 
         self._finish(X, fX, U, dim)
 
@@ -718,40 +720,39 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
     # Generic residual and Jacobian
     ################################################################################
 
-    def _residual(self, X, fX, U_c, dim):
-        M, m = X.shape
-        N = len(self.Basis)
+    def _residual(self, X, fX, U_c, dim):  # noqa: ANN001, ANN202, N803
+        _M, m = X.shape  # noqa: N806
+        N = len(self.Basis)  # noqa: N806
         n = dim
 
         # Extract U and c
-        U = U_c[: m * n].reshape(m, n)
+        U = U_c[: m * n].reshape(m, n)  # noqa: N806
         c = U_c[m * n :].reshape(N)
 
         # Construct basis
         # V = self.V(X, U)
-        Y = (U.T @ X.T).T
-        V = self.Basis.V(Y, dim)
-        res = V @ c - fX
-        return res
+        Y = (U.T @ X.T).T  # noqa: N806
+        V = self.Basis.V(Y, dim)  # noqa: N806
+        return V @ c - fX
 
-    def _jacobian(self, X, fX, U_c, dim):
-        M, m = X.shape
-        N = len(self.Basis)
+    def _jacobian(self, X, fX, U_c, dim):  # noqa: ANN001, ANN202, ARG002, N803
+        M, m = X.shape  # noqa: N806
+        N = len(self.Basis)  # noqa: N806
         n = dim
 
         # Extract U and c
-        U = U_c[: m * n].reshape(m, n)
+        U = U_c[: m * n].reshape(m, n)  # noqa: N806
         c = U_c[m * n :].reshape(N)
 
         # Re-initialize basis
-        Y = (U.T @ X.T).T
+        Y = (U.T @ X.T).T  # noqa: N806
         # self.basis = self.Basis(self.degree, Y)
-        V = self.Basis.V(Y, dim)
+        V = self.Basis.V(Y, dim)  # noqa: N806
 
         # Derivative of V with respect to U with c fixed
-        DVDUc = np.zeros((M, m, n))
+        DVDUc = np.zeros((M, m, n))  # noqa: N806
         # DV = self.DV(X, U) 	# Size (M, N, n)
-        DV = self.Basis.DV(Y, dim)
+        DV = self.Basis.DV(Y, dim)  # noqa: N806
         for k in range(m):
             for ell in range(n):
                 DVDUc[:, k, ell] = X[:, k] * np.dot(DV[:, :, ell], c)
@@ -760,31 +761,31 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
         # V = self.V(X, U)
 
         # Total Jacobian
-        jac = np.hstack([DVDUc.reshape(M, -1), V])
-        return jac
+        return np.hstack([DVDUc.reshape(M, -1), V])
 
-    def _trajectory(self, X, fX, U_c, pU_pc, alpha, dim):
-        r"""For the trajectory through the sup-norm space, we automatically compute optimal c
-        and advance U along the geodesic
+    def _trajectory(self, X, fX, U_c, pU_pc, alpha, dim):  # noqa: ANN001, ANN202, N803
+        r"""For the trajectory through the sup-norm space, we automatically compute optimal c  # noqa: E501.
+
+        and advance U along the geodesic.
 
         """
-        M, m = X.shape
-        N = len(self.Basis)
+        _M, m = X.shape  # noqa: N806
+        N = len(self.Basis)  # noqa: N806
         n = dim
 
         # Split components
-        U = orth(U_c[: m * n].reshape(m, n))
+        U = orth(U_c[: m * n].reshape(m, n))  # noqa: N806
         c = U_c[m * n :].reshape(N)
 
-        Delta = pU_pc[: m * n].reshape(m, n)
-        pc = pU_pc[m * n :].reshape(N)
+        Delta = pU_pc[: m * n].reshape(m, n)  # noqa: N806
+        pU_pc[m * n :].reshape(N)
 
         # Orthogonalize
-        Delta = Delta - U.dot(U.T.dot(Delta))
+        Delta = Delta - U.dot(U.T.dot(Delta))  # noqa: N806
 
         # Compute the step along the Geodesic
-        Y, s, ZT = scipy.linalg.svd(Delta, full_matrices=False, lapack_driver="gesvd")
-        U_new = np.dot(np.dot(U, ZT.T), np.diag(np.cos(s * alpha))) + np.dot(
+        Y, s, ZT = scipy.linalg.svd(Delta, full_matrices=False, lapack_driver="gesvd")  # noqa: N806
+        U_new = np.dot(np.dot(U, ZT.T), np.diag(np.cos(s * alpha))) + np.dot(  # noqa: N806
             Y, np.diag(np.sin(s * alpha))
         )
 
@@ -796,42 +797,40 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
 
         return np.hstack([U_new.flatten(), c.flatten()])
 
-    def _fit_alternating(self, X, fX, U0, dim, **kwargs):
-        M, m = X.shape
+    def _fit_alternating(self, X, fX, U0, dim, **kwargs) -> None:  # noqa: ANN001, ANN003, N803
+        _M, m = X.shape  # noqa: N806
         n = dim
 
-        def residual(U_c, dim):
-            r = self._residual(X, fX, U_c, dim)
-            return r
+        def residual(U_c, dim):  # noqa: ANN001, ANN202, N803
+            return self._residual(X, fX, U_c, dim)
 
-        def jacobian(U_c):
+        def jacobian(U_c):  # noqa: ANN001, ANN202, N803
             m = X.shape[1]
             n = dim
-            U = U_c[: m * n].reshape(m, n)
+            U_c[: m * n].reshape(m, n)
             # self.set_scale(X, U)
-            J = self._jacobian(X, fX, U_c, dim)
-            return J
+            return self._jacobian(X, fX, U_c, dim)
 
         # Trajectory
-        trajectory = lambda U_c, p, alpha: self._trajectory(X, fX, U_c, p, alpha, dim)
+        def trajectory(U_c, p, alpha):  # noqa: ANN001, ANN202, N803
+            return self._trajectory(X, fX, U_c, p, alpha, dim)
 
         # Initialize parameter values
         # self.set_scale(X, U0)
         c0 = self._fit_coef(X, fX, U0, dim)
-        U_c0 = np.hstack([U0.flatten(), c0])
+        U_c0 = np.hstack([U0.flatten(), c0])  # noqa: N806
 
         # Add orthogonality constraints to search direction
         # Recall pU.T @ U == 0 is a requirement for Grassmann optimization
-        def search_constraints(U_c, pU_pc, dim):
-            M, m = X.shape
-            N = len(self.Basis)
+        def search_constraints(U_c, pU_pc, dim):  # noqa: ANN001, ANN202, N803
+            _M, m = X.shape  # noqa: N806
+            len(self.Basis)
             n = dim
-            U = U_c[: m * n].reshape(m, n)
-            constraints = [
+            U = U_c[: m * n].reshape(m, n)  # noqa: N806
+            return [
                 pU_pc[k * m : (k + 1) * m].__rmatmul__(U.T) == np.zeros(n)
                 for k in range(n)
             ]
-            return constraints
 
         # setup lower/upper bound into SLP solver
         obj_lb = None
@@ -842,7 +841,7 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
             obj_lb = np.zeros(fX.shape)
 
         # Perform optimization
-        U_c = sequential_lp(
+        U_c = sequential_lp(  # noqa: N806
             residual,
             self.problem,
             U_c0,
@@ -856,17 +855,16 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
         )
 
         # Store solution
-        U = U_c[: m * n].reshape(m, n)
+        U = U_c[: m * n].reshape(m, n)  # noqa: N806
         self._finish(X, fX, U, dim)
 
-    def _normalize(self, X, problem):
+    def _normalize(self, X, problem):  # noqa: ANN001, ANN202, N803
         c = self.center(problem)
-        D = self.normalize_der(problem)
-        X_norm = D.dot((X - c.reshape(1, -1)).T).T
-        return X_norm
+        D = self.normalize_der(problem)  # noqa: N806
+        return D.dot((X - c.reshape(1, -1)).T).T
 
-    def normalize(self, X, problem):
-        """Given a points in the application space, convert it to normalized units
+    def normalize(self, X, problem):  # noqa: ANN001, ANN201, N803
+        """Given a points in the application space, convert it to normalized units.
 
         Parameters
         ----------
@@ -874,31 +872,36 @@ class PolynomialRidgeApproximation(PolynomialRidgeFunction):
                 points in the domain to normalize
         """
         try:
-            X.shape
+            X.shape  # noqa: B018
         except AttributeError:
-            X = np.array(self, X)
+            X = np.array(self, X)  # noqa: N806
         if len(X.shape) == 1:
-            X = X.reshape(-1, len(self))
+            X = X.reshape(-1, len(self))  # noqa: N806
             return self._normalize(X, problem).flatten()
         return self._normalize(X, problem)
 
-    def normalize_der(self, problem):
-        """Derivative of normalization function"""
-        norm = lambda x: x
+    def normalize_der(self, problem):  # noqa: ANN001, ANN201
+        """Derivative of normalization function."""
+
+        def norm(x):  # noqa: ANN001, ANN202
+            return x
+
         norm_ub = norm(problem.upper_bounds)
         norm_lb = norm(problem.lower_bounds)
 
         slope = np.ones(len(self))
-        I = (norm_ub != norm_lb) & np.isfinite(norm_lb) & np.isfinite(norm_ub)
+        I = (norm_ub != norm_lb) & np.isfinite(norm_lb) & np.isfinite(norm_ub)  # noqa: E741, N806
         slope[I] = 2.0 / (norm_ub[I] - norm_lb[I])
         return np.diag(slope)
 
-    def center(self, problem):
-        norm = lambda x: x
+    def center(self, problem):  # noqa: ANN001, ANN201, D102
+        def norm(x):  # noqa: ANN001, ANN202
+            return x
+
         norm_ub = norm(problem.upper_bounds)
         norm_lb = norm(problem.lower_bounds)
 
         c = np.zeros(len(self))
-        I = np.isfinite(norm_lb) & np.isfinite(norm_ub)
+        I = np.isfinite(norm_lb) & np.isfinite(norm_ub)  # noqa: E741, N806
         c[I] = (norm_lb[I] + norm_ub[I]) / 2.0
         return c

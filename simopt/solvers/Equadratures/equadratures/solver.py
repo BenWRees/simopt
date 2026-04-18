@@ -1,7 +1,10 @@
-"""Solvers for computation of linear systems of the form :math:`\mathbf{A}\mathbf{x}=\mathbf{b}`.
+r"""Solvers for computation of linear systems of the form :math:`\mathbf{A}\mathbf{x}=\mathbf{b}`.  # noqa: E501.
 
-These solvers are used *under-the-hood* by :class:`~equadratures.poly.Poly` when :meth:`~equadratures.poly.Poly.set_model()` is called, with the solver specified by the ``method`` argument.
-The solvers can also be used independently (see examples) for debugging and experimentation purposes.
+These solvers are used *under-the-hood* by :class:`~equadratures.poly.Poly` when
+:meth:`~equadratures.poly.Poly.set_model()` is called, with the solver specified by the
+``method`` argument.
+The solvers can also be used independently (see examples) for debugging and
+experimentation purposes.
 """
 
 from copy import deepcopy
@@ -23,33 +26,46 @@ except ImportError:
 # Base Solver class
 ###################
 class Solver:
-    """The parent solver class. All other solver subclasses inherit attributes and methods from this parent class.
+    """The parent solver class. All other solver subclasses inherit attributes and.
+
+    methods from this parent class.
 
     Note:
     ----
-    This parent class should not be used directly, but can be used to select the desired solver subclass (see examples).
+    This parent class should not be used directly, but can be used to select the desired
+    solver subclass (see examples).
 
     Parameters
     ----------
     method : string
-        The method used for solving the linear system. Options include: ``compressed-sensing``, ``least-squares``, ``minimum-norm``, ``numerical-integration``, ``least-squares-with-gradients``, ``least-absolute-residual``, ``huber``, ``elastic-net``, and ``relevance-vector-machine``.
+        The method used for solving the linear system. Options include: ``compressed-
+        sensing``, ``least-squares``, ``minimum-norm``, ``numerical-integration``,
+        ``least-squares-with-gradients``, ``least-absolute-residual``, ``huber``,
+        ``elastic-net``, and ``relevance-vector-machine``.
     solver_args : dict, optional
-        Dictionary containing optional arguments centered around the specific solver. Arguments are specific to the requested solver, except for the following generic arguments:
+        Dictionary containing optional arguments centered around the specific solver.
+        Arguments are specific to the requested solver, except for the following generic
+        arguments:
 
-        - **verbose** (bool): Default value of this input is set to ``False``; when ``True``, the solver prints information to screen.
-        - **opt** (str): Specifies the underlying optimisation method to use. ``scipy`` for scipy, and `osqp` to use the OSQP optimiser (requires ``cvxpy`` to be installed).
+        - **verbose** (bool): Default value of this input is set to ``False``; when
+        ``True``, the solver prints information to screen.
+        - **opt** (str): Specifies the underlying optimisation method to use. ``scipy``
+        for scipy, and `osqp` to use the OSQP optimiser (requires ``cvxpy`` to be
+        installed).
 
     Examples:
     --------
     Accessing the underlying solver used by a Poly instance
-        >>> # Fit a 2D polynomial using the elastic-net solver (with some specific solver_args passed)
+        >>> # Fit a 2D polynomial using the elastic-net solver (with some specific
+        solver_args passed)
         >>> x = np.linspace(-1,1,80)
         >>> xx = np.vstack([x,x]).T
         >>> y = xx[:,0]**3 + xx[0,1]**2 + np.random.normal(0,0.1,80)
         >>> myparam = eq.Parameter(distribution='uniform',order=3)
         >>> mybasis = eq.Basis('total-order')
         >>> mypoly = eq.Poly([myparam,myparam],mybasis,method='elastic-net',
-        >>>                 sampling_args={'mesh': 'user-defined','sample-points':xx,'sample-outputs':y},
+        >>>                 sampling_args={'mesh': 'user-defined','sample-
+        points':xx,'sample-outputs':y},
         >>>                 solver_args={'verbose':True,'crit':'AIC'})
         >>> mypoly.set_model()
         >>> # Plot the regularisation path using the solver's method
@@ -61,7 +77,8 @@ class Solver:
         >>> b = np.array([1,0,1])
         >>>
         >>> # # select_solver will return the requested solver subclass
-        >>> mysolver = eq.Solver.select_solver('least-squares',solver_args={'verbose':False})
+        >>> mysolver = eq.Solver.select_solver('least-
+        squares',solver_args={'verbose':False})
         >>>
         >>> # Or you can select the solversubclass directly
         >>> mysolver = solver.least_squares(solver_args={'verbose':True})
@@ -70,13 +87,16 @@ class Solver:
         >>> mysolver.solve(A,b)
         >>> x = mysolver.get_coefficients()
         >>>
-        >>> # Or providing get_coefficients() with A and b will automatically run solve()
+        >>> # Or providing get_coefficients() with A and b will automatically run
+        solve()
         >>> x = mysolver.get_coefficients(A,b)
         The condition number of the matrix is 29.82452477932781.
         The condition number of the matrix is 29.82452477932781.
     """
 
-    def __init__(self, method, solver_args={}):
+    def __init__(self, method, solver_args=None) -> None:  # noqa: ANN001, ARG002, D107
+        if solver_args is None:
+            solver_args = {}
         self.solver_args = solver_args
         self.gradient_flag = False
         # Parse generic solver args here (solver specific ones done in subclass)
@@ -93,7 +113,7 @@ class Solver:
             self.opt = "scipy"
 
     @staticmethod
-    def select_solver(method, solver_args={}):
+    def select_solver(method, solver_args=None):  # noqa: ANN001, ANN205
         """Method to return a solver subclass.
 
         Parameters
@@ -101,16 +121,23 @@ class Solver:
         method : str
             The name of the solver to return.
         solver_args : dict, optional
-            Dictionary containing optional arguments centered around the specific solver. Arguments are specific to the requested solver, except for the following generic arguments:
+            Dictionary containing optional arguments centered around the specific
+            solver. Arguments are specific to the requested solver, except for the
+            following generic arguments:
 
-            - **verbose** (bool): Default value of this input is set to ``False``; when ``True``, the solver prints information to screen.
-            - **opt** (str): Specifies the underlying optimisation method to use. ``scipy`` for scipy, and `osqp` to use the OSQP optimiser (requires ``cvxpy`` to be installed).
+            - **verbose** (bool): Default value of this input is set to ``False``; when
+            ``True``, the solver prints information to screen.
+            - **opt** (str): Specifies the underlying optimisation method to use.
+            ``scipy`` for scipy, and `osqp` to use the OSQP optimiser (requires
+            ``cvxpy`` to be installed).
 
         Returns:
         -------
         Solver
             The Solver subclass specified in ``method``.
         """
+        if solver_args is None:
+            solver_args = {}
         if method.lower() == "least-squares":
             return least_squares(solver_args)
         if method.lower() == "minimum-norm":
@@ -138,8 +165,11 @@ class Solver:
             "You have not selected a valid method for solving the coefficients of the polynomial. Choose from compressed-sensing, least-squares, least-squares-with-gradients, least-absolute-residual, minimum-norm, numerical-integration, huber, elastic-net or custom_solver."
         )
 
-    def get_coefficients(self, *args):
-        """Get the coefficients the solver has calculated. If the A and b matrices are provied Solver.solve() will be run first. If the solver uses gradients, C and d can also be given.
+    def get_coefficients(self, *args):  # noqa: ANN002, ANN201
+        """Get the coefficients the solver has calculated. If the A and b matrices are.
+
+        provied Solver.solve() will be run first. If the solver uses gradients, C and
+        d can also be given.
 
         Parameters
         ----------
@@ -167,7 +197,7 @@ class Solver:
                         self.solve(args[0], args[1])
                     else:
                         raise ValueError(
-                            "A should be two dimensional but has %d dimensions."
+                            "A should be two dimensional but has %d dimensions."  # noqa: UP031
                             % args[0].ndim
                         )
                 else:
@@ -181,7 +211,7 @@ class Solver:
                         self.solve(args[0], args[1], args[2], args[3])
                     else:
                         raise ValueError(
-                            "A and C should be two dimensional but A has %d dimensions and C has %d dimensions."
+                            "A and C should be two dimensional but A has %d dimensions and C has %d dimensions."  # noqa: UP031
                             % (args[0].ndim, args[2].ndim)
                         )
                 else:
@@ -196,7 +226,7 @@ class Solver:
 
 # Least squares solver subclass.
 ################################
-class least_squares(Solver):
+class least_squares(Solver):  # noqa: N801
     """Ordinary least squares solver.
 
     Parameters
@@ -204,14 +234,17 @@ class least_squares(Solver):
     solver_args : dict
         Optional arguments for the solver:
 
-        - **verbose** (bool): Default value of this input is set to ``False``; when ``True``, the solver prints information to screen.
+        - **verbose** (bool): Default value of this input is set to ``False``; when
+        ``True``, the solver prints information to screen.
     """
 
-    def __init__(self, solver_args={}):
+    def __init__(self, solver_args=None) -> None:  # noqa: ANN001, D107
         # Init base class
+        if solver_args is None:
+            solver_args = {}
         super().__init__("least-squares", solver_args)
 
-    def solve(self, A, b):
+    def solve(self, A, b) -> None:  # noqa: ANN001, D102, N803
         if np.__version__ < "1.14":
             alpha = np.linalg.lstsq(A, b)
         else:
@@ -225,7 +258,7 @@ class least_squares(Solver):
 
 # Minimum-norm solver subclass.
 ###############################
-class minimum_norm(Solver):
+class minimum_norm(Solver):  # noqa: N801
     """Minimum norm solver, used for uniquely or overdetermined systems (i.e. m>=n).
 
     Parameters
@@ -233,33 +266,36 @@ class minimum_norm(Solver):
     solver_args : dict
         Optional arguments for the solver:
 
-        - **verbose** (bool): Default value of this input is set to ``False``; when ``True``, the solver prints information to screen.
+        - **verbose** (bool): Default value of this input is set to ``False``; when
+        ``True``, the solver prints information to screen.
     """
 
-    def __init__(self, solver_args={}):
+    def __init__(self, solver_args=None) -> None:  # noqa: ANN001, D107
         # Init base class
+        if solver_args is None:
+            solver_args = {}
         super().__init__("minimum-norm", solver_args)
 
-    def solve(self, A, b):
-        Q, R, pvec = qr(A, pivoting=True)
+    def solve(self, A, b) -> None:  # noqa: ANN001, D102, N803
+        Q, R, pvec = qr(A, pivoting=True)  # noqa: N806
         m, n = A.shape
         if n < m:
             raise ValueError(
                 "The minimum-norm solver should only be used when the system is uniquely or overdetermined i.e. m>=n."
             )
         r = np.linalg.matrix_rank(A)
-        Q1 = Q[0:r, 0:r]
-        R1 = R[0:r, 0:r]
+        Q1 = Q[0:r, 0:r]  # noqa: N806
+        R1 = R[0:r, 0:r]  # noqa: N806
         indices = np.argsort(pvec)
-        P = np.eye(n)
+        P = np.eye(n)  # noqa: N806
         temp = P[indices, :]
-        P1 = temp[0:n, 0:r]
+        P1 = temp[0:n, 0:r]  # noqa: N806
         x = np.dot(P1, np.dot(np.linalg.inv(R1), np.dot(Q1.T, b)))
         x = x.reshape(n, 1)
         self.coefficients = x
 
 
-class compressed_sensing(Solver):
+class compressed_sensing(Solver):  # noqa: N801
     """Compressed sensing solver.
 
     Parameters
@@ -267,12 +303,15 @@ class compressed_sensing(Solver):
     solver_args : dict
         Optional arguments for the solver:
 
-        - **verbose** (bool): Default value of this input is set to ``False``; when ``True``, the solver prints information to screen.
+        - **verbose** (bool): Default value of this input is set to ``False``; when
+        ``True``, the solver prints information to screen.
         - **noise-level** (float)
     """
 
-    def __init__(self, solver_args={}):
+    def __init__(self, solver_args=None) -> None:  # noqa: ANN001, D107
         # Init base class
+        if solver_args is None:
+            solver_args = {}
         super().__init__("compressed-sensing", solver_args)
         # Solver specific attributes
         # Defaults
@@ -281,10 +320,10 @@ class compressed_sensing(Solver):
         if "noise-level" in self.solver_args:
             self.noise_level = solver_args.get("noise-level")
 
-    def solve(self, Ao, bo):
-        A = deepcopy(Ao)
+    def solve(self, Ao, bo) -> None:  # noqa: ANN001, D102, N803
+        A = deepcopy(Ao)  # noqa: N806
         y = bo.reshape(-1)
-        N = A.shape[0]
+        N = A.shape[0]  # noqa: N806
         # Possible noise levels
         log_eta = [-8, -7, -6, -5, -4, -3, -2, -1]
         if self.noise_level is None:
@@ -308,8 +347,8 @@ class compressed_sensing(Solver):
                         for i in n * np.ceil(N / 5.0) + range(int(np.ceil(N / 5.0)))
                         if i < N
                     ]
-                    A_ver = A[indices]
-                    A_train = np.delete(A, indices, 0)
+                    A_ver = A[indices]  # noqa: N806
+                    A_train = np.delete(A, indices, 0)  # noqa: N806
                     y_ver = y[indices].flatten()
                     if len(y_ver) == 0:
                         continue
@@ -344,8 +383,10 @@ class compressed_sensing(Solver):
         self.coefficients = np.reshape(x, (len(x), 1))
 
     @staticmethod
-    def _CG_solve(A, b, max_iters, tol):
-        """Solves Ax = b iteratively using conjugate gradient, assuming A is a symmetric positive definite matrix.
+    def _CG_solve(A, b, max_iters, tol):  # noqa: ANN001, ANN205, N802, N803
+        """Solves Ax = b iteratively using conjugate gradient, assuming A is a symmetric.
+
+        positive definite matrix.
 
         Parameters
         ----------
@@ -372,7 +413,7 @@ class compressed_sensing(Solver):
         iterations = 0
         delta = sum(r**2)
         delta_0 = sum(b**2)
-        bestx = x.copy()
+        x.copy()
         bestres = np.sqrt(delta / delta_0)
         residual = np.sqrt(delta / delta_0)
 
@@ -387,7 +428,7 @@ class compressed_sensing(Solver):
             d = r + beta * d
 
             if np.sqrt(delta / delta_0) < bestres:
-                bestx = x.copy()
+                x.copy()
                 bestres = np.sqrt(delta / delta_0)
 
             delta = new_delta
@@ -397,7 +438,7 @@ class compressed_sensing(Solver):
         return x.flatten(), residual, iterations
 
     @staticmethod
-    def _bp_denoise(A, b, epsilon, verbose=False, **kwargs):
+    def _bp_denoise(A, b, epsilon, verbose=False, **kwargs):  # noqa: ANN001, ANN003, ANN205, N803
         """Solving the basis pursuit de-noising problem.
 
         Parameters
@@ -411,30 +452,12 @@ class compressed_sensing(Solver):
         x0 : numpy.ndarray
             Initial solution, if not provided the least norm solution is used.
         """
-        if hasattr(kwargs, "x0"):
-            x0 = kwargs["x0"]
-        else:
-            x0 = None
-        if hasattr(kwargs, "lbtol"):
-            lbtol = kwargs["lbtol"]
-        else:
-            lbtol = 1e-3
-        if hasattr(kwargs, "mu"):
-            mu = kwargs["mu"]
-        else:
-            mu = 10
-        if hasattr(kwargs, "cgtol"):
-            cgtol = kwargs["cgtol"]
-        else:
-            cgtol = 1e-8
-        if hasattr(kwargs, "cgmaxiter"):
-            cgmaxiter = kwargs["cgmaxiter"]
-        else:
-            cgmaxiter = 200
-        if hasattr(kwargs, "use_CG"):
-            use_CG = kwargs["use_CG"]
-        else:
-            use_CG = False
+        x0 = kwargs["x0"] if hasattr(kwargs, "x0") else None
+        lbtol = kwargs["lbtol"] if hasattr(kwargs, "lbtol") else 0.001
+        mu = kwargs["mu"] if hasattr(kwargs, "mu") else 10
+        cgtol = kwargs["cgtol"] if hasattr(kwargs, "cgtol") else 1e-08
+        cgmaxiter = kwargs["cgmaxiter"] if hasattr(kwargs, "cgmaxiter") else 200
+        use_CG = kwargs["use_CG"] if hasattr(kwargs, "use_CG") else False  # noqa: N806
 
         # starting point --- make sure that it is feasible
         if x0 is not None:
@@ -442,7 +465,7 @@ class compressed_sensing(Solver):
                 if verbose:
                     print("Starting point infeasible  using x0 = At*inv(AAt)*y.")
                 if use_CG:
-                    w, cgres, cgiter = compressed_sensing._CG_solve(
+                    w, cgres, cgiter = compressed_sensing._CG_solve(  # noqa: RUF059
                         np.dot(A, A.T), b, cgmaxiter, cgtol
                     )
                 else:
@@ -450,19 +473,17 @@ class compressed_sensing(Solver):
                     cgres = np.linalg.norm(
                         np.dot(np.dot(A, A.T), w).flatten() - b.flatten()
                     ) / np.linalg.norm(b)
-                    cgiter = -1
                 if cgres > 0.5:
                     if verbose:
                         print("cgres = " + str(cgres))
                         print("A*At is ill-conditioned: cannot find starting point")
-                    xp = x0.copy()
-                    return xp
+                    return x0.copy()
                 x0 = np.dot(A.T, w)
         else:
             if verbose:
                 print("No x0. Using x0 = At*inv(AAt)*y.")
             if use_CG:
-                w, cgres, cgiter = compressed_sensing._CG_solve(
+                w, cgres, _cgiter = compressed_sensing._CG_solve(
                     np.dot(A, A.T), b, cgmaxiter, cgtol
                 )
             else:
@@ -470,11 +491,9 @@ class compressed_sensing(Solver):
                 cgres = np.linalg.norm(
                     np.dot(np.dot(A, A.T), w).flatten() - b.flatten()
                 ) / np.linalg.norm(b)
-                cgiter = -1
-            if cgres > 0.5:
-                if verbose:
-                    print("cgres = " + str(cgres))
-                    print("A*At is ill-conditioned: cannot find starting point")
+            if cgres > 0.5 and verbose:
+                print("cgres = " + str(cgres))
+                print("A*At is ill-conditioned: cannot find starting point")
             x0 = np.dot(A.T, w)
 
         # if cvxpy:
@@ -501,8 +520,8 @@ class compressed_sensing(Solver):
         b = b.flatten()
 
         x = x0.copy()
-        r = np.reshape(np.dot(A, x), len(b)) - b
-        N = len(x0)
+        np.reshape(np.dot(A, x), len(b)) - b
+        N = len(x0)  # noqa: N806
         u = (0.95) * np.abs(x0) + (0.10) * np.max(
             np.abs(x0)
         )  # arbitrary u starting point?
@@ -563,24 +582,24 @@ class compressed_sensing(Solver):
         return xp
 
     @staticmethod
-    def _l1qc_newton(
-        x0,
-        u0,
-        A,
-        b,
-        epsilon,
-        tau,
-        newtontol,
-        newtonmaxiter,
-        cgtol,
-        cgmaxiter,
-        verbose,
-        use_CG,
+    def _l1qc_newton(  # noqa: ANN205
+        x0,  # noqa: ANN001
+        u0,  # noqa: ANN001
+        A,  # noqa: ANN001, N803
+        b,  # noqa: ANN001
+        epsilon,  # noqa: ANN001
+        tau,  # noqa: ANN001
+        newtontol,  # noqa: ANN001
+        newtonmaxiter,  # noqa: ANN001
+        cgtol,  # noqa: ANN001
+        cgmaxiter,  # noqa: ANN001
+        verbose,  # noqa: ANN001
+        use_CG,  # noqa: ANN001, N803
     ):
         # line search parameters
         alpha = 0.01
         beta = 0.5
-        AtA = np.dot(A.T, A)
+        AtA = np.dot(A.T, A)  # noqa: N806
         x = x0.flatten()
         u = u0.flatten()
         r = np.dot(A, x).flatten() - b.flatten()
@@ -606,7 +625,7 @@ class compressed_sensing(Solver):
 
             w1p = ntgz - sig12 / sig11 * ntgu
 
-            H11p = (
+            H11p = (  # noqa: N806
                 np.diag(sigx.reshape(len(sigx)))
                 - (1.0 / fe) * AtA
                 + (1.0 / fe) ** 2 * np.outer(atr, atr)
@@ -628,7 +647,7 @@ class compressed_sensing(Solver):
                 xp = x.flatten()
                 up = u.flatten()
                 return xp, up, 0
-            Adx = np.dot(A, dx).flatten()
+            Adx = np.dot(A, dx).flatten()  # noqa: N806
 
             du = (1.0 / sig11) * ntgu - (sig12 / sig11) * dx
 
@@ -726,28 +745,31 @@ class compressed_sensing(Solver):
 
 # Numerical integration solver subclass.
 ########################################
-class numerical_integration(Solver):
-    """Numerical integration solver. This solves an orthogonal linear system i.e. simply :math:`\mathbf{x}=\mathbf{A}^T\mathbf{b}`.
+class numerical_integration(Solver):  # noqa: N801
+    r"""Numerical integration solver. This solves an orthogonal linear system i.e. simply :math:`\mathbf{x}=\mathbf{A}^T\mathbf{b}`.  # noqa: E501.
 
     Parameters
     ----------
     solver_args : dict
         Optional arguments for the solver:
 
-        - **verbose** (bool): Default value of this input is set to ``False``; when ``True``, the solver prints information to screen.
+        - **verbose** (bool): Default value of this input is set to ``False``; when
+        ``True``, the solver prints information to screen.
     """
 
-    def __init__(self, solver_args={}):
+    def __init__(self, solver_args=None) -> None:  # noqa: ANN001, D107
         # Init base class
+        if solver_args is None:
+            solver_args = {}
         super().__init__("numerical-integration", solver_args)
 
-    def solve(self, A, b):
+    def solve(self, A, b) -> None:  # noqa: ANN001, D102, N803
         self.coefficients = np.dot(A.T, b)
 
 
 # Least absolute residual solver.
 #################################
-class least_absolute_residual(Solver):
+class least_absolute_residual(Solver):  # noqa: N801
     """Least absolute residual solver. Minimises the L1 norm (absolute residuals).
 
     Parameters
@@ -755,16 +777,21 @@ class least_absolute_residual(Solver):
     solver_args : dict
         Optional arguments for the solver:
 
-        - **verbose** (bool): Default value of this input is set to ``False``; when ``True``, the solver prints information to screen.
-        - **opt** (str): Specifies the underlying optimisation method to use. ``scipy`` for scipy, and `osqp` to use the OSQP optimiser (requires ``cvxpy`` to be installed).
+        - **verbose** (bool): Default value of this input is set to ``False``; when
+        ``True``, the solver prints information to screen.
+        - **opt** (str): Specifies the underlying optimisation method to use. ``scipy``
+        for scipy, and `osqp` to use the OSQP optimiser (requires ``cvxpy`` to be
+        installed).
     """
 
-    def __init__(self, solver_args={}):
+    def __init__(self, solver_args=None) -> None:  # noqa: ANN001, D107
         # Init base class
+        if solver_args is None:
+            solver_args = {}
         super().__init__("least-absolute-residual", solver_args)
 
-    def solve(self, A, b):
-        N, d = A.shape
+    def solve(self, A, b) -> None:  # noqa: ANN001, D102, N803
+        N, d = A.shape  # noqa: N806
         if self.verbose:
             print("Solving for coefficients with least-absolute-residual")
 
@@ -786,9 +813,9 @@ class least_absolute_residual(Solver):
             if self.verbose:
                 print("Solving using scipy linprog")
             c = np.hstack([np.zeros(d), np.ones(N)])
-            A1 = np.hstack([A, -np.eye(N)])
-            A2 = np.hstack([-A, -np.eye(N)])
-            AA = np.vstack([A1, A2])
+            A1 = np.hstack([A, -np.eye(N)])  # noqa: N806
+            A2 = np.hstack([-A, -np.eye(N)])  # noqa: N806
+            AA = np.vstack([A1, A2])  # noqa: N806
             bb = np.hstack([b.reshape(-1), -b.reshape(-1)])
             res = linprog(c, A_ub=AA, b_ub=bb)
             self.coefficients = res.x[:d]
@@ -796,11 +823,13 @@ class least_absolute_residual(Solver):
 
 # Huber solver subclass.
 ########################
-class huber(Solver):
-    """Huber regression solver. Minimises the Huber loss function.
+class huber(Solver):  # noqa: N801
+    r"""Huber regression solver. Minimises the Huber loss function.
 
-    This function is identical to the least squares (L2) penalty for small residuals (i.e. :math:`||\mathbf{A}\mathbf{x}-\mathbf{b}||^2\le M`).
-    But on large residuals (:math:`||\mathbf{A}\mathbf{x}-\mathbf{b}||^2 > M`), its penalty is lower (L1) and increases linearly rather than quadratically.
+    This function is identical to the least squares (L2) penalty for small residuals
+    (i.e. :math:`||\mathbf{A}\mathbf{x}-\mathbf{b}||^2\le M`).
+    But on large residuals (:math:`||\mathbf{A}\mathbf{x}-\mathbf{b}||^2 > M`), its
+    penalty is lower (L1) and increases linearly rather than quadratically.
     It is thus more forgiving of outliers.
 
     Parameters
@@ -808,12 +837,15 @@ class huber(Solver):
     solver_args : dict, optional
         Optional arguments for the solver:
 
-        - **verbose** (bool): Default value of this input is set to ``False``; when ``True``, the solver prints information to screen.
+        - **verbose** (bool): Default value of this input is set to ``False``; when
+        ``True``, the solver prints information to screen.
         - **M** (float): The huber threshold. Default ``M=1``.
     """
 
-    def __init__(self, solver_args={}):
+    def __init__(self, solver_args=None) -> None:  # noqa: ANN001, D107
         # Init base class
+        if solver_args is None:
+            solver_args = {}
         super().__init__("huber", solver_args)
         # Solver specific attributes
         # Defaults
@@ -822,10 +854,10 @@ class huber(Solver):
         if "M" in self.solver_args:
             self.M = solver_args.get("M")
 
-    def solve(self, A, b):
+    def solve(self, A, b) -> None:  # noqa: ANN001, D102, N803
         if self.verbose:
-            print("Huber regression with M=%.2f." % self.M)
-        N, d = A.shape
+            print(f"Huber regression with M={self.M:.2f}.")
+        N, d = A.shape  # noqa: N806
 
         # Use cvxpy with OSQP for optimising
         if self.opt == "osqp":
@@ -857,7 +889,7 @@ class huber(Solver):
 
 # Relevence vector machine solver.
 ##################################
-class rvm(Solver):
+class rvm(Solver):  # noqa: N801
     """Relevence vector machine solver.
 
     Parameters
@@ -865,12 +897,15 @@ class rvm(Solver):
     solver_args : dict
         Optional arguments for the solver:
 
-        - **verbose** (bool): Default value of this input is set to ``False``; when ``True``, the solver prints information to screen.
+        - **verbose** (bool): Default value of this input is set to ``False``; when
+        ``True``, the solver prints information to screen.
         - **max_iter** (int): Maximum number of iterations. Default is 1000.
     """
 
-    def __init__(self, solver_args={}):
+    def __init__(self, solver_args=None) -> None:  # noqa: ANN001, D107
         # Init base class
+        if solver_args is None:
+            solver_args = {}
         super().__init__("rvm", solver_args)
         # Solver specific attributes
         # Defaults
@@ -879,31 +914,31 @@ class rvm(Solver):
         if "max_iter" in self.solver_args:
             self.max_iter = solver_args.get("max_iter")
 
-    def solve(self, A, b):
+    def solve(self, A, b) -> None:  # noqa: ANN001, D102, N803
         if len(b.shape) == 2:
             assert b.shape[1] == 1
             b = b.reshape(-1)
-        K, card = A.shape
+        K, card = A.shape  # noqa: N806
         alpha = np.ones(card)
         alpha_0 = 1.0
         remaining_coeff_ind = np.arange(card)
         removed = np.array([], dtype=int)
 
-        Alpha_diag = np.diag(alpha)
+        Alpha_diag = np.diag(alpha)  # noqa: N806
 
-        Sigma = np.linalg.inv(alpha_0 * A.T @ A + Alpha_diag)
+        Sigma = np.linalg.inv(alpha_0 * A.T @ A + Alpha_diag)  # noqa: N806
         mu = alpha_0 * Sigma @ A.T @ b
 
-        Phi = A.copy()
+        Phi = A.copy()  # noqa: N806
 
-        all_L = []
+        all_L = []  # noqa: N806
 
-        for i in range(self.max_iter):
-            C = (
+        for i in range(self.max_iter):  # noqa: B007
+            C = (  # noqa: N806
                 1.0 / alpha_0 * np.eye(K)
                 + Phi @ np.diag(1.0 / np.diag(Alpha_diag)) @ Phi.T
             )
-            L = -0.5 * (
+            L = -0.5 * (  # noqa: N806
                 K * np.log(2.0 * np.pi)
                 + np.linalg.slogdet(C)[1]
                 + b.T @ np.linalg.inv(C) @ b
@@ -926,10 +961,10 @@ class rvm(Solver):
 
             alpha = alpha_new.copy()
             alpha_0 = alpha_0_new
-            Phi = Phi[:, remaining_ind]
+            Phi = Phi[:, remaining_ind]  # noqa: N806
 
-            Alpha_diag = np.diag(alpha)
-            Sigma = np.linalg.inv(alpha_0 * Phi.T @ Phi + Alpha_diag)
+            Alpha_diag = np.diag(alpha)  # noqa: N806
+            Sigma = np.linalg.inv(alpha_0 * Phi.T @ Phi + Alpha_diag)  # noqa: N806
 
             mu = alpha_0 * Sigma @ Phi.T @ b
             if len(all_L) > 1:
@@ -947,7 +982,7 @@ class rvm(Solver):
 
 # Numerical integration solver subclass.
 ########################################
-class constrained_least_squares(Solver):
+class constrained_least_squares(Solver):  # noqa: N801
     """Constrained least squares regression.
 
     This solves an orthogonal linear system i.e. simply c=A^T.b.
@@ -957,21 +992,24 @@ class constrained_least_squares(Solver):
     solver_args : dict
         Optional arguments for the solver:
 
-        - **verbose** (bool): Default value of this input is set to ``False``; when ``True``, the solver prints information to screen.
+        - **verbose** (bool): Default value of this input is set to ``False``; when
+        ``True``, the solver prints information to screen.
     """
 
-    def __init__(self, solver_args={}):
+    def __init__(self, solver_args=None) -> None:  # noqa: ANN001, D107
         # Init base class
+        if solver_args is None:
+            solver_args = {}
         super().__init__("least-squares-with-gradients", solver_args)
         # Solver specific attributes
         self.gradient_flag = True
 
-    def solve(self, A, b, C, d):
+    def solve(self, A, b, C, d) -> None:  # noqa: ANN001, D102, N803
         # Size of matrices!
         m, n = A.shape
-        p, q = b.shape
-        k, l = C.shape
-        s, t = d.shape
+        p, _q = b.shape
+        k, _l = C.shape
+        s, _t = d.shape
         # Check that the number of elements in b are equivalent to the number of rows in A
         if m != p:
             raise ValueError("solver: error: mismatch in sizes of A and b")
@@ -987,22 +1025,22 @@ class constrained_least_squares(Solver):
             )
 
     @staticmethod
-    def _null_space_method(Ao, bo, Co, do, verbose):
-        A = deepcopy(Ao)
-        C = deepcopy(Co)
+    def _null_space_method(Ao, bo, Co, do, verbose):  # noqa: ANN001, ANN205, N803
+        A = deepcopy(Ao)  # noqa: N806
+        C = deepcopy(Co)  # noqa: N806
         b = deepcopy(bo)
         d = deepcopy(do)
-        m, n = A.shape
+        _m, n = A.shape
         p, n = C.shape
-        Q, R = np.linalg.qr(C.T, "complete")
-        Q1 = Q[0:n, 0:p]
-        Q2 = Q[0:n, p:n]
+        Q, R = np.linalg.qr(C.T, "complete")  # noqa: N806
+        Q1 = Q[0:n, 0:p]  # noqa: N806
+        Q2 = Q[0:n, p:n]  # noqa: N806
         # Lower triangular matrix!
-        L = R.T
-        L = L[0:p, 0:p]
+        L = R.T  # noqa: N806
+        L = L[0:p, 0:p]  # noqa: N806
         y1 = least_squares({"verbose": verbose}).get_coefficients(L, d)
         c = b - np.dot(np.dot(A, Q1), y1)
-        AQ2 = np.dot(A, Q2)
+        AQ2 = np.dot(A, Q2)  # noqa: N806
         y2 = least_squares({"verbose": verbose}).get_coefficients(AQ2, c)
         x = np.dot(Q1, y1) + np.dot(Q2, y2)
         cond = np.linalg.cond(AQ2)
@@ -1013,41 +1051,69 @@ class constrained_least_squares(Solver):
 
 # Elastic net solver subclass.
 ##############################
-class elastic_net(Solver):
-    """Elastic net solver.
+class elastic_net(Solver):  # noqa: N801
+    r"""Elastic net solver.
 
     The elastic net solver minimises
 
-    :math:`\\frac{1}{2}||\mathbf{A}\mathbf{x}-\mathbf{b}||_2 + \lambda (\\alpha||\mathbf{x}||_1 + \\frac{1}{2}(1-\\alpha)||\mathbf{x}||_2^2)`.
+    :math:`\\frac{1}{2}||\mathbf{A}\mathbf{x}-\mathbf{b}||_2 + \lambda
+    (\\alpha||\mathbf{x}||_1 + \\frac{1}{2}(1-\\alpha)||\mathbf{x}||_2^2)`.
 
-    where :math:`\lambda` controls the strength of the regularisation (with OLS returned when :math:`\lambda=0`), and :math:`\\alpha` controlling the blending between the L1 and L2 penalty terms.
+    where :math:`\lambda` controls the strength of the regularisation (with OLS returned
+    when :math:`\lambda=0`), and :math:`\\alpha` controlling the blending between the L1
+    and L2 penalty terms.
 
-    If ``path=True``, the elastic net is solved via coordinate descent [1]. The full regularisation path (:math:`\lambda` path) is computed (for a given :math:`\\alpha`), and the set of coefficients with the lowest model selection criteria is then selected according to [2]. Otherwise, the elastic net is solved for a given :math:`\\alpha` and :math:`\lambda` using the OSQP quadratic program optimiser (if ``cvxpy`` is installed).
+    If ``path=True``, the elastic net is solved via coordinate descent [1]. The full
+    regularisation path (:math:`\lambda` path) is computed (for a given
+    :math:`\\alpha`), and the set of coefficients with the lowest model selection
+    criteria is then selected according to [2]. Otherwise, the elastic net is solved for
+    a given :math:`\\alpha` and :math:`\lambda` using the OSQP quadratic program
+    optimiser (if ``cvxpy`` is installed).
 
     Parameters
     ----------
     solver_args : dict
         Optional arguments for the solver:
 
-        - **verbose** (bool): Default value of this input is set to ``False``; when ``True``, the solver prints information to screen.
-        - **alpha** (float): The L1/L2 pentalty blending parameter :math:`\\alpha`. Default: ``alpha=1.0``. If ``alpha=0`` is desired, use :class:`~equadratures.solver.least_squares`.
-        - **path** (bool): Computes the full regularisation path if True, otherwise solves for a single :math:`\lambda` value. Default: ``path=True``.
-        - **max_iter** (int): Max number of iterations for the coordinate descent solver (if ``path=True``). Default: ``max_iter=100``.
-        - **n_lambdas** (int): Number of lambda values along the regularisation path (if ``path=True``). Default: ``n_lambdas=100``.
-        - **lambda_eps** (float): Minimum lambda value, as a fraction of ``lambda_max`` (if ``path=True``). Default: ``lambda_eps=1e-3``.
-        - **lambda_max** (float): Maximum lambda value (if ``path=True``). If not ``None`` this overrides the automatically calculated value. Default: ``lambda_max=None``.
-        - **tol** (float): Convergence tolerance criterion for coordinate descent solver (if ``path=True``). Default: ``tol=1e-6``.
-        - **crit** (str): Information criterion to select optimal lambda from regularisation path. ``'AIC'`` is Akaike information criterion, ``'BIC'`` is Bayesian information criterion, ``'CV'`` is 5-fold cross-validated RSS error (if ``path=True``). Default: ``crit='CV'``.
-        - **lambda** (float): The penalty scaling parameter (if ``path=False``). Default: ``lambda=0.01`.
+        - **verbose** (bool): Default value of this input is set to ``False``; when
+        ``True``, the solver prints information to screen.
+        - **alpha** (float): The L1/L2 pentalty blending parameter :math:`\\alpha`.
+        Default: ``alpha=1.0``. If ``alpha=0`` is desired, use
+        :class:`~equadratures.solver.least_squares`.
+        - **path** (bool): Computes the full regularisation path if True, otherwise
+        solves for a single :math:`\lambda` value. Default: ``path=True``.
+        - **max_iter** (int): Max number of iterations for the coordinate descent solver
+        (if ``path=True``). Default: ``max_iter=100``.
+        - **n_lambdas** (int): Number of lambda values along the regularisation path (if
+        ``path=True``). Default: ``n_lambdas=100``.
+        - **lambda_eps** (float): Minimum lambda value, as a fraction of ``lambda_max``
+        (if ``path=True``). Default: ``lambda_eps=1e-3``.
+        - **lambda_max** (float): Maximum lambda value (if ``path=True``). If not
+        ``None`` this overrides the automatically calculated value. Default:
+        ``lambda_max=None``.
+        - **tol** (float): Convergence tolerance criterion for coordinate descent solver
+        (if ``path=True``). Default: ``tol=1e-6``.
+        - **crit** (str): Information criterion to select optimal lambda from
+        regularisation path. ``'AIC'`` is Akaike information criterion, ``'BIC'`` is
+        Bayesian information criterion, ``'CV'`` is 5-fold cross-validated RSS error (if
+        ``path=True``). Default: ``crit='CV'``.
+        - **lambda** (float): The penalty scaling parameter (if ``path=False``).
+        Default: ``lambda=0.01`.
 
     References:
     ----------
-    1. Friedman J., Hastie T., Tibshirani R., (2010) Regularization Paths for Generalized Linear Models via Coordinate Descent. Journal of Statistical Software, 33(1), 1-22. `Paper <https://www.jstatsoft.org/article/view/v033i01>`__
-    2. Zou, H., Hastie, T., Tibshirani, R., (2007) On the “degrees of freedom” of the lasso. The Annals of Statistics, 35(5), 2173–2192. `Paper <https://projecteuclid.org/download/pdfview_1/euclid.aos/1194461726>`__
+    1. Friedman J., Hastie T., Tibshirani R., (2010) Regularization Paths for
+    Generalized Linear Models via Coordinate Descent. Journal of Statistical Software,
+    33(1), 1-22. `Paper <https://www.jstatsoft.org/article/view/v033i01>`__
+    2. Zou, H., Hastie, T., Tibshirani, R., (2007) On the “degrees of freedom” of the
+    lasso. The Annals of Statistics, 35(5), 2173-2192. `Paper  # noqa: RUF002
+    <https://projecteuclid.org/download/pdfview_1/euclid.aos/1194461726>`__
     """
 
-    def __init__(self, solver_args={}):
+    def __init__(self, solver_args=None) -> None:  # noqa: ANN001, D107
         # Init base class
+        if solver_args is None:
+            solver_args = {}
         super().__init__("elastic-net", solver_args)
         # Defaults
         self.path = True
@@ -1080,7 +1146,7 @@ class elastic_net(Solver):
         if "lambda" in self.solver_args:
             self.lamda = solver_args.get("lambda")
 
-    def solve(self, A, b):
+    def solve(self, A, b) -> None:  # noqa: ANN001, D102, N803
         if self.path:
             self.coefficients, solver_dict = elastic_net._elastic_path(
                 A,
@@ -1105,17 +1171,19 @@ class elastic_net(Solver):
             )
 
     @staticmethod
-    def _elastic_net_single(A, b, verbose, lamda_val, alpha_val, opt):
-        """Private method, performs elastic net regression for single lambda value using OSQP optimiser."""
-        N, d = A.shape
-        if lamda_val == None:
+    def _elastic_net_single(A, b, verbose, lamda_val, alpha_val, opt):  # noqa: ANN001, ANN205, N803
+        """Private method, performs elastic net regression for single lambda value.
+
+        using OSQP optimiser.
+        """
+        _N, d = A.shape  # noqa: N806
+        if lamda_val is None:
             lamda_val = 0.1
-        if alpha_val == None:
+        if alpha_val is None:
             alpha_val = 1.0
         if verbose:
             print(
-                "Elastic net regression with lambda=%.2f and alpha=%.2f."
-                % (lamda_val, alpha_val)
+                f"Elastic net regression with lambda={lamda_val:.2f} and alpha={alpha_val:.2f}."
             )
 
         # Use cvxpy with OSQP for optimising
@@ -1148,8 +1216,17 @@ class elastic_net(Solver):
         return x
 
     @staticmethod
-    def _elastic_path(
-        A, b, verbose, max_iter, alpha, n_lamdas, lamda_eps, lamda_max, tol, crit
+    def _elastic_path(  # noqa: ANN205
+        A,  # noqa: ANN001, N803
+        b,  # noqa: ANN001
+        verbose,  # noqa: ANN001
+        max_iter,  # noqa: ANN001
+        alpha,  # noqa: ANN001
+        n_lamdas,  # noqa: ANN001
+        lamda_eps,  # noqa: ANN001
+        lamda_max,  # noqa: ANN001
+        tol,  # noqa: ANN001
+        crit,  # noqa: ANN001
     ):
         """Private method to perform elastic net regression via coordinate descent."""
         n, p = A.shape
@@ -1158,10 +1235,7 @@ class elastic_net(Solver):
             "elastic-net does not work reliably for alpha<0.01, choose 0.01>=alpha<=1."
         )
 
-        if crit == "CV":
-            nfold = 5
-        else:
-            nfold = 1
+        nfold = 5 if crit == "CV" else 1
 
         # Get grid of lambda values to cycle through (in descending order)
         lamdas = elastic_net._get_lamdas(A, b, n_lamdas, lamda_eps, lamda_max, alpha)
@@ -1172,24 +1246,24 @@ class elastic_net(Solver):
         rss = np.empty([n_lamdas, nfold]) * np.nan
         for fold in range(nfold):
             if verbose:
-                print("Fold %d/%d" % (fold, nfold))
+                print("Fold %d/%d" % (fold, nfold))  # noqa: UP031
             indices = [
                 int(k)
                 for k in fold * np.ceil(n / 5.0) + range(int(np.ceil(n / 5.0)))
                 if k < n
             ]
-            A_val = A[indices]
+            A_val = A[indices]  # noqa: N806
             b_val = b[indices]
-            A_train = np.delete(A, indices, 0)
+            A_train = np.delete(A, indices, 0)  # noqa: N806
             b_train = np.delete(b, indices, 0)
             if len(A_val) == 0:
                 continue
 
             x = np.zeros(p)  # Init coeff vector as zeroes
-            for l, lamda in enumerate(lamdas):
+            for l, lamda in enumerate(lamdas):  # noqa: E741
                 if verbose:
                     print(
-                        "Running coord. descent for lambda = %.2e (%d/%d)"
+                        "Running coord. descent for lambda = %.2e (%d/%d)"  # noqa: UP031
                         % (lamda, l, n_lamdas)
                     )
                 x_path[l, :, fold] = elastic_net._elastic_net_cd(
@@ -1227,8 +1301,7 @@ class elastic_net(Solver):
         x_best = x_path[idx, :, 0]
         if verbose:
             print(
-                "\nUsing %a criterion, optimum LASSO lambda = %.2e"
-                % (crit, lamdas[idx])
+                f"\nUsing {crit!a} criterion, optimum LASSO lambda = {lamdas[idx]:.2e}"
             )
 
         return x_best, {
@@ -1240,18 +1313,23 @@ class elastic_net(Solver):
         }
 
     @staticmethod
-    def _elastic_net_cd(x, A, b, lamda, alpha, max_iter, tol, verbose):
-        """Private method to perform coordinate descent (with elastic net soft thresholding) for a given lambda and alpha value.
+    def _elastic_net_cd(x, A, b, lamda, alpha, max_iter, tol, verbose):  # noqa: ANN001, ANN205, N803
+        """Private method to perform coordinate descent (with elastic net soft.
 
-        Following section 2.6 of [1], the algo does one complete pass over the features, and then for following iterations it only loops over the active set (non-zero coefficients). See commit 2b0af9f58fa5ff1876f76f7aedeaf2a0d7d252c8 for a more simple (but considerably slower for large p) algo.
+        thresholding) for a given lambda and alpha value.
+
+        Following section 2.6 of [1], the algo does one complete pass over the features,
+        and then for following iterations it only loops over the active set (non-zero
+        coefficients). See commit 2b0af9f58fa5ff1876f76f7aedeaf2a0d7d252c8 for a more
+        simple (but considerably slower for large p) algo.
         """
         # TODO - covariance updates (see 2.2 of [1]) could provide further speed up...
 
         # Preliminaries
         b = b.reshape(-1)
-        A2 = np.sum(A**2, axis=0)
+        A2 = np.sum(A**2, axis=0)  # noqa: N806
         dx_tol = tol
-        n, p = A.shape
+        _n, p = A.shape
 
         finish = False
         success = False
@@ -1304,13 +1382,13 @@ class elastic_net(Solver):
                     conv_msg = "Max iterations reached without convergence"
                     finish = True
                 if x_max == 0.0:  # if all coeff's zero
-                    conv_msg = "Convergence after %d iterations, x_max=0" % n_iter
+                    conv_msg = "Convergence after %d iterations, x_max=0" % n_iter  # noqa: UP031
                     finish = True
                 elif (
                     dx_max / x_max < dx_tol
                 ):  # biggest coord update of this iteration smaller than tolerance
                     conv_msg = (
-                        "Convergence after %d iterations, d_x: %.2e, tol: %.2e"
+                        "Convergence after %d iterations, d_x: %.2e, tol: %.2e"  # noqa: UP031
                         % (n_iter, dx_max / x_max, dx_tol)
                     )
                     finish = True
@@ -1336,15 +1414,15 @@ class elastic_net(Solver):
         return x
 
     @staticmethod
-    def _get_lamdas(A, b, n_lamdas, lamda_eps, lamda_maxmax, alpha):
+    def _get_lamdas(A, b, n_lamdas, lamda_eps, lamda_maxmax, alpha):  # noqa: ANN001, ANN205, N803
         eps = np.finfo(np.float64).eps
-        n, p = A.shape
+        n, _p = A.shape
 
         # Get list of lambda's
-        Ab = (A.T @ b * n).reshape(-1)  # *n as sum over n
+        Ab = (A.T @ b * n).reshape(-1)  # *n as sum over n  # noqa: N806
 
         # From sec 2.5 (with normalisation factor added)
-        Ab /= np.sum(A**2, axis=0) + eps
+        Ab /= np.sum(A**2, axis=0) + eps  # noqa: N806
         lamda_max = (
             np.max(np.abs(Ab[1:])) / (n * alpha)
         )  # 1: in here as not applying regularisation to intercept - TODO - check po at 0 for multiple parameters
@@ -1360,37 +1438,48 @@ class elastic_net(Solver):
         )[::-1]
 
     @staticmethod
-    def _soft_threshold(rho, lamda):
-        """Soft thresholding operator for 1D LASSO in elastic net coordinate descent algoritm"""
+    def _soft_threshold(rho, lamda):  # noqa: ANN001, ANN205
+        """Soft thresholding operator for 1D LASSO in elastic net coordinate descent.
+
+        algoritm.
+        """
         if rho < -lamda:
             return rho + lamda
         if rho > lamda:
             return rho - lamda
         return 0.0
 
-    def plot_regpath(self, nplot=None, show=True):
-        """Plots the regularisation path. See :func:`plot.plot_regpath<equadratures.plot.plot_regpath>` for full description."""
-        if hasattr(self, "elements"):
-            elements = self.elements
-        else:
-            elements = None
+    def plot_regpath(self, nplot=None, show=True):  # noqa: ANN001, ANN201
+        """Plots the regularisation path. See.
+
+        :func:`plot.plot_regpath<equadratures.plot.plot_regpath>` for full
+        description.
+        """
+        elements = self.elements if hasattr(self, "elements") else None
         return plot.plot_regpath(self, elements, nplot, show)
 
 
 # Custom solver subclass.
 #########################
-class custom_solver(Solver):
-    """Custom solver class.
+class custom_solver(Solver):  # noqa: N801
+    r"""Custom solver class.
 
-    This class allows you to enter a custom ``solve()`` function to solve :math:`\mathbf{A}\mathbf{x}=\mathbf{b}`. The ``solve()`` is provided via ``solver_args``, and should accept the numpy.ndarray's :math:`\mathbf{A}` and :math:`\mathbf{b}`, and return a numpy.ndarray containing the coefficients :math:`\mathbf{x}`.
+    This class allows you to enter a custom ``solve()`` function to solve
+    :math:`\mathbf{A}\mathbf{x}=\mathbf{b}`. The ``solve()`` is provided via
+    ``solver_args``, and should accept the numpy.ndarray's :math:`\mathbf{A}` and
+    :math:`\mathbf{b}`, and return a numpy.ndarray containing the coefficients
+    :math:`\mathbf{x}`.
 
     Parameters
     ----------
     solver_args : dict
-        Optional arguments for the solver. Optional arguments for the solver. Additional arguments are passed through to the custom ``solve()`` function as kwargs.
+        Optional arguments for the solver. Optional arguments for the solver. Additional
+        arguments are passed through to the custom ``solve()`` function as kwargs.
 
-        - **verbose** (bool): Default value of this input is set to ``False``; when ``True``, the solver prints information to screen.
-        - **solve** (Callable): The custom ``solve()`` solve function. This must accept A and b, and return x.
+        - **verbose** (bool): Default value of this input is set to ``False``; when
+        ``True``, the solver prints information to screen.
+        - **solve** (Callable): The custom ``solve()`` solve function. This must accept
+        A and b, and return x.
 
     Example:
     -------
@@ -1408,22 +1497,26 @@ class custom_solver(Solver):
     >>>             x = x + (term_1 * term_3 * a_row.T)
     >>>     return x
     >>>
-    >>> # Wrap this function in the custom_solver subclass and use it to fit a polynomial
+    >>> # Wrap this function in the custom_solver subclass and use it to fit a
+    polynomial
     >>> mypoly = eq.Poly(myparam, mybasis, method='custom-solver',
-    >>>             sampling_args={'mesh':'user-defined', 'sample-points':X, 'sample-outputs':y},
+    >>>             sampling_args={'mesh':'user-defined', 'sample-points':X, 'sample-
+    outputs':y},
     >>>               solver_args={'solve':lsq,'verbose':True})
     """
 
-    def __init__(self, solver_args={}):
+    def __init__(self, solver_args=None) -> None:  # noqa: ANN001, D107
         # Init base class
+        if solver_args is None:
+            solver_args = {}
         super().__init__("custom-solver", solver_args)
         # Solver specific attributes
         self.custom_solve = solver_args.pop("solve", None)
         self.kwargs = solver_args
 
-    def solve(self, A, b):
+    def solve(self, A, b) -> None:  # noqa: ANN001, D102, N803
         # Check if custom_solve is actually a function
-        if not hasattr(self.custom_solve, "__call__"):
+        if not callable(self.custom_solve):
             raise ValueError(
                 "custom_solve must be a callable function. It should accept A and b only, and return x."
             )

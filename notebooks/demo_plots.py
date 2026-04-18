@@ -1,4 +1,4 @@
-# ---
+# ---  # noqa: D100
 # jupyter:
 #   jupytext:
 #     formats: ipynb,py:percent
@@ -18,12 +18,12 @@
 #
 # This script is intended to help with debugging problems and solvers.
 #
-# It create a problem-solver pairing (using the directory) and runs multiple macroreplications of the solver on the problem.
+# It create a problem-solver pairing (using the directory) and runs multiple macroreplications of the solver on the problem.  # noqa: E501
 
 # %% [markdown]
 # ## Append SimOpt Path
 #
-# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.
+# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.  # noqa: E501
 
 # %%
 import sys
@@ -49,7 +49,7 @@ num_postreps_init_opt = 200
 
 # %%
 # Import the ProblemSolver class and other useful functions
-from simopt.experiment_base import (
+from simopt.experiment_base import (  # noqa: E402
     ProblemSolver,
     post_normalize,
     read_experiment_results,
@@ -87,7 +87,7 @@ for problem_name in problem_names:
 # %%
 # Produce basic plots.
 
-from simopt.experiment_base import (
+from simopt.experiment_base import (  # noqa: E402
     PlotType,
     plot_terminal_progress,
 )

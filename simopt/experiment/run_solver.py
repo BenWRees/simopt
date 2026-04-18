@@ -1,33 +1,40 @@
 """Functions for running solvers and collecting their outputs."""
 
-#TODO: Add in function estimates, budget history, and iterations as outputs to running a Problem-Solver Pair
+# TODO: Add in function estimates, budget history, and iterations as outputs to running a Problem-Solver Pair  # noqa: E501
 import logging
 import time
+from copy import deepcopy
 
 import pandas as pd
 from joblib import Parallel, delayed
-from copy import deepcopy
 
 from mrg32k3a.mrg32k3a import MRG32k3a
-from simopt.problem import Problem
+from simopt.base import MultistageProblem, ProblemLike
 from simopt.solver import Solver
 
 
 def _trim(df: pd.DataFrame, budget: int) -> pd.DataFrame:
     """Trim solution history beyond the problem's budget."""
+    if df.empty:
+        return df.copy()
+
     df = df.loc[df["budget"] <= budget].copy()
+
+    if df.empty:
+        return df
 
     # Add the latest solution as the final row
     if df["budget"].iloc[-1] < budget:
-        row = pd.DataFrame.from_records(
-            [{"step": len(df), "solution": df["solution"].iloc[-1], "budget": budget}]
-        )
+        last_row = df.iloc[-1].to_dict()
+        last_row["step"] = len(df)
+        last_row["budget"] = budget
+        row = pd.DataFrame.from_records([last_row], columns=df.columns)
         df = pd.concat([df, row], ignore_index=True)
 
     return df
 
 
-def _set_up_rngs(solver: Solver, problem: Problem, mrep: int) -> None:
+def _set_up_rngs(solver: Solver, problem: ProblemLike, mrep: int) -> None:
     # Stream 0: reserved for taking post-replications
     # Stream 1: reserved for bootstrapping
     # Stream 2: reserved for overhead ...
@@ -63,10 +70,10 @@ def _set_up_rngs(solver: Solver, problem: Problem, mrep: int) -> None:
 
 
 def _run_mrep(
-    solver: Solver, problem: Problem, mrep: int
+    solver: Solver, problem: ProblemLike, mrep: int
 ) -> tuple[pd.DataFrame, pd.DataFrame | None, float]:
     """Run one macroreplication of the solver on the problem.
-    
+
     Returns:
         tuple: (solution_df, iteration_df, elapsed_time)
             - solution_df: DataFrame with solution-level data
@@ -81,6 +88,11 @@ def _run_mrep(
     # Set up RNGs
     _set_up_rngs(solver, problem, mrep)
 
+    # Re-bind lookahead solver at run time so shared multistage problem
+    # instances do not retain another experiment's solver reference.
+    if isinstance(problem, MultistageProblem):
+        problem.lookahead_solver = solver
+
     # Run solver
     start = time.perf_counter()
     solution_df, iteration_df = solver.run(problem)
@@ -93,8 +105,26 @@ def _run_mrep(
 
     # Trim solution results to the problem budget and add macroreplication index
     solution_df = _trim(solution_df, problem.factors["budget"])
+    if solution_df.empty:
+        # Some wrapped/inner solves can exhaust budget before recording a
+        # recommendation. Keep one fallback row so downstream per-mrep
+        # postprocessing remains aligned with n_macroreps.
+        solution_df = pd.DataFrame.from_records(
+            [
+                {
+                    "step": 0,
+                    "solution": problem.factors["initial_solution"],
+                    "budget": problem.factors["budget"],
+                }
+            ]
+        )
+        logging.warning(
+            f"Macroreplication {mrep}: solver {solver.name} on {problem.name} "
+            "returned no recommended solutions; using initial solution fallback."
+        )
+
     solution_df["mrep"] = mrep
-    
+
     # Add macroreplication index to iteration data if available
     if iteration_df is not None:
         iteration_df["mrep"] = mrep
@@ -103,7 +133,7 @@ def _run_mrep(
 
 
 def run_solver(
-    solver: Solver, problem: Problem, n_macroreps: int, n_jobs: int = -1
+    solver: Solver, problem: ProblemLike, n_macroreps: int, n_jobs: int = -1
 ) -> tuple[pd.DataFrame, pd.DataFrame | None, list[float]]:
     """Runs the solver on the problem for a given number of macroreplications.
 
@@ -118,7 +148,8 @@ def run_solver(
     Returns:
         tuple: (solution_df, iteration_df, elapsed_times)
             - solution_df: DataFrame with solution-level data for all macroreps
-            - iteration_df: DataFrame with iteration-level data for all macroreps (or None)
+            - iteration_df: DataFrame with iteration-level data for all macroreps (or
+            None)
             - elapsed_times: List of elapsed times per macroreplication
 
     Raises:
@@ -149,9 +180,11 @@ def run_solver(
         if iteration_df is not None:
             iteration_dfs.append(iteration_df)
         elapsed_times.append(elapsed)
-    
+
     solution_df = pd.concat(solution_dfs, ignore_index=True)
-    iteration_df = pd.concat(iteration_dfs, ignore_index=True) if iteration_dfs else None
+    iteration_df = (
+        pd.concat(iteration_dfs, ignore_index=True) if iteration_dfs else None
+    )
 
     return solution_df, iteration_df, elapsed_times
 

@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # noqa: D100, N999
 
 import warnings
 from math import ceil, log
@@ -9,12 +9,12 @@ from numpy.linalg import norm
 from scipy.optimize import NonlinearConstraint, minimize
 
 warnings.filterwarnings("ignore")
-import importlib
+import importlib  # noqa: E402
 
-import matplotlib.pyplot as plt
-from pydantic import Field, model_validator
+import matplotlib.pyplot as plt  # noqa: E402
+from pydantic import Field, model_validator  # noqa: E402
 
-from simopt.base import (
+from simopt.base import (  # noqa: E402
     ConstraintType,
     ObjectiveType,
     Problem,
@@ -23,12 +23,12 @@ from simopt.base import (
     SolverConfig,
     VariableType,
 )
-from simopt.solvers.active_subspaces.basis import *
+from simopt.solvers.active_subspaces.basis import *  # noqa: E402, F403
 
 # from simopt.solvers.active_subspaces.polyridge import *
 # from simopt.solvers.active_subspaces.subspace import ActiveSubspace
-from .Geometry import *
-from .Sampling import *
+from .Geometry import *  # noqa: E402, F403
+from .Sampling import *  # noqa: E402, F403
 
 # from ..Equadratures.subspace import ActiveSubspace
 
@@ -154,7 +154,7 @@ class TrustRegionBaseConfig(SolverConfig):
     ]
 
     @model_validator(mode="after")
-    def _validate_eta_2_greater_than_eta_1(self):
+    def _validate_eta_2_greater_than_eta_1(self):  # noqa: ANN202
         if self.eta_2 <= self.eta_1:
             raise ValueError(
                 "A 'very successful' iteration threshold needs to be greater than a 'successful' iteration threshold"
@@ -174,35 +174,34 @@ class TrustRegionBase(Solver):
     gradient_needed: ClassVar[bool] = False
 
     def __init__(
-        self, name="TRUSTREGION_BASE", fixed_factors: dict | None = None
+        self, name="TRUSTREGION_BASE", fixed_factors: dict | None = None  # noqa: ANN001
     ) -> None:
         super().__init__(name, fixed_factors)
         self.rho = []
 
     # nice way to allow for different types of random models
-    def model_instantiation(self):
+    def model_instantiation(self):  # noqa: ANN202
         class_name = self.factors["model type"].strip()
         module = importlib.import_module("simopt.solvers.TrustRegion.Models")
         return getattr(module, class_name)
 
-    def polynomial_basis_instantiation(self):
+    def polynomial_basis_instantiation(self):  # noqa: ANN202
         class_name = self.factors["polynomial basis"].strip()
         module = importlib.import_module("simopt.solvers.active_subspaces.basis")
         return getattr(module, class_name)
 
-    def sample_instantiation(self):
+    def sample_instantiation(self):  # noqa: ANN202
         class_name = self.factors["sampling rule"].strip()
         module = importlib.import_module("simopt.solvers.TrustRegion.Sampling")
-        sampling_instance = getattr(module, class_name)(self)
-        return sampling_instance
+        return getattr(module, class_name)(self)
 
-    def geometry_type_instantiation(self):
+    def geometry_type_instantiation(self):  # noqa: ANN202
         class_name = self.factors["geometry instance"].strip()
         module = importlib.import_module("simopt.solvers.TrustRegion.Geometry")
         return getattr(module, class_name)
 
-    def solve_subproblem(self, delta, model, problem, solution, visited_pts_list):
-        """Solve the Trust-Region subproblem either using Cauchy reduction or a black-box optimisation solver
+    def solve_subproblem(self, delta, model, problem, solution, visited_pts_list):  # noqa: ANN001, ANN202
+        """Solve the Trust-Region subproblem either using Cauchy reduction or a black-box optimisation solver.
 
         Args:
                 model (random_model): the locally constucted model
@@ -214,17 +213,17 @@ class TrustRegionBase(Solver):
         """
         raise NotImplementedError
 
-    def evaluate_candidate_solution(
+    def evaluate_candidate_solution(  # noqa: ANN202
         self,
-        model,
-        problem,
-        fval_tilde,
-        delta_k,
-        interpolation_solns,
-        current_solution,
-        candidate_solution,
+        model,  # noqa: ANN001
+        problem,  # noqa: ANN001
+        fval_tilde,  # noqa: ANN001
+        delta_k,  # noqa: ANN001
+        interpolation_solns,  # noqa: ANN001
+        current_solution,  # noqa: ANN001
+        candidate_solution,  # noqa: ANN001
     ):
-        """Evaluate the candidate solution, by looking at the ratio comparison
+        """Evaluate the candidate solution, by looking at the ratio comparison.
 
         Args:
                 model (random_model): the local model
@@ -252,12 +251,12 @@ class TrustRegion(TrustRegionBase):
     class_name_abbr: ClassVar[str] = "TRUSTREGION"
     class_name: ClassVar[str] = "TrustRegion"
 
-    def __init__(self, name="TRUSTREGION", fixed_factors: dict | None = None) -> None:
+    def __init__(self, name="TRUSTREGION", fixed_factors: dict | None = None) -> None:  # noqa: ANN001, D107
         super().__init__(name, fixed_factors)
         self.rho = []
         self.sampling_nos = []
 
-    def construct_symmetric_matrix(self, column_vector):
+    def construct_symmetric_matrix(self, column_vector):  # noqa: ANN001, ANN201, D102
         flat_vector = np.array(column_vector).flatten()
         # Create the symmetric matrix
         n = len(flat_vector)
@@ -269,8 +268,8 @@ class TrustRegion(TrustRegionBase):
 
         return symmetric_matrix
 
-    def solve_subproblem(self, delta, model, problem, solution, visited_pts_list):
-        """Solve the Trust-Region subproblem either using Cauchy reduction or a black-box optimisation solver
+    def solve_subproblem(self, delta, model, problem, solution, visited_pts_list):  # noqa: ANN001, ANN201
+        """Solve the Trust-Region subproblem either using Cauchy reduction or a black-box optimisation solver.
 
         Args:
                 model (random_model): the locally constucted model
@@ -282,7 +281,7 @@ class TrustRegion(TrustRegionBase):
         """
         new_x = solution.x
 
-        q, grad, Hessian = model.coefficients
+        _q, grad, Hessian = model.coefficients  # noqa: N806
         fval = model.fval
 
         if self.factors["easy_solve"]:
@@ -300,14 +299,15 @@ class TrustRegion(TrustRegionBase):
 
         else:
 
-            def subproblem(s):
-                Hessian_matrix = np.diag(Hessian)
+            def subproblem(s):  # noqa: ANN001, ANN202
+                Hessian_matrix = np.diag(Hessian)  # noqa: N806
                 result = (
                     fval[0] + np.dot(s, grad) + np.dot(np.matmul(s, Hessian_matrix), s)
                 )
                 return float(result[0])
 
-            con_f = lambda s: float(norm(s))
+            def con_f(s):  # noqa: ANN001, ANN202
+                return float(norm(s))
             nlc = NonlinearConstraint(con_f, 0, delta)
             solve_subproblem = minimize(
                 subproblem,
@@ -335,17 +335,17 @@ class TrustRegion(TrustRegionBase):
 
         return candidate_solution, visited_pts_list
 
-    def evaluate_candidate_solution(
+    def evaluate_candidate_solution(  # noqa: ANN201
         self,
-        model,
-        problem,
-        fval_tilde,
-        delta_k,
-        interpolation_solns,
-        current_solution,
-        candidate_solution,
+        model,  # noqa: ANN001
+        problem,  # noqa: ANN001
+        fval_tilde,  # noqa: ANN001
+        delta_k,  # noqa: ANN001
+        interpolation_solns,  # noqa: ANN001
+        current_solution,  # noqa: ANN001
+        candidate_solution,  # noqa: ANN001
     ):
-        """Evaluate the candidate solution, by looking at the ratio comparison
+        """Evaluate the candidate solution, by looking at the ratio comparison.
 
         Args:
                 model (random_model): the local model
@@ -378,7 +378,7 @@ class TrustRegion(TrustRegionBase):
         model_reduction = model.local_model_evaluate(
             np.zeros(problem.dim)
         ) - model.local_model_evaluate(stepsize)
-        if model_reduction <= 0:
+        if model_reduction <= 0:  # noqa: SIM108
             rho = 0
         else:
             # difference = np.subtract(candidate_solution.x, current_solution.x)
@@ -409,7 +409,7 @@ class TrustRegion(TrustRegionBase):
         return current_solution, delta_k
 
     # solve the problem - inherited from base.Solver
-    def solve(self, problem: Problem) -> tuple[list[Solution], list[int]]:
+    def solve(self, problem: Problem) -> tuple[list[Solution], list[int]]:  # noqa: D102
         # self.recommended_solns = []
         # self.intermediate_budgets = []
 
@@ -535,7 +535,7 @@ class TrustRegion(TrustRegionBase):
         # plt.show()
 
     def sampling_no_against_iteration(self, k: int) -> None:
-        """Plot the number of samples taken against the iteration number"""
+        """Plot the number of samples taken against the iteration number."""
         x = np.arange(1, k + 1)
         print(self.sampling_nos)
         plt.plot(x, self.sampling_nos)
@@ -545,27 +545,27 @@ class TrustRegion(TrustRegionBase):
         plt.savefig("sampling_no_vs_iteration.png")
         # plt.show()
 
-    def sample_candidate_solution(
+    def sample_candidate_solution(  # noqa: ANN201, D102
         self,
-        sampling_instance,
-        candidate_solution,
-        current_solution,
-        problem,
-        k,
-        delta_k,
+        sampling_instance,  # noqa: ANN001
+        candidate_solution,  # noqa: ANN001
+        current_solution,  # noqa: ANN001
+        problem,  # noqa: ANN001
+        k,  # noqa: ANN001
+        delta_k,  # noqa: ANN001
     ):
         if self.factors["crn_across_solns"]:
             problem.simulate(candidate_solution, current_solution.n_reps)
             self.budget.request(current_solution.n_reps)
             fval_tilde = -1 * problem.minmax[0] * candidate_solution.objectives_mean
             return candidate_solution, fval_tilde
-        candidate_solution, expended_budget = sampling_instance(
+        candidate_solution, _expended_budget = sampling_instance(
             problem, k, candidate_solution, delta_k
         )
         fval_tilde = -1 * problem.minmax[0] * candidate_solution.objectives_mean
         return candidate_solution, fval_tilde
 
-    def calculate_max_radius(self, problem):
+    def calculate_max_radius(self, problem):  # noqa: ANN001, ANN201, D102
         # Designate random number generator for random sampling
         find_next_soln_rng = self.rng_list[1]
 
@@ -587,8 +587,7 @@ class TrustRegion(TrustRegionBase):
                 )
             ]
         # TODO: update this so that it could be used for problems with decision variables at varying scales!
-        delta_max = max(delta_max_arr)
-        return delta_max
+        return max(delta_max_arr)
 
 
 # class OMoRF(TrustRegionBase):

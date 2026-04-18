@@ -1,4 +1,4 @@
-# ---
+# ---  # noqa: D100
 # jupyter:
 #   jupytext:
 #     formats: ipynb,py:percent
@@ -15,7 +15,7 @@
 
 # %% [markdown]
 # # Demo for an experiment with FCSA on the SAN problem
-# This script is intented to demonstrate an experiment with three different versions of the FCSA solver on the SAN problem. 
+# This script is intented to demonstrate an experiment with three different versions of the FCSA solver on the SAN problem.  # noqa: E501
 
 # %% [markdown]
 # ## Append SimOpt Path
@@ -45,7 +45,7 @@ from simopt.solvers.fcsa import FCSA
 # %% [markdown]
 # ## Experiment Configuration Parameters
 #
-# Configure 3 versions of the solver: CSA, CSA-N, and FCSA and set problem configuration. Set report_all_solutions = True meaning all incumbent solutions will be reported. 
+# Configure 3 versions of the solver: CSA, CSA-N, and FCSA and set problem configuration. Set report_all_solutions = True meaning all incumbent solutions will be reported.  # noqa: E501
 
 # %%
 fixed_factors = {
@@ -87,7 +87,7 @@ fcsa = FCSA(
 
 
 # %%
-def run_experiment(solver, problem, n_macroreps, n_postreps):
+def run_experiment(solver, problem, n_macroreps, n_postreps):  # noqa: ANN001, ANN201, D103
     experiment = ProblemSolver(solver=solver, problem=problem)
     experiment.run(n_macroreps=n_macroreps)
     experiment.post_replicate(n_postreps=n_postreps)
@@ -107,7 +107,7 @@ post_normalize(experiments, n_postreps)
 # %% [markdown]
 # ## Plotting Settings
 #
-# Define the plotting settings for the experiments. Plot terminal objective progress, terminal feasibility progress, objective progress curve, and feasiblity progress curve for all incumbent solutions.
+# Define the plotting settings for the experiments. Plot terminal objective progress, terminal feasibility progress, objective progress curve, and feasiblity progress curve for all incumbent solutions.  # noqa: E501
 
 # %%
 plot_terminal_progress([experiment1], PlotType.VIOLIN, normalize=False)
@@ -138,7 +138,7 @@ plot_feasibility_progress(
 # %% [markdown]
 # ## Experiment Configuration Parameters
 #
-# Configure 2 versions of the solver: CSA-N, and FCSA and set problem configuration. Set report_all_solutions = False meaning only recommended solutions will be reported. 
+# Configure 2 versions of the solver: CSA-N, and FCSA and set problem configuration. Set report_all_solutions = False meaning only recommended solutions will be reported.  # noqa: E501
 
 # %%
 csa_n = FCSA(
@@ -170,7 +170,7 @@ post_normalize([experiment2, experiment3], 100)
 # %% [markdown]
 # ## Plotting Settings
 #
-# Define the plotting settings for the experiments. Plot terminal objective vs feasibility scatter plot for recommended solutions. 
+# Define the plotting settings for the experiments. Plot terminal objective vs feasibility scatter plot for recommended solutions.  # noqa: E501
 
 # %%
 plot_terminal_feasibility([[experiment2], [experiment3]], PlotType.FEASIBILITY_SCATTER)

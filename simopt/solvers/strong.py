@@ -123,7 +123,7 @@ class STRONG(Solver):
     variable_type: ClassVar[VariableType] = VariableType.CONTINUOUS
     gradient_needed: ClassVar[bool] = False
 
-    def solve(self, problem: Problem) -> None:  # noqa: D102
+    def solve(self, problem: Problem) -> None:  # noqa: D102  # ty: ignore[invalid-method-override]
         # Default values.
         self.iteration_count = 1
         self.record_count = 1
@@ -158,11 +158,11 @@ class STRONG(Solver):
         self.intermediate_budgets.append(self.budget.used)
 
         # Precompute factorials
-        factorials = np.array([math.factorial(i) for i in range(1, problem.dim + 1)])
+        np.array([math.factorial(i) for i in range(1, problem.dim + 1)])
         # Precompute other variables
         neg_minmax = -problem.minmax[0]
         dim_sq = problem.dim**2
-        try :
+        try:
             while True:
                 new_x = np.array(new_solution.x)
                 # Check variable bounds.
@@ -196,7 +196,7 @@ class STRONG(Solver):
                         if num_generated_grads > 2:
                             # Update n_r and counter after each loop.
                             n_r *= lam
-                        # Accept any non-zero gradient, or exit if the budget is exceeded.
+                        # Accept any non-zero gradient, or exit if the budget is exceeded.  # noqa: E501
                         if norm(grad) != 0:
                             break
 
@@ -219,7 +219,9 @@ class STRONG(Solver):
                     # Construct the polynomial.
                     x_diff = candidate_x - new_x
                     r_old = g_old
-                    r_new = g_old + (x_diff @ grad) + 0.5 * ((x_diff @ hessian) @ x_diff)
+                    r_new = (
+                        g_old + (x_diff @ grad) + 0.5 * ((x_diff @ hessian) @ x_diff)
+                    )
 
                     r_diff = (r_old - r_new)[0]
                     r_diff = make_nonzero(r_diff, "r_diff (stage I)")
@@ -292,7 +294,7 @@ class STRONG(Solver):
                         if num_generated_grads > 2:
                             # Update n_r and counter after each loop.
                             n_r *= lam
-                        # Accept any non-zero gradient, or exit if the budget is exceeded.
+                        # Accept any non-zero gradient, or exit if the budget is exceeded.  # noqa: E501
                         if norm(grad) != 0 or self.budget.remaining <= 0:
                             break
 
@@ -318,7 +320,9 @@ class STRONG(Solver):
                     # Construct the polynomial.
                     x_diff = candidate_x - new_x
                     r_old = g_old
-                    r_new = g_old + (x_diff @ grad) + 0.5 * ((x_diff @ hessian) @ x_diff)
+                    r_new = (
+                        g_old + (x_diff @ grad) + 0.5 * ((x_diff @ hessian) @ x_diff)
+                    )
 
                     r_diff = (r_old - r_new)[0]
                     r_diff = make_nonzero(r_diff, "rdiff (stage II)")
@@ -363,7 +367,9 @@ class STRONG(Solver):
                             # Step 2: determine the new inner solution based on the
                             # accumulated design matrix X.
                             try_x = self.cauchy_point(g_var, h_var, new_x, problem)
-                            try_solution = self.create_new_solution(tuple(try_x), problem)
+                            try_solution = self.create_new_solution(
+                                tuple(try_x), problem
+                            )
 
                             # Step 3.
                             counter_ceiling = np.ceil(
@@ -409,12 +415,12 @@ class STRONG(Solver):
                                 result_solution = new_solution
                                 result_x = new_x
                             elif (eta_0 <= rrho) and (rrho < eta_1):
-                                # Accept the solution and remains the size of trust region.
+                                # Accept the solution and remains the size of trust region.  # noqa: E501
                                 result_solution = try_solution
                                 result_x = try_x
                                 rr_old = g_b_new
                             else:
-                                # Accept the solution and expand the size of trust region.
+                                # Accept the solution and expand the size of trust region.  # noqa: E501
                                 delta_t = gamma_2 * delta_t
                                 result_solution = try_solution
                                 result_x = try_x
@@ -444,7 +450,7 @@ class STRONG(Solver):
                             self.recommended_solns.append(new_solution)
                             self.intermediate_budgets.append(self.budget.used)
                     n_r = int(np.ceil(self.factors["lambda_2"] * n_r))
-                
+
                 self.iteration_count += 1
                 self.iterations.append(self.iteration_count)
                 self.fn_estimates.append(new_solution.objectives_mean.item())

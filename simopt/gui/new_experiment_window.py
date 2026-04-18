@@ -1,15 +1,16 @@
-from __future__ import annotations
+from __future__ import annotations  # noqa: D100
 
 import os
-from pathlib import Path
 import pickle
 import re
 import threading
 import tkinter as tk
 from abc import ABCMeta
+from collections.abc import Callable
+from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from tkinter.font import nametofont
-from typing import Callable, Final, Literal
+from typing import Final, Literal
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -82,13 +83,13 @@ class NewExperimentWindow(Toplevel):
         self.custom_macro_reps: dict[str, tk.IntVar] = {}
         # dict that contains user specified postrep numbers for each experiment
         self.custom_post_reps: dict[str, tk.IntVar] = {}
-        # dict that contains number of postreps to take at initial & optimal solution for normalization for each experiment
+        # dict that contains number of postreps to take at initial & optimal solution for normalization for each experiment  # noqa: E501
         self.custom_init_post_reps: dict[str, tk.IntVar] = {}
         # contains bool val for if crn is used across budget for each experiment
         self.custom_crn_budgets: dict[str, tk.StringVar] = {}
         # contains bool val for if crn is used across macroreps for each experiment
         self.custom_crn_macros: dict[str, tk.StringVar] = {}
-        # contains bool val for if crn is used across initial and optimal solution for each experiment
+        # contains bool val for if crn is used across initial and optimal solution for each experiment  # noqa: E501
         self.custom_crn_inits: dict[str, tk.StringVar] = {}
         # solver tolerance gaps for each experiment (inserted as list)
         # TODO: add checks to ensure that solve_tol lists are always 4 long
@@ -470,7 +471,7 @@ class NewExperimentWindow(Toplevel):
         )
         attr_desc_lines = [
             "Objective: Single [S] | Multiple [M]",
-            "Constraint: Unconstrained [U] | Box [B] | Deterministic [D] | Stochastic [S]",
+            "Constraint: Unconstrained [U] | Box [B] | Deterministic [D] | Stochastic [S]",  # noqa: E501
             "Variable: Discrete [D] | Continuous [C] | Mixed [M]",
             "Gradient Available: True [G] | False [N]",
         ]
@@ -871,14 +872,14 @@ class NewExperimentWindow(Toplevel):
             values=possible_options
         )
 
-    def add_problem_to_curr_exp(
+    def add_problem_to_curr_exp(  # noqa: D102
         self, unique_name: str, problem_list: list[list]
     ) -> None:
         self.root_problem_dict[unique_name] = problem_list
         self.add_problem_to_curr_exp_list(unique_name)
         self.__update_solver_dropdown()
 
-    def add_solver_to_curr_exp(self, unique_name: str, solver_list: list[list]) -> None:
+    def add_solver_to_curr_exp(self, unique_name: str, solver_list: list[list]) -> None:  # noqa: D102
         self.root_solver_dict[unique_name] = solver_list
         self.add_solver_to_curr_exp_list(unique_name)
         self.__update_problem_dropdown()
@@ -919,7 +920,7 @@ class NewExperimentWindow(Toplevel):
         )
         self.tk_buttons[del_button_name].grid(row=insert_row, column=3)
 
-    def add_problem_to_curr_exp_list(self, unique_name: str) -> None:
+    def add_problem_to_curr_exp_list(self, unique_name: str) -> None:  # noqa: D102
         # Make sure the unique name is in the root problem dict
         if unique_name not in self.root_problem_dict:
             error_msg = f"Problem {unique_name} not found in root problem dict"
@@ -933,7 +934,7 @@ class NewExperimentWindow(Toplevel):
         )
         self.__update_problem_list_scroll_region()
 
-    def add_solver_to_curr_exp_list(self, unique_name: str) -> None:
+    def add_solver_to_curr_exp_list(self, unique_name: str) -> None:  # noqa: D102
         # Make sure the unique name is in the root solver dict
         if unique_name not in self.root_solver_dict:
             error_msg = f"Solver {unique_name} not found in root solver dict"
@@ -1137,9 +1138,9 @@ class NewExperimentWindow(Toplevel):
         self.cross_design_problem_compatibility()
         self.cross_design_solver_compatibility()
 
-    def cross_design_problem_compatibility(self) -> None:
+    def cross_design_problem_compatibility(self) -> None:  # noqa: D102
         # If we don't have the tab open, return
-        # if self.tk_notebooks["ntbk.ps_adding"].select() != "Quick-Add Problems/Solvers":
+        # if self.tk_notebooks["ntbk.ps_adding"].select() != "Quick-Add Problems/Solvers":  # noqa: E501
         #     return
         # create temp objects for current selected solvers and all possilble problems
         temp_solvers = []
@@ -1169,9 +1170,9 @@ class NewExperimentWindow(Toplevel):
             state = "disabled" if error else "normal"
             self.tk_checkbuttons[dict_name].configure(state=state)
 
-    def cross_design_solver_compatibility(self) -> None:
+    def cross_design_solver_compatibility(self) -> None:  # noqa: D102
         # If we don't have the tab open, return
-        # if self.tk_notebooks["ntbk.ps_adding"].select() != "Quick-Add Problems/Solvers":
+        # if self.tk_notebooks["ntbk.ps_adding"].select() != "Quick-Add Problems/Solvers":  # noqa: E501
         #     return
         # create temp objects for current selected solvers and all possilble problems
         temp_problems = []
@@ -1201,7 +1202,7 @@ class NewExperimentWindow(Toplevel):
             state = "disabled" if error else "normal"
             self.tk_checkbuttons[dict_name].configure(state=state)
 
-    def create_cross_design(self) -> None:
+    def create_cross_design(self) -> None:  # noqa: D102
         any_added = False
         for solver_name in solver_directory:
             dict_name = f"ntbk.ps_adding.quick_add.problems_frame.{solver_name}"
@@ -1261,13 +1262,13 @@ class NewExperimentWindow(Toplevel):
             if "ntbk.ps_adding.quick_add.solvers_frame" in key:
                 self.tk_var_bools[key].set(False)
 
-    def raise_not_yet_implemented_error(self) -> None:
+    def raise_not_yet_implemented_error(self) -> None:  # noqa: D102
         error_msg = "This feature has not yet been implemented."
         messagebox.showerror("Not Yet Implemented", error_msg)
 
-    def load_design(self) -> None:
+    def load_design(self) -> None:  # noqa: D102
         # Open file dialog to select design file
-        # CSV files only, but all files can be selected (in case someone forgets to change file type)
+        # CSV files only, but all files can be selected (in case someone forgets to change file type)  # noqa: E501
         design_file = filedialog.askopenfilename(
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
         )
@@ -1275,7 +1276,7 @@ class NewExperimentWindow(Toplevel):
         if design_file == "" or not design_file:
             return
         # Exit w/ message if file does not exist
-        if not os.path.exists(design_file):
+        if not os.path.exists(design_file):  # noqa: PTH110
             messagebox.showerror(
                 "File Not Found",
                 "The selected file does not exist. Please select a different file.",
@@ -1287,7 +1288,7 @@ class NewExperimentWindow(Toplevel):
         except Exception as e:
             messagebox.showerror(
                 "Error Reading File",
-                f"An error occurred while reading the file. Please ensure the file is a CSV file and try again. Error: {e}",
+                f"An error occurred while reading the file. Please ensure the file is a CSV file and try again. Error: {e}",  # noqa: E501
             )
             return
         # Grab the values for 'name', 'design_type', and 'num_stacks' from the first row
@@ -1328,10 +1329,10 @@ class NewExperimentWindow(Toplevel):
         else:
             messagebox.showerror(
                 "Invalid Design File",
-                f"The name variable in the design file ({name}) is not recognized as a problem or solver. Please ensure the file is a valid design file.",
+                f"The name variable in the design file ({name}) is not recognized as a problem or solver. Please ensure the file is a valid design file.",  # noqa: E501
             )
 
-    def load_experiment(self) -> None:
+    def load_experiment(self) -> None:  # noqa: D102
         # Open file dialog to select design file
         # Pickle files only, but all files can be selected (in case someone
         # forgets to change file type)
@@ -1347,7 +1348,7 @@ class NewExperimentWindow(Toplevel):
         if experiment_file == "" or not experiment_file:
             return
         # Exit w/ message if file does not exist
-        if not os.path.exists(experiment_file):
+        if not os.path.exists(experiment_file):  # noqa: PTH110
             messagebox.showerror(
                 "File Not Found",
                 "The selected file does not exist. Please select a different file.",
@@ -1355,12 +1356,12 @@ class NewExperimentWindow(Toplevel):
             return
         # Open the file with pickle
         try:
-            with open(experiment_file, "rb") as f:
+            with open(experiment_file, "rb") as f:  # noqa: PTH123
                 experiment = pickle.load(f)
         except Exception as e:
             messagebox.showerror(
                 "Error Reading File",
-                f"An error occurred while reading the file. Please ensure the file is a pickled experiment and try again. Error: {e}",
+                f"An error occurred while reading the file. Please ensure the file is a pickled experiment and try again. Error: {e}",  # noqa: E501
             )
             return
 
@@ -1368,7 +1369,7 @@ class NewExperimentWindow(Toplevel):
         if not isinstance(experiment, ProblemsSolvers):
             messagebox.showerror(
                 "Invalid File",
-                "The file selected is not a valid experiment file. Please select a different file.",
+                "The file selected is not a valid experiment file. Please select a different file.",  # noqa: E501
             )
             return
 
@@ -1633,7 +1634,7 @@ class NewExperimentWindow(Toplevel):
             frame (ttk.Frame): The frame in which to display the data farming options.
         """
         # Check if the base object is a Problem or Solver
-        if not isinstance(base_object, (Problem, Solver)):
+        if not isinstance(base_object, Problem | Solver):
             error_msg = "base_object must be a Problem or Solver object."
             error_msg += f" Received {type(base_object)}."
             raise TypeError(error_msg)
@@ -1648,7 +1649,7 @@ class NewExperimentWindow(Toplevel):
                 specifications[factor] = model_specifications[factor]
         # Convert the specifications to a dictionary of DFFactor objects
 
-        # TODO: This is a hack to remove the step_type and search_direction factors 
+        # TODO: This is a hack to remove the step_type and search_direction factors
         # because str type is not currently supported in the GUI.
         if isinstance(base_object, Solver) and base_object.class_name_abbr == "FCSA":
             del specifications["step_type"]
@@ -1744,15 +1745,15 @@ class NewExperimentWindow(Toplevel):
 
         # Create the factor settings txt file
         # Check if the folder exists, if not create it
-        if not os.path.exists(DATA_FARMING_DIR):
-            os.makedirs(DATA_FARMING_DIR)
-        # If the file already exists, clear it and make a new, empty file of the same name
-        filepath = os.path.join(DATA_FARMING_DIR, f"{design_name}.txt")
-        if os.path.exists(filepath):
-            os.remove(filepath)
+        if not os.path.exists(DATA_FARMING_DIR):  # noqa: PTH110
+            os.makedirs(DATA_FARMING_DIR)  # noqa: PTH103
+        # If the file already exists, clear it and make a new, empty file of the same name  # noqa: E501
+        filepath = os.path.join(DATA_FARMING_DIR, f"{design_name}.txt")  # noqa: PTH118
+        if os.path.exists(filepath):  # noqa: PTH110
+            os.remove(filepath)  # noqa: PTH107
 
         # Write the factor settings to the file
-        with open(filepath, "x") as settings_file:
+        with open(filepath, "x") as settings_file:  # noqa: PTH123
             # For each factor, write the min, max, and decimal values to the file
             for factor_name in design_factors:
                 # Lookup the factor in the dictionary
@@ -1794,7 +1795,7 @@ class NewExperimentWindow(Toplevel):
             return
 
         # Display the design tree
-        filename = os.path.join(DATA_FARMING_DIR, f"{design_name}_design.csv")
+        filename = os.path.join(DATA_FARMING_DIR, f"{design_name}_design.csv")  # noqa: PTH118
         self._create_gen_design_frame(filename, base_object)
 
     def _create_gen_design_frame(
@@ -1872,7 +1873,7 @@ class NewExperimentWindow(Toplevel):
         unique_design_points = design_table.drop_duplicates().shape[0]
         point_plural = "" if unique_design_points == 1 else "s"
         self.tk_labels["gen_design.header"].configure(
-            text=f"Generated Design - {len(design_table)} Design Point{point_plural} ({unique_design_points} Unique)"
+            text=f"Generated Design - {len(design_table)} Design Point{point_plural} ({unique_design_points} Unique)"  # noqa: E501
         )
 
         self.design_tree = ttk.Treeview(master=master_frame)
@@ -2132,7 +2133,7 @@ class NewExperimentWindow(Toplevel):
         self.cross_design_problem_compatibility()
         self.__update_problem_dropdown()
 
-    def create_experiment(self) -> None:
+    def create_experiment(self) -> None:  # noqa: D102
         # Check to make sure theres at least one problem and solver
         if len(self.root_solver_dict) == 0 or len(self.root_problem_dict) == 0:
             messagebox.showerror(
@@ -2215,7 +2216,7 @@ class NewExperimentWindow(Toplevel):
         # Clear the current experiment
         self.clear_experiment()
 
-    def clear_experiment(self) -> None:
+    def clear_experiment(self) -> None:  # noqa: D102
         # Delete all problems and solvers
         problem_names = list(self.root_problem_dict.keys())
         for name in problem_names:
@@ -2574,7 +2575,7 @@ class NewExperimentWindow(Toplevel):
         # Update the scroll region
         self.__update_exp_list_scroll_region()
 
-    def run_experiment(self, experiment_name: str) -> None:
+    def run_experiment(self, experiment_name: str) -> None:  # noqa: D102
         # get experiment object from master dict
         experiment = self.root_experiment_dict[experiment_name]
 
@@ -2586,7 +2587,7 @@ class NewExperimentWindow(Toplevel):
         # use ProblemsSolvers run
         experiment.run(n_macroreps=n_macroreps)
 
-    def open_defaults_window(self) -> None:
+    def open_defaults_window(self) -> None:  # noqa: D102
         # Create a new window
         default_window_title = (
             "Simopt Graphical User Interface - Experiment Options Defaults"
@@ -2604,7 +2605,7 @@ class NewExperimentWindow(Toplevel):
 
         # Title label
         title_text = "Default experiment options for all experiments."
-        title_text += "\nAny changes made will affect all future and current un-run or processed experiments."
+        title_text += "\nAny changes made will affect all future and current un-run or processed experiments."  # noqa: E501
         self.title_label = ttk.Label(
             master=self.main_frame,
             text=title_text,
@@ -2653,7 +2654,7 @@ class NewExperimentWindow(Toplevel):
         # CRN across budget
         self.crn_budget_label = ttk.Label(
             master=self.main_frame,
-            text="Use CRN on post-replications for solutions recommended at different times?",
+            text="Use CRN on post-replications for solutions recommended at different times?",  # noqa: E501
         )
         self.crn_budget_var = tk.StringVar()
         crn_budget_str = "yes" if self.crn_budget_default else "no"
@@ -2670,7 +2671,7 @@ class NewExperimentWindow(Toplevel):
         # CRN across macroreps
         self.crn_macro_label = ttk.Label(
             master=self.main_frame,
-            text="Use CRN on post-replications for solutions recommended on different macro-replications?",
+            text="Use CRN on post-replications for solutions recommended on different macro-replications?",  # noqa: E501
         )
         self.crn_macro_var = tk.StringVar()
         crn_macro_default_str = "yes" if self.crn_macro_default else "no"
@@ -2778,7 +2779,7 @@ class NewExperimentWindow(Toplevel):
             row=8, column=0, columnspan=2, padx=10, pady=10, sticky="ew"
         )
 
-    def change_experiment_defaults(self) -> None:
+    def change_experiment_defaults(self) -> None:  # noqa: D102
         # Change default values to user input
         self.macro_default = self.macro_rep_var.get()
         self.post_default = self.post_rep_var.get()
@@ -2829,7 +2830,7 @@ class NewExperimentWindow(Toplevel):
             return search_dict[exp_name].get()
         return default_val
 
-    def open_post_processing_window(self, experiment_name: str) -> None:
+    def open_post_processing_window(self, experiment_name: str) -> None:  # noqa: D102
         # check if options have already been set
         n_macroreps: int = self._find_option_setting_int(
             experiment_name, self.custom_macro_reps, self.macro_default
@@ -2910,7 +2911,7 @@ class NewExperimentWindow(Toplevel):
         # CRN across budget
         self.crn_budget_label = ttk.Label(
             master=self.main_frame,
-            text="Use CRN on post-replications for solutions recommended at different times?",
+            text="Use CRN on post-replications for solutions recommended at different times?",  # noqa: E501
         )
         self.crn_budget_label.grid(row=3, column=0)
         self.crn_budget_var = tk.StringVar()
@@ -2923,7 +2924,7 @@ class NewExperimentWindow(Toplevel):
         # CRN across macroreps
         self.crn_macro_label = ttk.Label(
             master=self.main_frame,
-            text="Use CRN on post-replications for solutions recommended on different macro-replications?",
+            text="Use CRN on post-replications for solutions recommended on different macro-replications?",  # noqa: E501
         )
         self.crn_macro_label.grid(row=4, column=0)
         self.crn_macro_var = tk.StringVar()
@@ -2965,7 +2966,7 @@ class NewExperimentWindow(Toplevel):
         # solve tols
         self.solve_tols_label = ttk.Label(
             master=self.main_frame,
-            text="Relative optimality gap(s) definining when a problem is solved; must be between 0 & 1, list in increasing order.",
+            text="Relative optimality gap(s) definining when a problem is solved; must be between 0 & 1, list in increasing order.",  # noqa: E501
         )
         self.solve_tols_label.grid(row=7, column=1)
         self.solve_tols_frame = tk.Frame(master=self.main_frame)
@@ -3019,7 +3020,7 @@ class NewExperimentWindow(Toplevel):
         )
         self.set_as_default_button.grid(row=7, column=0)
 
-    def save_experiment_options(self, experiment_name: str) -> None:
+    def save_experiment_options(self, experiment_name: str) -> None:  # noqa: D102
         # get user specified values and save to dictionaries
         self.custom_post_reps[experiment_name] = self.post_rep_var
         self.custom_init_post_reps[experiment_name] = self.init_post_rep_var
@@ -3039,7 +3040,7 @@ class NewExperimentWindow(Toplevel):
             self.solve_tol_4_var,
         ]
 
-    def post_process(self, experiment_name: str) -> None:
+    def post_process(self, experiment_name: str) -> None:  # noqa: D102
         # get experiment object from master dict
         experiment = self.root_experiment_dict[experiment_name]
 
@@ -3068,7 +3069,7 @@ class NewExperimentWindow(Toplevel):
             crn_across_macroreps=crn_macro,
         )
 
-    def post_normalize(self, experiment_name: str) -> None:
+    def post_normalize(self, experiment_name: str) -> None:  # noqa: D102
         # get experiment object from master dict
         experiment = self.root_experiment_dict[experiment_name]
 
@@ -3086,7 +3087,7 @@ class NewExperimentWindow(Toplevel):
         # run post normalization
         experiment.post_normalize(n_postreps_init_opt=reps, crn_across_init_opt=crn)
 
-    def log_results(self, experiment_name: str) -> None:
+    def log_results(self, experiment_name: str) -> None:  # noqa: D102
         # get experiment object from master dict
         experiment = self.root_experiment_dict[experiment_name]
 
@@ -3105,7 +3106,7 @@ class NewExperimentWindow(Toplevel):
         experiment.log_group_experiment_results()
         experiment.report_group_statistics(solve_tols=solve_tols)
 
-    def open_plotting_window(self) -> None:
+    def open_plotting_window(self) -> None:  # noqa: D102
         # create new window
         self.plotting_window = Toplevel(self.root)
         self.plotting_window.center_window(0.8)
@@ -3159,13 +3160,13 @@ class NewExperimentWindow(Toplevel):
         self.plotting_workspace_frame = tk.Frame(self.plot_main_frame)
 
         # dictonaries/variables to store plotting information
-        self.experiment_tabs = {}  # holds names of experiments that already have a plotting tab created
+        self.experiment_tabs = {}  # holds names of experiments that already have a plotting tab created  # noqa: E501
         self.selected_solvers = []  # holds solvers that have been selected
         self.selected_problems = []  # holds problems that have been selected
         self.ref_menu_created = (
             False  # tracks if there if a ref solver menu currently existing
         )
-        self.plot_check_vars = {}  # holds selection variables of plots orgainized by filepath
+        self.plot_check_vars = {}  # holds selection variables of plots orgainized by filepath  # noqa: E501
         self.ext_options = [
             ".png",
             ".jpeg",
@@ -3185,8 +3186,8 @@ class NewExperimentWindow(Toplevel):
         )
         self.title_label.grid(row=0, column=0, sticky="nsew")
         subtitle_lines = [
-            "Select Solvers and Problems to Plot from Experiments that have been Post-Normalized.",
-            "Solver/Problem factors will only be displayed if all solvers/problems within the experiment are the same.",
+            "Select Solvers and Problems to Plot from Experiments that have been Post-Normalized.",  # noqa: E501
+            "Solver/Problem factors will only be displayed if all solvers/problems within the experiment are the same.",  # noqa: E501
         ]
         subtitle = "\n".join(subtitle_lines)
         self.subtitle_label = ttk.Label(
@@ -3224,7 +3225,7 @@ class NewExperimentWindow(Toplevel):
         )
         self.experiment_selection_label.grid(row=0, column=0, sticky="ew", padx=10)
         # find experiments that have been postnormalized
-        postnorm_experiments = []  # list to hold names of all experiments that have been postnormalized
+        postnorm_experiments = []  # list to hold names of all experiments that have been postnormalized  # noqa: E501
         for exp_name in self.root_experiment_dict:
             experiment = self.root_experiment_dict[exp_name]
             status = experiment.check_postnormalize()
@@ -3495,9 +3496,9 @@ class NewExperimentWindow(Toplevel):
         if len(postnorm_experiments) == 1:
             self.update_plot_menu(postnorm_experiments[0])
 
-    def refresh_experiments(self) -> None:
+    def refresh_experiments(self) -> None:  # noqa: D102
         # find experiments that have been postnormalized
-        postnorm_experiments = []  # list to hold names of all experiments that have been postnormalized
+        postnorm_experiments = []  # list to hold names of all experiments that have been postnormalized  # noqa: E501
         for exp_name in self.root_experiment_dict:
             experiment = self.root_experiment_dict[exp_name]
             status = experiment.check_postnormalize()
@@ -3513,10 +3514,10 @@ class NewExperimentWindow(Toplevel):
         if len(postnorm_experiments) == 1:
             self.update_plot_menu(postnorm_experiments[0])
 
-    def update_plot_window_scroll(self, event: tk.Event) -> None:
+    def update_plot_window_scroll(self, event: tk.Event) -> None:  # noqa: ARG002, D102
         self.plotting_canvas.configure(scrollregion=self.plotting_canvas.bbox("all"))
 
-    def update_plot_menu(self, tk_experiment_name: tk.StringVar) -> None:
+    def update_plot_menu(self, tk_experiment_name: tk.StringVar) -> None:  # noqa: D102
         # If we somehow get a string instead of a variable, just use the string
         if isinstance(tk_experiment_name, str):
             experiment_name = tk_experiment_name
@@ -3626,7 +3627,7 @@ class NewExperimentWindow(Toplevel):
                     "", index, text=str(index), values=[problem.name]
                 )
 
-    def show_plot_options(self, plot_type_tk: tk.StringVar) -> None:
+    def show_plot_options(self, plot_type_tk: tk.StringVar) -> None:  # noqa: D102
         if isinstance(plot_type_tk, tk.StringVar):
             plot_type = plot_type_tk.get()
         else:
@@ -3660,7 +3661,7 @@ class NewExperimentWindow(Toplevel):
         description_wrap_length = 500
 
         if plot_type == "Progress Curve":
-            description = "Plot individual or aggregate progress curves for one or more solvers on a single problem."
+            description = "Plot individual or aggregate progress curves for one or more solvers on a single problem."  # noqa: E501
             self.plot_description = ttk.Label(
                 master=self.more_options_frame,
                 text=description,
@@ -3899,7 +3900,7 @@ class NewExperimentWindow(Toplevel):
             self.legend_menu.grid(row=7, column=1)
 
         if plot_type == "Area Scatter Plot":
-            description = "Plot a scatter plot of mean and standard deviation of area under progress curves."
+            description = "Plot a scatter plot of mean and standard deviation of area under progress curves."  # noqa: E501
             self.plot_description = ttk.Label(
                 master=self.more_options_frame,
                 text=description,
@@ -3987,7 +3988,7 @@ class NewExperimentWindow(Toplevel):
 
         if plot_type == "Solvability Profile":
             self.ref_menu_created = True  # track that menu exists
-            description = "Plot the (difference of) solvability profiles for each solver on a set of problems."
+            description = "Plot the (difference of) solvability profiles for each solver on a set of problems."  # noqa: E501
             self.plot_description = ttk.Label(
                 master=self.more_options_frame,
                 text=description,
@@ -4151,7 +4152,7 @@ class NewExperimentWindow(Toplevel):
 
         if plot_type == "Terminal Progress":
             # plot description
-            description = "Plot individual or aggregate terminal progress for one or more solvers on a single problem. Each unique selected problem will produce its own plot."
+            description = "Plot individual or aggregate terminal progress for one or more solvers on a single problem. Each unique selected problem will produce its own plot."  # noqa: E501
             self.plot_description = ttk.Label(
                 master=self.more_options_frame,
                 text=description,
@@ -4190,7 +4191,7 @@ class NewExperimentWindow(Toplevel):
             self.normalize_menu.grid(row=3, column=1)
 
         if plot_type == "Terminal Scatter Plot":
-            description = "Plot a scatter plot of mean and standard deviation of terminal progress."
+            description = "Plot a scatter plot of mean and standard deviation of terminal progress."  # noqa: E501
             self.plot_description = ttk.Label(
                 master=self.more_options_frame,
                 text=description,
@@ -4284,7 +4285,7 @@ class NewExperimentWindow(Toplevel):
         )
         self.plot_button.grid(row=2, column=0, sticky="nsew")
 
-    def disable_legend(
+    def disable_legend(  # noqa: D102
         self, is_enabled_tk: tk.StringVar
     ) -> None:  # also enables/disables solver & problem group names
         if isinstance(is_enabled_tk, tk.StringVar):
@@ -4311,7 +4312,7 @@ class NewExperimentWindow(Toplevel):
             self.legend_menu.configure(state="disabled")
             self.solver_set_entry.configure(state="disabled")
 
-    def enable_ref_solver(self, plot_type_tk: tk.StringVar) -> None:
+    def enable_ref_solver(self, plot_type_tk: tk.StringVar) -> None:  # noqa: D102
         if isinstance(plot_type_tk, tk.StringVar):
             plot_type = plot_type_tk.get()
         else:
@@ -4347,19 +4348,19 @@ class NewExperimentWindow(Toplevel):
             self.plot_CI_menu.configure(state="disabled")
             self.plot_hw_menu.configure(state="disabled")
 
-    def select_all_solvers(self) -> None:
+    def select_all_solvers(self) -> None:  # noqa: D102
         self.solver_tree.selection_set(self.solver_tree.get_children())
 
-    def deselect_all_solvers(self) -> None:
+    def deselect_all_solvers(self) -> None:  # noqa: D102
         self.solver_tree.selection_remove(self.solver_tree.get_children())
 
-    def select_all_problems(self) -> None:
+    def select_all_problems(self) -> None:  # noqa: D102
         self.problem_tree.selection_set(self.problem_tree.get_children())
 
-    def deselect_all_problems(self) -> None:
+    def deselect_all_problems(self) -> None:  # noqa: D102
         self.problem_tree.selection_remove(self.problem_tree.get_children())
 
-    def select_solver(
+    def select_solver(  # noqa: D102
         self, _: tk.Event
     ) -> (
         None
@@ -4376,7 +4377,7 @@ class NewExperimentWindow(Toplevel):
         if self.ref_menu_created:  # if reference solver menu exists update menu
             self.update_ref_solver()
 
-    def select_problem(self, _: tk.Event) -> None:
+    def select_problem(self, _: tk.Event) -> None:  # noqa: D102
         selected_items = self.problem_tree.selection()
         self.selected_problems = []
         for item in selected_items:
@@ -4386,7 +4387,7 @@ class NewExperimentWindow(Toplevel):
             ]  # get corresponding problem from experiment
             self.selected_problems.append(problem)
 
-    def update_ref_solver(self) -> None:
+    def update_ref_solver(self) -> None:  # noqa: D102
         saved_solver = (
             self.ref_solver_var.get()
         )  # save previously selected reference solver
@@ -4419,7 +4420,7 @@ class NewExperimentWindow(Toplevel):
 
     def __get_plot_experiment_sublist(self) -> list[list[ProblemSolver]]:
         # get selected solvers & problems
-        exp_sublist = []  # sublist of experiments to be plotted (each index represents a group of problems over a single solver)
+        exp_sublist = []  # sublist of experiments to be plotted (each index represents a group of problems over a single solver)  # noqa: E501
         for solver in self.selected_solvers:
             solver_list = []
             for problem in self.selected_problems:
@@ -4460,9 +4461,7 @@ class NewExperimentWindow(Toplevel):
         parameters["Number Bootstrap Samples"] = n_boot
         parameters["Confidence Level"] = con_level
         # Lookup plot type enum for passing to plotting function
-        subplot_type_enum: PlotType = PlotType.from_str(
-            subplot_type.lower()
-        )
+        subplot_type_enum: PlotType = PlotType.from_str(subplot_type.lower())
         # create new plot for each problem
         for i in range(n_problems):
             prob_list = []
@@ -4650,9 +4649,7 @@ class NewExperimentWindow(Toplevel):
         assert subplot_type in ["box", "violin"]
         parameters["Normalize Optimality Gaps"] = normalize_str
         # Lookup plot type enum for passing to plotting function
-        subplot_type_enum: PlotType = PlotType.from_str(
-            subplot_type.lower()
-        )
+        subplot_type_enum: PlotType = PlotType.from_str(subplot_type.lower())
         # create a new plot for each problem
         for i in range(n_problems):
             prob_list = []
@@ -4757,7 +4754,7 @@ class NewExperimentWindow(Toplevel):
                 "Invalid plot type selected. Please select a valid plot type.",
             )
             return
-        plot_input = subplot_types[subplot_type]
+        subplot_types[subplot_type]
 
         # Get user input
         beta = float(self.beta_var.get())
@@ -4844,7 +4841,7 @@ class NewExperimentWindow(Toplevel):
             parameters=parameters,
         )
 
-    def plot(self) -> None:
+    def plot(self) -> None:  # noqa: D102
         # Ensure that at least one solver and one problem are selected
         if len(self.selected_problems) == 0:
             error_msg = "Please select problems to plot."
@@ -4872,7 +4869,7 @@ class NewExperimentWindow(Toplevel):
         # Call the appropriate plot function
         plot_types[self.plot_type]()
 
-    def add_plot_to_notebook(
+    def add_plot_to_notebook(  # noqa: D102
         self,
         file_paths: list[str],
         solver_names: list[str],
@@ -5002,7 +4999,7 @@ class NewExperimentWindow(Toplevel):
             if self.plot_notebook.tab(index, "text") == exp_name:
                 self.plot_notebook.select(index)
 
-    def delete_plot(
+    def delete_plot(  # noqa: D102
         self, row: int, frame: tk.Frame, file_path: os.PathLike | str
     ) -> None:
         for widget in frame.winfo_children():  # remove plot from list display
@@ -5011,7 +5008,7 @@ class NewExperimentWindow(Toplevel):
                 widget.destroy()
         del self.plot_check_vars[file_path]  # remove check variable from dictionary
 
-    def load_plot(self) -> None:
+    def load_plot(self) -> None:  # noqa: D102
         # ask user for pickle file location
         file_path = filedialog.askopenfilename()
 
@@ -5020,19 +5017,19 @@ class NewExperimentWindow(Toplevel):
             return
 
         # load plot pickle
-        with open(file_path, "rb") as f:
+        with open(file_path, "rb") as f:  # noqa: PTH123
             fig = pickle.load(f)
         ax = fig.axes[0]
         # get current plot information
         title = ax.get_title()
 
         # display image with same file name, if no image, create one
-        lead_path = os.path.splitext(file_path)[0]
+        lead_path = os.path.splitext(file_path)[0]  # noqa: PTH122
         image = False
         for ext in self.ext_options:
-            if not image:  # image has not yet been found (display first file type found if more than one exist)
+            if not image:  # image has not yet been found (display first file type found if more than one exist)  # noqa: E501
                 image_path = lead_path + ext
-                image = os.path.exists(image_path)
+                image = os.path.exists(image_path)  # noqa: PTH110
 
         if not image:  # create image to display if path not found
             image_path = lead_path + ".png"
@@ -5065,18 +5062,18 @@ class NewExperimentWindow(Toplevel):
         del_button = tk.Button(
             master=self.loaded_plots_frame,
             text="Delete",
-            command=lambda r=row,
-            frame=self.loaded_plots_frame,
-            fp=image_path: self.delete_plot(r, frame, fp),
+            command=lambda r=row, frame=self.loaded_plots_frame, fp=image_path: (
+                self.delete_plot(r, frame, fp)
+            ),
         )
         del_button.grid(row=row, column=4, pady=10)
 
         # display loaded plots tab
         self.plot_notebook.select(0)
 
-    def view_plot(
+    def view_plot(  # noqa: D102
         self, file_path: os.PathLike | str
-    ) -> None:  # this window also allows for the editing of individual plots by accessing the created pickle file
+    ) -> None:  # this window also allows for the editing of individual plots by accessing the created pickle file  # noqa: E501
         # create new window
         self.view_single_window = tk.Toplevel(self)
         self.view_single_window.title("Simopt Graphical User Interface - View Plot")
@@ -5228,7 +5225,7 @@ class NewExperimentWindow(Toplevel):
         )
         self.edit_image_button.grid(row=3, column=0, pady=10)
 
-    def save_plot_changes(
+    def save_plot_changes(  # noqa: D102
         self,
         fig: plt.Figure,
         pickle_path: str | os.PathLike,
@@ -5238,7 +5235,7 @@ class NewExperimentWindow(Toplevel):
     ) -> None:
         if not copy:
             # overwrite pickle with new plot
-            with open(pickle_path, "wb") as f:
+            with open(pickle_path, "wb") as f:  # noqa: PTH123
                 pickle.dump(fig, f)
 
             # overwrite image with new plot
@@ -5252,18 +5249,18 @@ class NewExperimentWindow(Toplevel):
             plot_display.image = plot_photo
             plot_display.grid(row=0, column=0, padx=10, pady=10)
         else:
-            path_name, ext = os.path.splitext(file_path)
+            path_name, ext = os.path.splitext(file_path)  # noqa: PTH122
             # Check to make sure file does not override previous images
             counter = 1
             extended_path_name = file_path
-            while os.path.exists(extended_path_name):
+            while os.path.exists(extended_path_name):  # noqa: PTH110
                 extended_path_name = f"{path_name} ({counter}){ext}"
                 new_path_name = f"{path_name} ({counter})"  # use for pickle
                 counter += 1
             plt.savefig(extended_path_name, bbox_inches="tight")  # save image
             # save pickle with new name
             pickle_file = new_path_name + ".pkl"
-            with open(pickle_file, "wb") as f:
+            with open(pickle_file, "wb") as f:  # noqa: PTH123
                 pickle.dump(fig, f)
             # add new row to loaded plots tab
             title = fig.axes[0].get_title()  # title for display
@@ -5293,16 +5290,16 @@ class NewExperimentWindow(Toplevel):
             del_button = tk.Button(
                 master=self.loaded_plots_frame,
                 text="Delete",
-                command=lambda r=row,
-                frame=self.loaded_plots_frame,
-                fp=extended_path_name: self.delete_plot(r, frame, fp),
+                command=lambda r=row, frame=self.loaded_plots_frame, fp=extended_path_name: (  # noqa: E501
+                    self.delete_plot(r, frame, fp)
+                ),
             )
             del_button.grid(row=row, column=4, pady=10)
 
             # display loaded plots tab
             self.plot_notebook.select(0)
 
-    def edit_plot_title(
+    def edit_plot_title(  # noqa: D102
         self, file_path: os.PathLike | str, image_frame: tk.Frame
     ) -> None:
         # create new window
@@ -5315,9 +5312,9 @@ class NewExperimentWindow(Toplevel):
         self.edit_title_frame = tk.Frame(self.edit_title_window)
         self.edit_title_frame.grid(row=0, column=0)
         # load plot pickle
-        root, ext = os.path.splitext(file_path)
+        root, _ext = os.path.splitext(file_path)  # noqa: PTH122
         pickle_path = f"{root}.pkl"
-        with open(pickle_path, "rb") as f:
+        with open(pickle_path, "rb") as f:  # noqa: PTH123
             fig = pickle.load(f)
         ax = fig.axes[0]
 
@@ -5465,7 +5462,7 @@ class NewExperimentWindow(Toplevel):
         )
         self.save_title_to_copy_button.grid(row=8, column=1, padx=20)
 
-    def save_title_changes(
+    def save_title_changes(  # noqa: D102
         self,
         fig: plt.figure,
         pickle_path: str | os.PathLike,
@@ -5511,7 +5508,7 @@ class NewExperimentWindow(Toplevel):
         )  # save changes and display new image
         self.edit_title_window.destroy()  # close editing window
 
-    def edit_plot_x_axis(
+    def edit_plot_x_axis(  # noqa: D102
         self, file_path: str | os.PathLike, image_frame: tk.Frame
     ) -> None:  # actualy edits both axes
         # create new window
@@ -5542,7 +5539,7 @@ class NewExperimentWindow(Toplevel):
             self.edit_x_axis_window
         )  # create editing frame
 
-    def show_axis_options(
+    def show_axis_options(  # noqa: D102
         self,
         axis: Literal["X-Axis", "Y-Axis"],
         file_path: str | os.PathLike,
@@ -5552,9 +5549,9 @@ class NewExperimentWindow(Toplevel):
         self.edit_x_axis_frame.grid(row=1, column=0)
 
         # load plot pickle
-        root, ext = os.path.splitext(file_path)
+        root, _ext = os.path.splitext(file_path)  # noqa: PTH122
         pickle_path = f"{root}.pkl"
-        with open(pickle_path, "rb") as f:
+        with open(pickle_path, "rb") as f:  # noqa: PTH123
             fig = pickle.load(f)
         ax = fig.axes[0]
 
@@ -5770,7 +5767,7 @@ class NewExperimentWindow(Toplevel):
         )
         self.save_axes_to_copy_button.grid(row=2, column=1, padx=20)
 
-    def save_x_axis_changes(
+    def save_x_axis_changes(  # noqa: D102
         self,
         fig: plt.figure,
         pickle_path: str | os.PathLike,
@@ -5845,7 +5842,7 @@ class NewExperimentWindow(Toplevel):
         )  # save changes and display new image
         self.edit_x_axis_window.destroy()
 
-    def edit_plot_text(
+    def edit_plot_text(  # noqa: D102
         self, file_path: str | os.PathLike, image_frame: tk.Frame
     ) -> None:
         # create new window
@@ -5858,9 +5855,9 @@ class NewExperimentWindow(Toplevel):
         self.edit_text_frame = tk.Frame(self.edit_text_window)
         self.edit_text_frame.grid(row=0, column=0)
         # load plot pickle
-        root, _ = os.path.splitext(file_path)
+        root, _ = os.path.splitext(file_path)  # noqa: PTH122
         pickle_path = f"{root}.pkl"
-        with open(pickle_path, "rb") as f:
+        with open(pickle_path, "rb") as f:  # noqa: PTH123
             fig = pickle.load(f)
         ax = fig.axes[0]
         # test to make sure not editing title or axes
@@ -6138,7 +6135,7 @@ class NewExperimentWindow(Toplevel):
         )
         self.save_text_to_copy_button.grid(row=1, column=1, pady=10, padx=20)
 
-    def save_text_changes(
+    def save_text_changes(  # noqa: D102
         self,
         fig: plt.figure,
         pickle_path: str | os.PathLike,
@@ -6192,7 +6189,7 @@ class NewExperimentWindow(Toplevel):
         )  # save changes and display new image
         self.edit_text_window.destroy()
 
-    def edit_plot_image(
+    def edit_plot_image(  # noqa: D102
         self, file_path: str | os.PathLike, image_frame: tk.Frame
     ) -> None:
         # create new window
@@ -6205,9 +6202,9 @@ class NewExperimentWindow(Toplevel):
         self.edit_image_frame = tk.Frame(self.edit_image_window)
         self.edit_image_frame.grid(row=0, column=0)
         # load plot pickle
-        root, ext = os.path.splitext(file_path)
+        root, ext = os.path.splitext(file_path)  # noqa: PTH122
         pickle_path = f"{root}.pkl"
-        with open(pickle_path, "rb") as f:
+        with open(pickle_path, "rb") as f:  # noqa: PTH123
             fig = pickle.load(f)
         dpi = fig.get_dpi()  # get current dpi
 
@@ -6252,7 +6249,7 @@ class NewExperimentWindow(Toplevel):
         )
         self.save_image_to_copy_button.grid(row=1, column=1, pady=10, padx=20)
 
-    def save_image_changes(
+    def save_image_changes(  # noqa: D102
         self,
         fig: plt.figure,
         pickle_path: str | os.PathLike,
@@ -6262,11 +6259,11 @@ class NewExperimentWindow(Toplevel):
     ) -> None:
         dpi = float(self.dpi_var.get())
         ext = self.ext_var.get()
-        path_name = os.path.splitext(file_path)[0]
+        path_name = os.path.splitext(file_path)[0]  # noqa: PTH122
         save_path = path_name + ext
         if not copy:
             # overwrite pickle with new plot
-            with open(pickle_path, "wb") as f:
+            with open(pickle_path, "wb") as f:  # noqa: PTH123
                 pickle.dump(fig, f)
 
             # overwrite image with new plot
@@ -6285,14 +6282,14 @@ class NewExperimentWindow(Toplevel):
             counter = 1
             extended_path_name = save_path
             new_path_name = save_path  # in case while loop doesn't need to run
-            while os.path.exists(extended_path_name):
+            while os.path.exists(extended_path_name):  # noqa: PTH110
                 extended_path_name = f"{path_name} ({counter}){ext}"
                 new_path_name = f"{path_name} ({counter})"  # use for pickle
                 counter += 1
             plt.savefig(extended_path_name, bbox_inches="tight", dpi=dpi)  # save image
             # save pickle with new name
             pickle_file = new_path_name + ".pkl"
-            with open(pickle_file, "wb") as f:
+            with open(pickle_file, "wb") as f:  # noqa: PTH123
                 pickle.dump(fig, f)
             # add new row to loaded plots tab
             title = fig.axes[0].get_title()  # title for display
@@ -6322,15 +6319,15 @@ class NewExperimentWindow(Toplevel):
             del_button = tk.Button(
                 master=self.loaded_plots_frame,
                 text="Delete",
-                command=lambda r=row,
-                frame=self.loaded_plots_frame,
-                fp=extended_path_name: self.delete_plot(r, frame, fp),
+                command=lambda r=row, frame=self.loaded_plots_frame, fp=extended_path_name: (  # noqa: E501
+                    self.delete_plot(r, frame, fp)
+                ),
             )
             del_button.grid(row=row, column=4, pady=10)
 
         self.edit_image_window.destroy()
 
-    def view_all_plots(self) -> None:
+    def view_all_plots(self) -> None:  # noqa: D102
         # create new window
         self.view_all_window = tk.Toplevel(self)
         self.view_all_window.title(
@@ -6393,7 +6390,7 @@ class NewExperimentWindow(Toplevel):
                 row += 1
                 col = 0
 
-    def view_selected_plots(self) -> None:
+    def view_selected_plots(self) -> None:  # noqa: D102
         # get selected plots
         selected_plots = []
         for file_path in self.plot_check_vars:
@@ -6404,7 +6401,7 @@ class NewExperimentWindow(Toplevel):
         if len(selected_plots) == 0:
             messagebox.showerror(
                 "No Plots Selected",
-                " No plots were selected. Please check boxes next to plots you wish to display.",
+                " No plots were selected. Please check boxes next to plots you wish to display.",  # noqa: E501
             )
         else:  # create viewing window
             # create new window
@@ -6467,13 +6464,13 @@ class NewExperimentWindow(Toplevel):
                     row += 1
                     col = 0
 
-    def update_view_window_scroll(self, event: tk.Event) -> None:
+    def update_view_window_scroll(self, event: tk.Event) -> None:  # noqa: ARG002, D102
         self.view_canvas.configure(scrollregion=self.view_canvas.bbox("all"))
 
-    def update_view_all_window_scroll(self, event: tk.Event) -> None:
+    def update_view_all_window_scroll(self, event: tk.Event) -> None:  # noqa: ARG002, D102
         self.view_all_canvas.configure(scrollregion=self.view_all_canvas.bbox("all"))
 
-    def update_view_single_window_scroll(self, event: tk.Event) -> None:
+    def update_view_single_window_scroll(self, event: tk.Event) -> None:  # noqa: ARG002, D102
         self.view_single_canvas.configure(
             scrollregion=self.view_single_canvas.bbox("all")
         )

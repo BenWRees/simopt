@@ -1,5 +1,6 @@
 """Area scatter plot."""
 
+import contextlib
 import logging
 from pathlib import Path
 
@@ -188,12 +189,12 @@ def plot_area_scatterplots(
                         marker=marker_str,
                     )
             solver_curve_handles.append(handle)
-        leg = plt.legend(handles=solver_curve_handles, labels=solver_names, loc=legend_loc)
+        leg = plt.legend(
+            handles=solver_curve_handles, labels=solver_names, loc=legend_loc
+        )
         if leg is not None:
-            try:
+            with contextlib.suppress(Exception):
                 leg.get_frame().set_alpha(0.4)
-            except Exception:
-                pass
         file_list.append(
             save_plot(
                 solver_name=solver_set_name,

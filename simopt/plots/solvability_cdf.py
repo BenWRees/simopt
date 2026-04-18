@@ -1,5 +1,6 @@
 """Solvability CDF plot."""
 
+import contextlib
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -113,8 +114,8 @@ def plot_solvability_cdfs(
                     normalize=True,
                 )
                 if plot_conf_ints:
-                    if isinstance(bs_conf_int_lb_curve, (int, float)) or isinstance(
-                        bs_conf_int_ub_curve, (int, float)
+                    if isinstance(bs_conf_int_lb_curve, int | float) or isinstance(
+                        bs_conf_int_ub_curve, int | float
                     ):
                         error_msg = (
                             "Bootstrap confidence intervals are not available "
@@ -134,10 +135,8 @@ def plot_solvability_cdfs(
             loc=legend_loc,
         )
         if leg is not None:
-            try:
+            with contextlib.suppress(Exception):
                 leg.get_frame().set_alpha(0.4)
-            except Exception:
-                pass
         if print_max_hw:
             report_max_halfwidth(
                 curve_pairs=curve_pairs, normalize=True, conf_level=conf_level
@@ -177,8 +176,8 @@ def plot_solvability_cdfs(
                     normalize=True,
                 )
                 if plot_conf_ints:
-                    if isinstance(bs_conf_int_lb_curve, (int, float)) or isinstance(
-                        bs_conf_int_ub_curve, (int, float)
+                    if isinstance(bs_conf_int_lb_curve, int | float) or isinstance(
+                        bs_conf_int_ub_curve, int | float
                     ):
                         error_msg = (
                             "Bootstrap confidence intervals are not available "
@@ -187,8 +186,8 @@ def plot_solvability_cdfs(
                         raise ValueError(error_msg)
                     plot_bootstrap_conf_ints(bs_conf_int_lb_curve, bs_conf_int_ub_curve)
                 if print_max_hw:
-                    if isinstance(bs_conf_int_lb_curve, (int, float)) or isinstance(
-                        bs_conf_int_ub_curve, (int, float)
+                    if isinstance(bs_conf_int_lb_curve, int | float) or isinstance(
+                        bs_conf_int_ub_curve, int | float
                     ):
                         error_msg = (
                             "Max halfwidth is not available for scalar estimators."

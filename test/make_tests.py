@@ -20,7 +20,7 @@ def is_compatible(problem_name: str, solver_name: str) -> bool:
     solver_name : str
         Name of the solver.
 
-    Returns
+    Returns:
     -------
     bool
         True if the solver is compatible with the problem, False otherwise.
@@ -54,12 +54,12 @@ def create_test(problem_name: str, solver_name: str) -> None:
     # Loop through each curve object and convert it into a tuple
     # This is done to avoid pickling issues
     for i in range(len(myexperiment.objective_curves)):
-        myexperiment.objective_curves[i] = (  # type: ignore
+        myexperiment.objective_curves[i] = (
             myexperiment.objective_curves[i].x_vals,
             myexperiment.objective_curves[i].y_vals,
         )
     for i in range(len(myexperiment.progress_curves)):
-        myexperiment.progress_curves[i] = (  # type: ignore
+        myexperiment.progress_curves[i] = (
             myexperiment.progress_curves[i].x_vals,
             myexperiment.progress_curves[i].y_vals,
         )
@@ -70,9 +70,9 @@ def create_test(problem_name: str, solver_name: str) -> None:
     filename = "test_" + file_problem_name + "_" + file_solver_name + ".py"
 
     # Open the file template and read it
-    cwd = os.getcwd()  # Get the current working directory
+    cwd = os.getcwd()  # Get the current working directory  # noqa: PTH109
     filepath = cwd + "/test/" + filename
-    with open(cwd + "/test/template.py", "rb") as f:
+    with open(cwd + "/test/template.py", "rb") as f:  # noqa: PTH123
         template = f.read()
 
     # Loop through the template and replace the placeholders with the actual values
@@ -102,18 +102,18 @@ def create_test(problem_name: str, solver_name: str) -> None:
     )  # Replace the class name
 
     # Write the new test into the new file
-    with open(filepath, "xb") as f:
+    with open(filepath, "xb") as f:  # noqa: PTH123
         f.write(template)
 
 
 def main() -> None:
     """Create test cases for all compatible problem-solver pairs."""
     # Delete all files beginning with "test_" in the test directory
-    cwd = os.getcwd()  # Get the current working directory
+    cwd = os.getcwd()  # Get the current working directory  # noqa: PTH109
     test_directory = cwd + "/test"
-    for filename in os.listdir(test_directory):
+    for filename in os.listdir(test_directory):  # noqa: PTH208
         if filename.startswith("test_"):
-            os.remove(test_directory + "/" + filename)
+            os.remove(test_directory + "/" + filename)  # noqa: PTH107
 
     # Loop through all the problems and solvers
     for problem_name in problem_directory:

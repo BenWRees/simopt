@@ -119,16 +119,16 @@ class CompleteEnumeration(Solver):
         self._incumbent_x = value
 
     @property
-    def incumbent_solution(self) -> Solution:
+    def incumbent_solution(self) -> Solution | None:
         """Get the incumbent solution."""
         return self._incumbent_solution
 
     @incumbent_solution.setter
-    def incumbent_solution(self, value: Solution) -> None:
+    def incumbent_solution(self, value: Solution | None) -> None:
         """Set the incumbent solution."""
-        self._incumbent_solution = value
+        self._incumbent_solution = value  # type: ignore[assignment]
 
-    def solve(self, problem: Problem) -> None:
+    def solve(self, problem: Problem) -> None:  # ty: ignore[invalid-method-override]
         """Solve the given problem using Complete Enumeration.
 
         Args:
@@ -168,7 +168,7 @@ class CompleteEnumeration(Solver):
             raise ValueError(
                 f"Budget ({self.budget.total}) is insufficient. "
                 f"Need at least {required_budget} replications "
-                f"({sample_size} per solution × {len(solution_list)} solutions)."
+                f"({sample_size} per solution × {len(solution_list)} solutions)."  # noqa: RUF001
             )
 
         try:
@@ -202,7 +202,7 @@ class CompleteEnumeration(Solver):
                     self.problem.simulate(sol, sample_size)
             else:
                 # Parallel execution of simulations
-                def simulate_solution(sol):
+                def simulate_solution(sol):  # noqa: ANN001, ANN202
                     print(f"    Simulating solution: {sol.x}...")
                     self.problem.simulate(sol, sample_size)
                     return sol
@@ -237,7 +237,10 @@ class CompleteEnumeration(Solver):
                     self.recommended_solns.append(self.incumbent_solution)
                     self.intermediate_budgets.append(self.budget.used)
 
-                    self.fn_estimates.append(self.incumbent_solution.objectives_mean.item())
+                    assert self.incumbent_solution is not None
+                    self.fn_estimates.append(
+                        self.incumbent_solution.objectives_mean.item()
+                    )
                     self.budget_history.append(self.budget.used)
                     self.iterations.append(self.iteration_count)
                 else:

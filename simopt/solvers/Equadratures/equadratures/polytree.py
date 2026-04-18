@@ -1,4 +1,4 @@
-import numpy as np
+import numpy as np  # noqa: D100
 
 import equadratures.plot as plot
 from equadratures import Weight
@@ -13,7 +13,11 @@ class PolyTree:
     Parameters
     ----------
     splitting_criterion : str, optional
-            The type of splitting_criterion to use in the fit function. Options include ``model_aware`` which fits polynomials for each candidate split, ``model_agnostic`` which uses a standard deviation based model-agnostic split criterion [1], and ``loss_gradient`` which uses a gradient based splitting criterion similar to that in [2].
+            The type of splitting_criterion to use in the fit function. Options include
+            ``model_aware`` which fits polynomials for each candidate split,
+            ``model_agnostic`` which uses a standard deviation based model-agnostic
+            split criterion [1], and ``loss_gradient`` which uses a gradient based
+            splitting criterion similar to that in [2].
     max_depth : int, optional
             The maximum depth which the tree will grow to.
     min_samples_leaf : int, optional
@@ -21,7 +25,8 @@ class PolyTree:
     order : int, optional
             The order of the generated orthogonal polynomials.
     basis : str, optional
-            The type of index set used for the basis. Options include: ``univariate``, ``total-order``, ``tensor-grid``, ``sparse-grid`` and ``hyperbolic-basis``.
+            The type of index set used for the basis. Options include: ``univariate``,
+            ``total-order``, ``tensor-grid``, ``sparse-grid`` and ``hyperbolic-basis``.
     search : str, optional
             The method of search to be used. Options are ``grid`` or ``exhaustive``.
     samples : int, optional
@@ -33,7 +38,8 @@ class PolyTree:
     split_dims : list, optional
             List of dimensions along which to make splits.
     k : float, optional
-            The smoothing parameter. Range from 0.0 to 1.0, with 0 giving no smoothing, and 1 giving maximum smoothing.
+            The smoothing parameter. Range from 0.0 to 1.0, with 0 giving no smoothing,
+            and 1 giving maximum smoothing.
     distribution : str, optional
             The type of input parameter distributions. Either ``uniform`` or ``data``.
 
@@ -48,28 +54,37 @@ class PolyTree:
 
     References:
     ----------
-    1. Wang, Y., Witten, I. H., (1997) Inducing Model Trees for Continuous Classes. In Proc. of the 9th European Conf. on Machine Learning Poster Papers. 128-137. `Paper <https://researchcommons.waikato.ac.nz/handle/10289/1183>`__
-    2. Broelemann, K., Kasneci, G., (2019) A Gradient-Based Split Criterion for Highly Accurate and Transparent Model Trees. In Int. Joint Conf. on Artificial Intelligence (IJCAI). 2030-2037. `Paper <https://www.ijcai.org/Proceedings/2019/0281.pdf>`__
-    3. Chan, T. F., Golub, G. H., LeVeque, R. J., (1983) Algorithms for computing the sample variance: Analysis and recommendations. The American Statistician. 37(3): 242–247. `Paper <https://www.tandfonline.com/doi/abs/10.1080/00031305.1983.10483115>`__
+    1. Wang, Y., Witten, I. H., (1997) Inducing Model Trees for Continuous Classes. In
+    Proc. of the 9th European Conf. on Machine Learning Poster Papers. 128-137. `Paper
+    <https://researchcommons.waikato.ac.nz/handle/10289/1183>`__
+    2. Broelemann, K., Kasneci, G., (2019) A Gradient-Based Split Criterion for Highly
+    Accurate and Transparent Model Trees. In Int. Joint Conf. on Artificial Intelligence
+    (IJCAI). 2030-2037. `Paper <https://www.ijcai.org/Proceedings/2019/0281.pdf>`__
+    3. Chan, T. F., Golub, G. H., LeVeque, R. J., (1983) Algorithms for computing the
+    sample variance: Analysis and recommendations. The American Statistician. 37(3):
+    242-247. `Paper  # noqa: RUF002
+    <https://www.tandfonline.com/doi/abs/10.1080/00031305.1983.10483115>`__
     """
 
-    def __init__(
+    def __init__(  # noqa: D107
         self,
-        splitting_criterion="model_aware",
-        max_depth=5,
-        min_samples_leaf=None,
-        order=1,
-        basis="total-order",
-        search="exhaustive",
-        samples=50,
-        verbose=False,
-        poly_method="least-squares",
-        poly_solver_args={},
-        all_data=False,
-        split_dims=None,
-        k=0.05,
-        distribution="uniform",
-    ):
+        splitting_criterion="model_aware",  # noqa: ANN001
+        max_depth=5,  # noqa: ANN001
+        min_samples_leaf=None,  # noqa: ANN001
+        order=1,  # noqa: ANN001
+        basis="total-order",  # noqa: ANN001
+        search="exhaustive",  # noqa: ANN001
+        samples=50,  # noqa: ANN001
+        verbose=False,  # noqa: ANN001
+        poly_method="least-squares",  # noqa: ANN001
+        poly_solver_args=None,  # noqa: ANN001
+        all_data=False,  # noqa: ANN001
+        split_dims=None,  # noqa: ANN001
+        k=0.05,  # noqa: ANN001
+        distribution="uniform",  # noqa: ANN001
+    ) -> None:
+        if poly_solver_args is None:
+            poly_solver_args = {}
         self.splitting_criterion = splitting_criterion
         self.max_depth = max_depth
         self.min_samples_leaf = min_samples_leaf
@@ -100,22 +115,23 @@ class PolyTree:
         assert samples > 0, "samples must be a postive integer"
         assert k > 0, "k must be a positive number"
 
-    def get_splits(self):
+    def get_splits(self):  # noqa: ANN201
         """Returns all of the data splits made.
 
         Returns:
         -------
         list
-            A list of splits made in the format of a nested list: [[split, dimension], ...]
+            A list of splits made in the format of a nested list: [[split, dimension],
+            ...]
         """
 
-        def _search_tree(node, splits):
-            if node["children"]["left"] != None:
+        def _search_tree(node, splits):  # noqa: ANN001, ANN202
+            if node["children"]["left"] is not None:
                 if [node["threshold"], node["j_feature"]] not in splits:
                     splits.append([node["threshold"], node["j_feature"]])
                 splits = _search_tree(node["children"]["left"], splits)
 
-            if node["children"]["right"] != None:
+            if node["children"]["right"] is not None:
                 if [node["threshold"], node["j_feature"]] not in splits:
                     splits.append([node["threshold"], node["j_feature"]])
                 splits = _search_tree(node["children"]["right"], splits)
@@ -124,13 +140,13 @@ class PolyTree:
 
         return _search_tree(self.tree, [])
 
-    def _split_data(self, j_feature, threshold, X, y):
+    def _split_data(self, j_feature, threshold, X, y):  # noqa: ANN001, ANN202, N803
         idx_left = np.where(X[:, j_feature] <= threshold)[0]
         idx_right = np.delete(np.arange(0, len(X)), idx_left)
         assert len(idx_left) + len(idx_right) == len(X)
         return (X[idx_left], y[idx_left]), (X[idx_right], y[idx_right])
 
-    def get_polys(self):
+    def get_polys(self):  # noqa: ANN201
         """Returns all of the polynomials fitted at each node in the tree.
 
         Returns:
@@ -139,21 +155,21 @@ class PolyTree:
             A list of Poly objects.
         """
 
-        def _search_tree(node, polys):
-            if node["children"]["left"] == None and node["children"]["right"] == None:
+        def _search_tree(node, polys):  # noqa: ANN001, ANN202
+            if node["children"]["left"] is None and node["children"]["right"] is None:
                 polys.append(node["poly"])
 
-            if node["children"]["left"] != None:
+            if node["children"]["left"] is not None:
                 polys = _search_tree(node["children"]["left"], polys)
 
-            if node["children"]["right"] != None:
+            if node["children"]["right"] is not None:
                 polys = _search_tree(node["children"]["right"], polys)
 
             return polys
 
         return _search_tree(self.tree, [])
 
-    def fit(self, X, y):
+    def fit(self, X, y) -> None:  # noqa: ANN001, N803
         """Fits the PolyTree to the provided data.
 
         Parameters
@@ -164,14 +180,14 @@ class PolyTree:
                 Training output data
         """
 
-        def _build_tree():
+        def _build_tree():  # noqa: ANN202
             global index_node_global
 
-            def _splitter(node):
+            def _splitter(node):  # noqa: ANN001, ANN202
                 # Extract data
-                X, y = node["data"]
+                X, y = node["data"]  # noqa: N806
                 depth = node["depth"]
-                N, d = X.shape
+                N, d = X.shape  # noqa: N806
 
                 # Dimensions to split along
                 if self.split_dims is None:
@@ -200,15 +216,10 @@ class PolyTree:
                 if (depth >= 0) and (depth < self.max_depth):
                     if self.splitting_criterion != "loss_gradient":
                         for j_feature in range(d):
-                            last_threshold = np.inf
-
                             if self.search == "exhaustive":
                                 threshold_search = X[:, j_feature]
                             elif self.search == "grid":
-                                if self.samples > N:
-                                    samples = N
-                                else:
-                                    samples = self.samples
+                                samples = N if self.samples > N else self.samples
                                 threshold_search = np.linspace(
                                     np.min(X[:, j_feature]),
                                     np.max(X[:, j_feature]),
@@ -222,11 +233,11 @@ class PolyTree:
                             # Perform threshold split search on j_feature
                             for threshold in np.unique(np.sort(threshold_search)):
                                 # Split data based on threshold
-                                (X_left, y_left), (X_right, y_right) = self._split_data(
+                                (X_left, y_left), (X_right, y_right) = self._split_data(  # noqa: N806
                                     j_feature, threshold, X, y
                                 )
                                 # print(j_feature, threshold, X_left, X_right)
-                                N_left, N_right = len(X_left), len(X_right)
+                                N_left, N_right = len(X_left), len(X_right)  # noqa: N806
 
                                 # Do not attempt to split if split conditions not satisfied
                                 if not (
@@ -270,7 +281,7 @@ class PolyTree:
                     # Gradient based splitting criterion from ref. [2]
                     else:
                         # Fit a single poly to parent node
-                        loss, poly = _fit_poly(X, y)
+                        _loss, poly = _fit_poly(X, y)
 
                         # Now run the splitting algo using gradients from this poly
                         did_split, j_feature_best, threshold_best = (
@@ -279,12 +290,12 @@ class PolyTree:
 
                 # If model_agnostic or gradient based, fit poly's to children now we have split
                 if self.splitting_criterion != "model_aware" and did_split:
-                    (X_left, y_left), (X_right, y_right) = self._split_data(
+                    (X_left, y_left), (X_right, y_right) = self._split_data(  # noqa: N806
                         j_feature_best, threshold_best, X, y
                     )
                     loss_left, poly_left = _fit_poly(X_left, y_left)
                     loss_right, poly_right = _fit_poly(X_right, y_right)
-                    N_left, N_right = len(X_left), len(X_right)
+                    N_left, N_right = len(X_left), len(X_right)  # noqa: N806
                     loss_best = (N_left * loss_left + N_right * loss_right) / N
                     polys_best = [poly_left, poly_right]
                     if self.splitting_criterion == "loss_gradient":
@@ -306,7 +317,7 @@ class PolyTree:
                     self.actual_max_depth = depth
 
                 # Return the best result
-                result = {
+                return {
                     "did_split": did_split,
                     "loss": loss_best,
                     "polys": polys_best,
@@ -316,13 +327,11 @@ class PolyTree:
                     "N": N,
                 }
 
-                return result
-
-            def _fit_poly(X, y):
+            def _fit_poly(X, y):  # noqa: ANN001, ANN202, N803
                 #                                try:
 
-                N, d = X.shape
-                myParameters = []
+                N, d = X.shape  # noqa: N806
+                myParameters = []  # noqa: N806
 
                 for dimension in range(d):
                     values = X[:, dimension]
@@ -363,11 +372,11 @@ class PolyTree:
                             )
 
                 if self.basis == "hyperbolic-basis":
-                    myBasis = Basis(
+                    myBasis = Basis(  # noqa: N806
                         self.basis, orders=[self.order for _ in range(d)], q=0.5
                     )
                 else:
-                    myBasis = Basis(self.basis, orders=[self.order for _ in range(d)])
+                    myBasis = Basis(self.basis, orders=[self.order for _ in range(d)])  # noqa: N806
 
                 container["index_node_global"] += 1
                 poly = Poly(
@@ -387,7 +396,7 @@ class PolyTree:
 
                 return mse, poly
 
-            def _create_node(X, y, depth, container):
+            def _create_node(X, y, depth, container):  # noqa: ANN001, ANN202, N803
                 poly_loss, poly = _fit_poly(X, y)
 
                 node = {
@@ -407,7 +416,7 @@ class PolyTree:
 
                 return node
 
-            def _split_traverse_node(node, container):
+            def _split_traverse_node(node, container) -> None:  # noqa: ANN001
                 result = _splitter(node)
                 if not result["did_split"]:
                     return
@@ -418,7 +427,7 @@ class PolyTree:
                 if not self.all_data:
                     del node["data"]
 
-                (X_left, y_left), (X_right, y_right) = result["data"]
+                (X_left, y_left), (X_right, y_right) = result["data"]  # noqa: N806
                 poly_left, poly_right = result["polys"]
 
                 node["children"]["left"] = _create_node(
@@ -440,7 +449,7 @@ class PolyTree:
 
             return root
 
-        N, d = X.shape
+        _N, d = X.shape  # noqa: N806
         if self.basis == "hyperbolic-basis":
             self.cardinality = Basis(
                 self.basis, orders=[self.order for _ in range(d)], q=0.5
@@ -449,7 +458,7 @@ class PolyTree:
             self.cardinality = Basis(
                 self.basis, orders=[self.order for _ in range(d)]
             ).get_cardinality()
-        if self.min_samples_leaf == None or self.min_samples_leaf == self.cardinality:
+        if self.min_samples_leaf is None or self.min_samples_leaf == self.cardinality:
             self.min_samples_leaf = int(np.ceil(self.cardinality * 1.25))
         elif self.cardinality > self.min_samples_leaf:
             print(
@@ -460,7 +469,7 @@ class PolyTree:
 
         self.tree = _build_tree()
 
-    def prune(self, X, y, tol=0.0, percent=False):
+    def prune(self, X, y, tol=0.0, percent=False) -> None:  # noqa: ANN001, N803
         """Prunes the tree that you have fitted.
 
         Parameters
@@ -470,14 +479,16 @@ class PolyTree:
         y : numpy.ndarray
                 Training output data
         tol : float, optional
-                Pruning tolerance (%). Prune nodes if they only improve loss by less than this tolerance.
+                Pruning tolerance (%). Prune nodes if they only improve loss by less
+                than this tolerance.
         percent : bool, optional
-                If true, tol is taken as a percentage of the parent node's error. Otherwise, tol is taken to be an absolute value.
+                If true, tol is taken as a percentage of the parent node's error.
+                Otherwise, tol is taken to be an absolute value.
         """
         if percent:
             tol /= 100.0
 
-        def pruner(node, X_subset, y_subset):
+        def pruner(node, X_subset, y_subset):  # noqa: ANN001, ANN202, N803
             if X_subset.shape[0] < 1:
                 node["test_loss"] = 0
                 node["n_samples"] = 0
@@ -491,11 +502,11 @@ class PolyTree:
                 / X_subset.shape[0]
             )
 
-            is_left = node["children"]["left"] != None
-            is_right = node["children"]["right"] != None
+            is_left = node["children"]["left"] is not None
+            is_right = node["children"]["right"] is not None
 
             if is_left and is_right:
-                (X_left, y_left), (X_right, y_right) = self._split_data(
+                (X_left, y_left), (X_right, y_right) = self._split_data(  # noqa: N806
                     node["j_feature"], node["threshold"], X_subset, y_subset
                 )
 
@@ -518,10 +529,7 @@ class PolyTree:
 
                 node["lower_loss"] = lower_loss
 
-                if percent:
-                    loss_eps = tol * node["test_loss"]
-                else:
-                    loss_eps = tol
+                loss_eps = tol * node["test_loss"] if percent else tol
                 print(lower_loss + loss_eps, node["test_loss"])
                 if lower_loss + loss_eps > node["test_loss"]:
                     if self.verbose:
@@ -540,7 +548,7 @@ class PolyTree:
             return node
 
         assert self.tree is not None, "Run fit() before prune()"
-        (X_left, y_left), (X_right, y_right) = self._split_data(
+        (X_left, y_left), (X_right, y_right) = self._split_data(  # noqa: N806
             self.tree["j_feature"], self.tree["threshold"], X, y
         )
 
@@ -551,21 +559,23 @@ class PolyTree:
             self.tree["children"]["right"], X_right, y_right
         )
 
-    def predict(self, X):
+    def predict(self, X):  # noqa: ANN001, ANN201, N803
         """Evaluates the the polynomial tree approximation of the data.
 
         Parameters
         ----------
         X : numpy.ndarray
-            An ndarray with shape (number_of_observations, dimensions) at which the tree fit must be evaluated at.
+            An ndarray with shape (number_of_observations, dimensions) at which the tree
+            fit must be evaluated at.
 
         Returns:
         -------
         numpy.ndarray
-            Array with shape (1, number_of_observations) corresponding to the polynomial approximations of the tree.
+            Array with shape (1, number_of_observations) corresponding to the polynomial
+            approximations of the tree.
         """
 
-        def _predict(node, indexes):
+        def _predict(node, indexes) -> None:  # noqa: ANN001
             y_pred[indexes, node["depth"], 0] = (
                 node["poly"].get_polyfit(X[indexes]).reshape(-1)
             )
@@ -616,21 +626,23 @@ class PolyTree:
 
         return smoothed_y_pred
 
-    def apply(self, X):
+    def apply(self, X):  # noqa: ANN001, ANN201, N803
         """Returns the leaf node index for each observation in the data.
 
         Parameters
         ----------
         X : numpy.ndarray
-            Array with shape (number_of_observations, dimensions) at which the tree fit must be evaluated at.
+            Array with shape (number_of_observations, dimensions) at which the tree fit
+            must be evaluated at.
 
         Returns:
         -------
         numpy.ndarray
-            A numpy.ndarray of shape (number_of_observations,1) corresponding to the node indices for each observation in X.
+            A numpy.ndarray of shape (number_of_observations,1) corresponding to the
+            node indices for each observation in X.
         """
 
-        def _apply(node, indexes):
+        def _apply(node, indexes) -> None:  # noqa: ANN001
             no_children = (
                 node["children"]["left"] is None and node["children"]["right"] is None
             )
@@ -644,12 +656,12 @@ class PolyTree:
             _apply(node["children"]["right"], indexes[idx_right])
 
         if X.ndim == 1:
-            X = X.reshape(1, -1)
+            X = X.reshape(1, -1)  # noqa: N806
         inode = np.zeros(shape=X.shape[0], dtype=int)
         _apply(self.tree, np.arange(0, X.shape[0]))
         return inode
 
-    def get_leaves(self):
+    def get_leaves(self):  # noqa: ANN201
         """Returns the node indices for all leaf nodes.
 
         Returns:
@@ -658,7 +670,7 @@ class PolyTree:
             Contains the node indices of all leaf nodes.
         """
 
-        def _recurse(node, leaf_list):
+        def _recurse(node, leaf_list) -> None:  # noqa: ANN001
             no_children = (
                 node["children"]["left"] is None and node["children"]["right"] is None
             )
@@ -672,13 +684,14 @@ class PolyTree:
         _recurse(self.tree, leaf_list)
         return leaf_list
 
-    def get_mean_and_variance(self):
+    def get_mean_and_variance(self):  # noqa: ANN201
         """Computes the mean and variance of the polynomial tree model.
 
         Returns:
         -------
         tuple
-            Tuple (mean,variance) containing two floats; the approximated mean and variance from the fitted PolyTree.
+            Tuple (mean,variance) containing two floats; the approximated mean and
+            variance from the fitted PolyTree.
         """
         # Get volume of polytree domain
         root_poly = self.tree["poly"]
@@ -707,17 +720,19 @@ class PolyTree:
 
         return mean, var
 
-    def get_graphviz(self, X=None, feature_names=None, file_name=None):
+    def get_graphviz(self, X=None, feature_names=None, file_name=None):  # noqa: ANN001, ANN201, N803
         """Generates a graphviz visualisation of the PolyTree.
 
         Parameters
         ----------
         X : numpy.ndarray, optional
-                An ndarray with shape (dimensions) containing an input vector for a given sample, to highlight in the tree.
+                An ndarray with shape (dimensions) containing an input vector for a
+                given sample, to highlight in the tree.
         feature_names : list, optional
                 A list of the names of the features used in the training data.
         filename : str, optional
-                Filename to write graphviz data to. If ``None`` (default) then rendered in-place, if ``'source'``, the raw graphviz string is returned.
+                Filename to write graphviz data to. If ``None`` (default) then rendered
+                in-place, if ``'source'``, the raw graphviz string is returned.
 
         """
         from graphviz import Digraph
@@ -726,11 +741,15 @@ class PolyTree:
 
         if feature_names is None:
             dim = self.tree["poly"].dimensions
-            feature_names = ["x_%d" % i for i in range(dim)]
+            feature_names = ["x_%d" % i for i in range(dim)]  # noqa: UP031
 
         def _build_graphviz_recurse(
-            node, parent_node_index=0, parent_depth=0, edge_label="", labelangle=0
-        ):
+            node,  # noqa: ANN001
+            parent_node_index=0,  # noqa: ANN001
+            parent_depth=0,  # noqa: ANN001
+            edge_label="",  # noqa: ANN001
+            labelangle=0,  # noqa: ANN001
+        ) -> None:
             # Empty node
             if node is None:
                 return
@@ -820,7 +839,7 @@ class PolyTree:
                 labelangle="-45",
             )
 
-        def _flag_tree_walk(node, X):
+        def _flag_tree_walk(node, X):  # noqa: ANN001, ANN202, N803
             node["flag"] = True
             if node["children"]["left"] is None and node["children"]["right"] is None:
                 return None
@@ -828,6 +847,7 @@ class PolyTree:
                 return _flag_tree_walk(node["children"]["left"], X)
             if X[node["j_feature"]] > node["threshold"]:
                 return _flag_tree_walk(node["children"]["right"], X)
+            return None
 
         # Flag the node path to highlight later
         if X is not None:
@@ -844,7 +864,7 @@ class PolyTree:
         if file_name is None:
             try:
                 g.render(view=True)
-            except:
+            except Exception:
                 file_name = "tree.dot"
                 print(
                     "GraphViz source file written to "
@@ -855,10 +875,11 @@ class PolyTree:
         if (
             file_name is not None
         ):  # not elif here as file_name might be updated in try-except above
-            with open(file_name, "w") as file:
+            with open(file_name, "w") as file:  # noqa: PTH123
                 file.write(str(g.source))
+        return None
 
-    def get_node(self, inode):
+    def get_node(self, inode):  # noqa: ANN001, ANN201
         """Returns the node corresponding to a given node number.
 
         Parameters
@@ -873,7 +894,7 @@ class PolyTree:
         """
 
         # Find node with given index inode. Traverse all children until correct node found.
-        def _get_node_from_n(node):
+        def _get_node_from_n(node):  # noqa: ANN001, ANN202
             if (
                 node is not None
             ):  # Need to check if node is None here as below _get_node_from_n() calls on children will result in None if leaf node
@@ -887,22 +908,27 @@ class PolyTree:
 
         return _get_node_from_n(self.tree)
 
-    def get_paths(self, X=None):
+    def get_paths(self, X=None):  # noqa: ANN001, ANN201, N803
         """Returns the tree paths for the leaf nodes in the tree.
 
         Parameters
         ----------
         X : numpy.ndarray, optional
-            Array with shape (number_of_observations, dimensions) to apply the tree to. If given, paths will only be returned for leaves which contain observations.
+            Array with shape (number_of_observations, dimensions) to apply the tree to.
+            If given, paths will only be returned for leaves which contain observations.
 
         Returns:
         -------
         dict
-            Dictionary containing a dict for each leaf node. Indexed by the node indices for the leaf nodes.
+            Dictionary containing a dict for each leaf node. Indexed by the node indices
+            for the leaf nodes.
         """
 
-        def _find_path(node, path, i):
-            """Private recursive function to find path through a tree for a given leaf node."""
+        def _find_path(node, path, i) -> bool:  # noqa: ANN001
+            """Private recursive function to find path through a tree for a given leaf.
+
+            node.
+            """
             node_index = node["index"]
             info = {
                 "node": node_index,
@@ -924,7 +950,7 @@ class PolyTree:
             return False
 
         # Get leaf node id's
-        if X is None:
+        if X is None:  # noqa: SIM108
             leave_id = self.get_leaves()
         else:
             # Get leaf nodes
@@ -945,49 +971,60 @@ class PolyTree:
 
         return paths
 
-    def plot_decision_surface(
+    def plot_decision_surface(  # noqa: ANN201
         self,
-        ij,
-        ax=None,
-        X=None,
-        y=None,
-        max_depth=None,
-        label=True,
-        color="data",
-        colorbar=True,
-        show=True,
-        kwargs={},
+        ij,  # noqa: ANN001
+        ax=None,  # noqa: ANN001
+        X=None,  # noqa: ANN001, N803
+        y=None,  # noqa: ANN001
+        max_depth=None,  # noqa: ANN001
+        label=True,  # noqa: ANN001
+        color="data",  # noqa: ANN001
+        colorbar=True,  # noqa: ANN001
+        show=True,  # noqa: ANN001
+        kwargs=None,  # noqa: ANN001
     ):
-        """Plots the decision boundaries of the PolyTree over a 2D surface. See :meth:`~equadratures.plot.plot_decision_surface` for full description."""
+        """Plots the decision boundaries of the PolyTree over a 2D surface. See.
+
+        :meth:`~equadratures.plot.plot_decision_surface` for full description.
+        """
+        if kwargs is None:
+            kwargs = {}
         return plot.plot_decision_surface(
             self, ij, ax, X, y, max_depth, label, color, colorbar, show, kwargs
         )
 
-    def _find_split_from_grad(self, model, X, y):
-        """Private method to find the optimal split point for a tree node based on the training data in that node.
+    def _find_split_from_grad(self, model, X, y):  # noqa: ANN001, ANN202, N803
+        """Private method to find the optimal split point for a tree node based on the.
+
+        training data in that node.
 
         Parameters
         ----------
         model : Poly
-            An instance of the Poly class, corresponding to the Poly belonging to the tree node.
+            An instance of the Poly class, corresponding to the Poly belonging to the
+            tree node.
         X : numpy.ndarray
-                An ndarray with shape (number_of_observations, dimensions) containing the input data belonging to the tree node.
+                An ndarray with shape (number_of_observations, dimensions) containing
+                the input data belonging to the tree node.
         y : numpy.ndarray
-                An ndarray with shape (number_of_observations, 1) containing the response data belonging to the tree node.
+                An ndarray with shape (number_of_observations, 1) containing the
+                response data belonging to the tree node.
 
         Returns:
         -------
         tuple
             Tuple (did_split, split_dim, split_val), where:
                 did_split (bool): True if a split was found, otherwise False.
-                split_dim (int): The dimension in X within which the best split was found.
+                split_dim (int): The dimension in X within which the best split was
+                found.
                 split_val (float): The location of the best split.
         """
         renorm = True
-        N, D = np.shape(X)
+        N, _D = np.shape(X)  # noqa: N806
 
         # Gradient of loss wrt model coefficients
-        P = model.get_poly(X).T
+        P = model.get_poly(X).T  # noqa: N806
         r = y - model.get_polyfit(X)
         g = r * P
 
@@ -995,27 +1032,25 @@ class PolyTree:
         gsum = g.sum(axis=0)
 
         # Loop through all dimensions in X
-        split_dim = None
-        split_val = None
         gain_max = -np.inf
         for d in self.split_dims:
             # Sort along feature i
             sort = np.argsort(X[:, d])
-            Xd = X[sort, d]
+            Xd = X[sort, d]  # noqa: N806
 
             # Find unique values along one column. #TODO - grid search option
             _, splits = np.unique(Xd, return_index=True)
             splits = splits[1:]
 
             # Number of samples on left and right split
-            N_l = splits
-            N_r = N - N_l
+            N_l = splits  # noqa: N806
+            N_r = N - N_l  # noqa: N806
 
             # Only take splits where both children have more than `min_samples_leaf` samples
             idx = np.minimum(N_l, N_r) >= self.min_samples_leaf
             splits = splits[idx]
-            N_l = N_l[idx].reshape(-1, 1)
-            N_r = N_r[idx].reshape(-1, 1)
+            N_l = N_l[idx].reshape(-1, 1)  # noqa: N806
+            N_r = N_r[idx].reshape(-1, 1)  # noqa: N806
 
             # If we've run out of candidate spilts, skip
             if len(splits) <= 1:
@@ -1054,10 +1089,12 @@ class PolyTree:
         return True, best_split_dim, best_split_val
 
     @staticmethod
-    def _get_mean_and_sigma(X, splits, N_l, N_r, sort):
-        """Computes mean and standard deviation of the data in array X, when it is
+    def _get_mean_and_sigma(X, splits, N_l, N_r, sort):  # noqa: ANN001, ANN205, N803
+        """Computes mean and standard deviation of the data in array X, when it is.
+
         split in two by the threshold values in the splits array. The data is offset by
-        its mean to avoid catastrophic cancellation when computing the variance (see ref. [3]).
+        its mean to avoid catastrophic cancellation when computing the variance (see
+        ref. [3]).
 
         Parameters
         ----------
@@ -1077,13 +1114,13 @@ class PolyTree:
 
         # Reorder, and shift X by mean
         mu = np.reshape(np.mean(X, axis=0), (1, -1))
-        Xshift = X[sort] - mu
+        Xshift = X[sort] - mu  # noqa: N806
 
         # Cumulative sums (and sums of squares) for left and right splits
-        Xsum_l = Xshift.cumsum(axis=0)
-        Xsum_r = Xsum_l[-1:, :] - Xsum_l
-        X2sum_l = (Xshift**2).cumsum(axis=0)
-        X2sum_r = X2sum_l[-1:, :] - X2sum_l
+        Xsum_l = Xshift.cumsum(axis=0)  # noqa: N806
+        Xsum_r = Xsum_l[-1:, :] - Xsum_l  # noqa: N806
+        X2sum_l = (Xshift**2).cumsum(axis=0)  # noqa: N806
+        X2sum_r = X2sum_l[-1:, :] - X2sum_l  # noqa: N806
 
         # Compute mean of left and right side for all splits
         mu_l = Xsum_l[splits - 1, :] / N_l
@@ -1104,28 +1141,32 @@ class PolyTree:
         return mu_l, mu_r, sigma_l, sigma_r
 
     @staticmethod
-    def _renormalise(gradients, a, c):
+    def _renormalise(gradients, a, c):  # noqa: ANN001, ANN205
         """Renormalises gradients according to according to eq. (14) of [1].
-        Parameters
+
+        Parameters.
         ----------
         gradients : numpy.ndarray
             Array with shape (n_samples, n_params), containing the gradients.
         a : numpy.ndarray
-            Array with shape (n_samples, n_params-1) containing the normalisation factors.
+            Array with shape (n_samples, n_params-1) containing the normalisation
+            factors.
         c: numpy.ndarray
-            Array with shape (n_samples, n_params-1) containing the normalisation offsets.
+            Array with shape (n_samples, n_params-1) containing the normalisation
+            offsets.
 
         Returns:
         -------
         gradients : numpy.ndarray
-            Array with shape (n_samples, n_params) containing the renormalised gradients.
+            Array with shape (n_samples, n_params) containing the renormalised
+            gradients.
         """
         c = c * gradients[:, 0].reshape(-1, 1)
         gradients[:, 1:] = gradients[:, 1:] * a + c
         return gradients
 
     @staticmethod
-    def _calc_domain_vol(Polynomial):
+    def _calc_domain_vol(Polynomial):  # noqa: ANN001, ANN205, N803
         params = Polynomial.parameters
         vol = 1.0
         for param in params:

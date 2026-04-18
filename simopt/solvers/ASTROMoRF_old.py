@@ -1,4 +1,4 @@
-# #type: ignore
+# #type: ignore  # noqa: D100, N999
 # """
 # Summary
 # -------

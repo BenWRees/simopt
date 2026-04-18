@@ -88,7 +88,7 @@ class NelderMead(Solver):
     gradient_needed: ClassVar[bool] = False
 
     # FIXME: fix typing on `sort_sol`
-    def solve(self, problem: Problem) -> None:  # noqa: D102
+    def solve(self, problem: Problem) -> None:  # noqa: D102  # ty: ignore[invalid-method-override]
         self.iteration_count = 1
         self.record_count = 1
         # Designate random number generator for random sampling.
@@ -157,7 +157,7 @@ class NelderMead(Solver):
                     new_pts,
                 )
 
-            sol.extend(self.create_new_solution(pt, problem) for pt in new_pts) 
+            sol.extend(self.create_new_solution(pt, problem) for pt in new_pts)
 
         r = self.factors["r"]  # For increasing replications.
 
@@ -176,7 +176,7 @@ class NelderMead(Solver):
         # Sort solutions by obj function estimate.
         sort_sol = self._sort_and_end_update(problem, sol)
 
-        try :
+        try:
             # Maximization problem is converted to minimization by using minmax.
             while True:
                 # Shrink towards best if out of bounds.
@@ -198,15 +198,18 @@ class NelderMead(Solver):
                         break
 
                     sol_0_x = np.array(sort_sol[0].x)  # pyrefly: ignore
+                    delta = self.factors["delta"]
                     for i in range(1, len(sort_sol)):
+                        sort_sol_i = np.array(sort_sol[i].x)  # pyrefly: ignore
                         p_new = (
-                            self.factors["delta"]
-                            * np.array(sort_sol[i].x)  # pyrefly: ignore
-                            + (1 - self.factors["delta"]) * sol_0_x
+                            delta * sort_sol_i  # pyrefly: ignore
+                            + (1 - delta) * sol_0_x
                         )
                         p_new = self._check_const(p_new, sol_0_x)
                         p_new = Solution(p_new, problem)
-                        p_new.attach_rngs(rng_list=self.solution_progenitor_rngs, copy=True)
+                        p_new.attach_rngs(
+                            rng_list=self.solution_progenitor_rngs, copy=True
+                        )
                         self.budget.request(r)
                         problem.simulate(p_new, r)
 
@@ -273,7 +276,9 @@ class NelderMead(Solver):
 
                     # Record data if within budget.
                     self.intermediate_budgets.append(self.budget.used)
-                    self.recommended_solns.append(p_exp if exp_fn_val < fn_low else p_refl)
+                    self.recommended_solns.append(
+                        p_exp if exp_fn_val < fn_low else p_refl
+                    )
 
                 # Check if accept contraction or shrink.
                 elif refl_fn_val > fn_sec:
@@ -290,14 +295,18 @@ class NelderMead(Solver):
 
                     # Evaluate contraction point.
                     p_cont = Solution(p_cont, problem)
-                    p_cont.attach_rngs(rng_list=self.solution_progenitor_rngs, copy=True)
+                    p_cont.attach_rngs(
+                        rng_list=self.solution_progenitor_rngs, copy=True
+                    )
                     self.budget.request(r)
                     problem.simulate(p_cont, r)
                     cont_fn_val = inv_minmax * p_cont.objectives_mean
 
                     # Accept contraction.
                     if cont_fn_val <= fn_high:
-                        sort_sol[-1] = p_cont  # p_cont replaces p_high. # pyrefly: ignore
+                        sort_sol[-1] = (
+                            p_cont  # p_cont replaces p_high. # pyrefly: ignore
+                        )
 
                         # Sort & end updating.
                         sort_sol = self._sort_and_end_update(
@@ -343,8 +352,8 @@ class NelderMead(Solver):
                             problem,
                             sort_sol,  # pyrefly: ignore
                         )
-                        
-                        # Record data if there is a new best solution in the contraction.
+
+                        # Record data if there is a new best solution in the contraction.  # noqa: E501
                         if is_new_best:
                             self.intermediate_budgets.append(self.budget.used)
                             self.recommended_solns.append(sort_sol[0])
@@ -359,8 +368,6 @@ class NelderMead(Solver):
                 self.fn_estimates.append(sort_sol[0].objectives_mean.item())
                 self.budget_history.append(self.budget.used)
                 self.iterations.append(self.iteration_count)
-                
-    
 
     def _sort_and_end_update(
         self, problem: Problem, sol: Iterable[Solution]

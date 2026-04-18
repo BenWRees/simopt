@@ -14,35 +14,40 @@ class Polynet:
     :param numpy.ndarray sample_points: Sample training data inputs.
     :param numpy.ndarray sample_outputs: Sample training data outputs.
     :param int num_ridges: The number of ridges used in the neural network/
-    :param int max_iters: The maximum number of iterations for the gradient descent optimisation algorithm.
+    :param int max_iters: The maximum number of iterations for the gradient descent
+    optimisation algorithm.
     :param double learning_rate: The learning rate used in the optimisation.
     :param numpy.ndarray W: An initial ridge for the optimisation algorithm.
     :param numpy.ndarray coeffs: Coefficients for the polynomial 1D-ridge functions.
-    :param string opt: The optimisation strategy used. Options include: ``sd`` for steepest descent, ``mom`` for a momentum-rate-based approach or ``adapt`` for an adaptive learning rate based approach.
+    :param string opt: The optimisation strategy used. Options include: ``sd`` for
+    steepest descent, ``mom`` for a momentum-rate-based approach or ``adapt`` for an
+    adaptive learning rate based approach.
     :param double momentum_rate: The momentum rate used.
-    :param int poly_deg: The degree of the polynomials used throughout the neural network.
+    :param int poly_deg: The degree of the polynomials used throughout the neural
+    network.
     :param bool verbose: A verbose flag.
 
     **Sample constructor initialisations**::
 
-        net = Polynet(X,Y,num_ridges,max_iters=20000, learning_rate=1e-4, momentum_rate=.001, opt='adapt')
+        net = Polynet(X,Y,num_ridges,max_iters=20000, learning_rate=1e-4,
+        momentum_rate=.001, opt='adapt')
         net.fit()
     """
 
-    def __init__(
+    def __init__(  # noqa: D107
         self,
-        sample_points,
-        sample_outputs,
-        num_ridges,
-        max_iters=1,
-        learning_rate=0.001,
-        W=None,
-        coeffs=None,
-        momentum_rate=0.001,
-        opt="sd",
-        poly_deg=2,
-        verbose=False,
-    ):
+        sample_points,  # noqa: ANN001
+        sample_outputs,  # noqa: ANN001
+        num_ridges,  # noqa: ANN001
+        max_iters=1,  # noqa: ANN001
+        learning_rate=0.001,  # noqa: ANN001
+        W=None,  # noqa: ANN001, N803
+        coeffs=None,  # noqa: ANN001
+        momentum_rate=0.001,  # noqa: ANN001
+        opt="sd",  # noqa: ANN001
+        poly_deg=2,  # noqa: ANN001
+        verbose=False,  # noqa: ANN001
+    ) -> None:
         self.sample_points = sample_points
         self.sample_outputs = sample_outputs
         self.verbose = verbose
@@ -67,7 +72,7 @@ class Polynet:
                     Basis("total-order"),
                 )
         self.poly_card = self.poly_array[0, 0].basis.cardinality
-        layer_sizes = [self.dims] + self.num_ridges
+        layer_sizes = [self.dims, *self.num_ridges]
         if W is None:
             self.W = [
                 np.random.randn(layer_sizes[k + 1], layer_sizes[k])
@@ -108,28 +113,29 @@ class Polynet:
         self.learning_rate = learning_rate
         self.momentum_rate = momentum_rate
 
-    def update_coeffs(self):
+    def update_coeffs(self) -> None:  # noqa: D102
         for k in range(self.num_layers):
             for j in range(self.num_ridges[k]):
                 current_coeffs = self.coeffs[k][j, :]
                 reshaped_coeffs = np.reshape(current_coeffs, (len(current_coeffs), 1))
                 (self.poly_array[k, j]).coefficients = reshaped_coeffs
 
-    def evaluate_fit(self, x, train=False):
+    def evaluate_fit(self, x, train=False):  # noqa: ANN001, ANN201
         """Evaluates the trained network on provided data.
 
         :param Polynet self:
             An instance of the Polynet object.
 
         :param numpy.ndarray x:
-            A set of testing inputs of shape (M, d), where M represents the number of testing points and d the dimensionality of the input data.
+            A set of testing inputs of shape (M, d), where M represents the number of
+            testing points and d the dimensionality of the input data.
 
         """
         # evaluate nn
         # if train, update with training data and also updates Z
-        Z = self.Z[:]
-        Y = self.Y[:]
-        W = self.W[:]
+        Z = self.Z[:]  # noqa: N806
+        Y = self.Y[:]  # noqa: N806
+        W = self.W[:]  # noqa: N806
         Z[0] = np.dot(W[0], x.T)
         n_points = x.shape[0]
         for k in range(1, self.num_layers):
@@ -154,14 +160,14 @@ class Polynet:
             self.Y = Y[:]
         return np.sum(y_final, axis=0)
 
-    def update_delta(self):
+    def update_delta(self) -> None:  # noqa: D102
         # EBP
         delta = self.delta
-        Z = self.Z
+        Z = self.Z  # noqa: N806
         num_ridges = self.num_ridges
         n_points = Z[0].shape[1]
         num_layers = self.num_layers
-        W = self.W
+        W = self.W  # noqa: N806
         act_mat = self.act_mat
         act_mat = [np.zeros((num_ridges[k], n_points)) for k in range(num_layers)]
         for k in range(num_layers):
@@ -178,10 +184,10 @@ class Polynet:
         self.delta = delta[:]
         self.act_mat = act_mat[:]
 
-    def update_phi(self):
+    def update_phi(self) -> None:  # noqa: D102
         # update matrix of basis function evaluations. If Z is updated for train, update this as well
         phi = self.phi
-        Z = self.Z
+        Z = self.Z  # noqa: N806
         num_ridges = self.num_ridges
         n_points = Z[0].shape[1]
         num_layers = self.num_layers
@@ -193,7 +199,7 @@ class Polynet:
                 phi[k][i, :, :] = np.squeeze(current_poly.get_poly(Z[k][i]))
         self.phi = phi[:]
 
-    def fit(self):
+    def fit(self) -> None:
         """Trains the neural network on the data.
 
         :param Polynet self:
@@ -201,15 +207,15 @@ class Polynet:
 
         """
         n_data = self.sample_points.shape[0]
-        W_change = self.W[:]
+        W_change = self.W[:]  # noqa: N806
         for t in range(self.max_iters):
-            W_new = self.W[:]
+            W_new = self.W[:]  # noqa: N806
             coeffs_new = self.coeffs[:]
-            prev_gradWs = self.W[:]
+            self.W[:]
             self.update_delta()
             self.update_phi()
             for k in range(self.num_layers):
-                Wk_grads = self.gradient_Wk(k)
+                Wk_grads = self.gradient_Wk(k)  # noqa: N806
                 alphak_grads = self.gradient_alphak(k)
                 # steepest descent
                 if self.opt == "sd":
@@ -225,7 +231,7 @@ class Polynet:
                     # adaptive learning rate
                     if t > 0:
                         current_loss = self.loss()
-                        if prev_loss < current_loss:
+                        if prev_loss < current_loss:  # noqa: F821
                             self.learning_rate *= 0.5
                         else:
                             self.learning_rate *= 1.1
@@ -235,14 +241,14 @@ class Polynet:
                     alphak_grads, axis=2
                 )
                 W_change[k] = W_new[k] - self.W[k]
-            prev_loss = self.loss()
+            self.loss()
             self.W = W_new[:]
             self.coeffs = coeffs_new[:]
             self.update_coeffs()
             if t % 100 == 0 and self.verbose:
-                print("iter: %d" % t)
-                print("loss: %f" % self.loss())
-                print("rate: %.10f" % self.learning_rate)
+                print("iter: %d" % t)  # noqa: UP031
+                print(f"loss: {self.loss():f}")
+                print(f"rate: {self.learning_rate:.10f}")
             if np.isnan(self.loss()):
                 print("Optimization diverged... Consider lowering learning rate.")
                 break
@@ -250,24 +256,24 @@ class Polynet:
                 print("per point loss is < 0.0001, breaking")
                 break
 
-    def loss(self):
+    def loss(self):  # noqa: ANN201, D102
         return np.sum(
             (self.evaluate_fit(self.sample_points) - self.sample_outputs) ** 2
         )
 
-    def gradient_Wk(self, k):
+    def gradient_Wk(self, k):  # noqa: ANN001, ANN201, D102, N802
         # Calculate grad of E wrt W^{(k)}, the weights of the k-th layer, summed over all training points
         if k > 0:
             return np.dot(self.delta[k], self.Y[k - 1].T)
         return np.dot(self.delta[k], self.sample_points)
 
-    def gradient_alphak(self, k):
+    def gradient_alphak(self, k):  # noqa: ANN001, ANN201, D102
         # Calculate grad of E wrt alpha^{(k)} the poly coeff matrix at k-th layer, summed over all training points
-        Wd = self.phi[k].copy()
+        Wd = self.phi[k].copy()  # noqa: N806
         if k == self.num_layers - 1:
-            Wd_one = self.evaluate_fit(self.sample_points) - self.sample_outputs
+            Wd_one = self.evaluate_fit(self.sample_points) - self.sample_outputs  # noqa: N806
         else:
-            Wd_one = np.dot(self.W[k + 1].T, self.delta[k + 1])
+            Wd_one = np.dot(self.W[k + 1].T, self.delta[k + 1])  # noqa: N806
         for c in range(Wd.shape[1]):
             Wd[:, c, :] = Wd_one
         return self.phi[k] * Wd

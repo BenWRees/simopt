@@ -15,7 +15,7 @@ class Lognormal(Distribution):
     The shape parameter associated with the Lognormal distribution.
     """
 
-    def __init__(self, shape_parameter):
+    def __init__(self, shape_parameter) -> None:  # noqa: ANN001, D107
         if shape_parameter is None:
             self.shape_parameter = 1.0
         else:
@@ -34,7 +34,7 @@ class Lognormal(Distribution):
             0, self.shape_parameter * 10, RECURRENCE_PDF_SAMPLES
         )
 
-    def get_description(self):
+    def get_description(self):  # noqa: ANN201
         """A description of the Lognormal distribution.
 
         :param Lognormal self:
@@ -42,14 +42,13 @@ class Lognormal(Distribution):
         :return:
             A string describing the Lognormal distribution.
         """
-        text = (
+        return (
             "is a Lognormal distribution is characterised by its shape parameter, which here is"
             + str(self.shape_parameter)
             + "."
         )
-        return text
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """A Lognormal probability density function.
 
         :param Lognormal self:
@@ -57,7 +56,8 @@ class Lognormal(Distribution):
         :param points:
             Matrix of points for defining the probability density function.
         :return:
-            An array of N equidistant values over the support of the Lognormal distribution.
+            An array of N equidistant values over the support of the Lognormal
+            distribution.
         :return:
             Probability density values along the support of the Lognormal distribution.
         """
@@ -65,7 +65,7 @@ class Lognormal(Distribution):
             return self.parent.pdf(points)
         raise ValueError("Please digit an input for get_pdf method")
 
-    def get_cdf(self, points=None):
+    def get_cdf(self, points=None):  # noqa: ANN001, ANN201
         """A Lognormal cumulative density function.
 
         :param Lognormal self:
@@ -73,7 +73,8 @@ class Lognormal(Distribution):
         :param matrix points:
             Matrix of points for defining the cumulative density function.
         :return:
-            An array of N equidistant values over the support of the Lognormal distribution.
+            An array of N equidistant values over the support of the Lognormal
+            distribution.
         :return:
             Cumulative density values along the support of the Lognormal distribution.
         """
@@ -81,30 +82,29 @@ class Lognormal(Distribution):
             return self.parent.cdf(points)
         raise ValueError("Please digit an input for get_cdf method")
 
-    def get_icdf(self, xx):
+    def get_icdf(self, xx):  # noqa: ANN001, ANN201
         """A Lognormal inverse cumulative density function.
 
         :param Gumbel:
             An instance of Logistic class
         :param matrix xx:
-            A matrix of points at which the inverse cumulative density function need to be evaluated.
+            A matrix of points at which the inverse cumulative density function need to
+            be evaluated.
         :return:
             Inverse cumulative density function values of the Lognormal distribution.
         """
         return self.parent.ppf(xx)
 
-    def get_samples(self, m=None):
+    def get_samples(self, m=None):  # noqa: ANN001, ANN201
         """Generates samples from the Lognormal distribution.
 
         :param Logistic self:
             An instance of Lognormal class
         :param integer m:
-            Number of random samples. If no value is provided, a default of 5e05 is assumed.
+            Number of random samples. If no value is provided, a default of 5e05 is
+            assumed.
         :return:
             A N-by-1 vector that contains the samples.
         """
-        if m is not None:
-            number = m
-        else:
-            number = 500000
+        number = m if m is not None else 500000
         return self.parent.rvs(size=number)

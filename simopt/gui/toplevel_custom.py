@@ -1,4 +1,4 @@
-import sys
+import sys  # noqa: D100
 import tkinter as tk
 from tkinter import ttk
 from tkinter.font import nametofont

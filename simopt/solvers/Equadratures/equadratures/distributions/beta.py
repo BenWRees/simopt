@@ -2,7 +2,7 @@
 
 import numpy as np
 from scipy.special import beta
-from scipy.stats import beta
+from scipy.stats import beta  # noqa: F811
 
 from equadratures.distributions.recurrence_utils import jacobi_recurrence_coefficients
 from equadratures.distributions.template import Distribution
@@ -14,16 +14,18 @@ class Beta(Distribution):
     """The class defines a Beta object. It is the child of Distribution.
 
     :param double a:
-        First shape parameter of the beta distribution. This value has to be greater than 0.
+        First shape parameter of the beta distribution. This value has to be greater
+        than 0.
     :param double b:
-            Second shape parameter of the beta distribution. This value has to be greater than 0.
+            Second shape parameter of the beta distribution. This value has to be
+            greater than 0.
     :param double lower:
         Lower bound of the support of the beta distribution.
     :param double upper:
         Upper bound of the support of the beta distribution.
     """
 
-    def __init__(self, lower=None, upper=None, shape_A=None, shape_B=None):
+    def __init__(self, lower=None, upper=None, shape_A=None, shape_B=None) -> None:  # noqa: ANN001, D107, N803
         if shape_A is None:
             self.shape_A = 2.0
         else:
@@ -65,7 +67,7 @@ class Beta(Distribution):
             self.lower, self.upper, RECURRENCE_PDF_SAMPLES
         )
 
-    def get_description(self):
+    def get_description(self):  # noqa: ANN201
         """A description of the beta distribution.
 
         :param Beta self:
@@ -73,7 +75,7 @@ class Beta(Distribution):
         :return:
             A string describing the beta distribution.
         """
-        text = (
+        return (
             "is a beta distribution is defined over a support; given here as "
             + str(self.lower)
             + ", to "
@@ -84,9 +86,8 @@ class Beta(Distribution):
             + str(self.shape_B)
             + "."
         )
-        return text
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """A beta probability density function.
 
         :param Beta self:
@@ -98,7 +99,7 @@ class Beta(Distribution):
             return self.parent.pdf(points)
         raise ValueError("Please specify an input for getPDF method")
 
-    def get_cdf(self, points=None):
+    def get_cdf(self, points=None):  # noqa: ANN001, ANN201
         """A beta cumulative density function.
 
         :param Beta self:
@@ -112,7 +113,7 @@ class Beta(Distribution):
             return self.parent.cdf(points)
         raise ValueError("Please digit an input for getCDF method")
 
-    def get_recurrence_coefficients(self, order):
+    def get_recurrence_coefficients(self, order):  # noqa: ANN001, ANN201
         """Recurrence coefficients for the beta distribution.
 
         :param Beta self:
@@ -122,28 +123,28 @@ class Beta(Distribution):
         :return:
             Recurrence coefficients associated with the beta distribution.
         """
-        ab = jacobi_recurrence_coefficients(
+        return jacobi_recurrence_coefficients(
             self.shape_parameter_A - 1.0,
             self.shape_parameter_B - 1.0,
             self.lower,
             self.upper,
             order,
         )
-        return ab
 
-    def get_icdf(self, xx):
+    def get_icdf(self, xx):  # noqa: ANN001, ANN201
         """A Beta inverse cumulative density function.
 
         :param Beta self:
             An instance of Beta class.
         :param array xx:
-            Points at which the inverse cumulative density funcion needs to be evaluated.
+            Points at which the inverse cumulative density funcion needs to be
+            evaluated.
         :return:
             Inverse cumulative density function values of the Beta distribution.
         """
         return self.parent.ppf(xx)
 
-    def get_samples(self, m=None):
+    def get_samples(self, m=None):  # noqa: ANN001, ANN201
         """Generates samples from the Beta distribution.
 
         :param beta self:
@@ -153,8 +154,5 @@ class Beta(Distribution):
         :return:
             A N-by-1 vector that contains the samples.
         """
-        if m is not None:
-            number = m
-        else:
-            number = 500000
+        number = m if m is not None else 500000
         return self.parent.rvs(size=number)

@@ -1,4 +1,4 @@
-# from equadratures.parameter import Parameter
+# from equadratures.parameter import Parameter  # noqa: D104
 # from equadratures.poly import Poly
 # from equadratures.stats import Statistics
 # from equadratures.basis import Basis

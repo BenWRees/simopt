@@ -136,7 +136,7 @@ class SPSA(Solver):
         """
         return np.array(self.rng_list[2].choices([-1, 1], [0.5, 0.5], k=dim))
 
-    def solve(self, problem: Problem) -> None:  # noqa: D102
+    def solve(self, problem: Problem) -> None:  # noqa: D102  # ty: ignore[invalid-method-override]
         self.iteration_count = 1
         # -minmax is needed to cast this as a minimization problem
         neg_minmax = -np.array(problem.minmax)
@@ -153,7 +153,7 @@ class SPSA(Solver):
         self.budget.request(self.factors["n_reps"])
         problem.simulate(theta_sol, self.factors["n_reps"])
 
-        #initial recording of fn_estimates, iterations, budget_history
+        # initial recording of fn_estimates, iterations, budget_history
         self.fn_estimates.append(theta_sol.objectives_mean.item())
         self.iterations.append(self.iteration_count)
         self.budget_history.append(self.budget.used)

@@ -1,10 +1,14 @@
-"""Module for computing optimal subspace dimensions and polynomial degrees for ASTROMORF.
+"""Module for computing optimal subspace dimensions and polynomial degrees for.
+
+ASTROMORF.
 
 This module provides functions to:
 1. Determine the optimal polynomial degree based on available sample budget
-2. Select the best subspace dimension for consistent and high-quality optimization trajectories
+2. Select the best subspace dimension for consistent and high-quality optimization
+trajectories
 3. Perform 2D hyperparameter search to find optimal (dimension, degree) pairs
-4. Solve hyperparameter tuning as a simulation optimization problem using Bayesian optimization
+4. Solve hyperparameter tuning as a simulation optimization problem using Bayesian
+optimization
 """
 
 from __future__ import annotations
@@ -18,12 +22,14 @@ if TYPE_CHECKING:
     from simopt.base import Problem
 
 
-def _test_single_polynomial_degree(args):
+def _test_single_polynomial_degree(args):  # noqa: ANN001, ANN202
     """Worker function to test a single polynomial degree in parallel.
+
     Must be at module level for pickling with ProcessPoolExecutor.
 
     Args:
-        args: Tuple of (degree, problem, subspace_dimension, solver_name, n_macroreps, verbose)
+        args: Tuple of (degree, problem, subspace_dimension, solver_name, n_macroreps,
+        verbose)
 
     Returns:
         Tuple of (degree, statistics) or None if failed
@@ -77,19 +83,19 @@ def _test_single_polynomial_degree(args):
 
         # Try to read diagnostics file for this experiment
         # Diagnostics files are created during the run with iteration-level info
-        diag_dir = os.path.join(os.getcwd(), "Diagnostics")
-        if os.path.exists(diag_dir):
+        diag_dir = os.path.join(os.getcwd(), "Diagnostics")  # noqa: PTH109, PTH118
+        if os.path.exists(diag_dir):  # noqa: PTH110
             # Look for diagnostics files matching this problem
             diag_files = [
                 f
-                for f in os.listdir(diag_dir)
+                for f in os.listdir(diag_dir)  # noqa: PTH208
                 if f.startswith(f"astromorf_diagnostics_{problem.name}")
             ]
 
             # Parse diagnostics files for this experiment
             for diag_file in sorted(diag_files)[-n_macroreps:]:
                 try:
-                    with open(os.path.join(diag_dir, diag_file)) as f:
+                    with open(os.path.join(diag_dir, diag_file)) as f:  # noqa: PTH118, PTH123
                         content = f.read()
 
                         # Look for: "The number of successful iterations was X and the number of unsuccessful iterations was Y"
@@ -180,7 +186,10 @@ def find_best_polynomial_degree(
     quality_weight: float = 0.35,
     verbose: bool = True,
 ) -> dict:
-    """Find the optimal polynomial degree for ASTROMORF that achieves the most successful
+    """Find the optimal polynomial degree for ASTROMORF that achieves the most.
+
+    successful.
+
     iterations and best model quality across multiple macroreplications.
 
     This function evaluates different polynomial degrees by running the solver
@@ -191,7 +200,8 @@ def find_best_polynomial_degree(
 
     Args:
         problem (Problem): The simulation-optimization problem to solve
-        subspace_dimension (int | None): Subspace dimension to use. If None, uses default
+        subspace_dimension (int | None): Subspace dimension to use. If None, uses
+        default
         solver_name (str): Name of the solver to use (default: "ASTROMORF")
         n_macroreps (int): Number of macroreplications to run per degree (default: 10)
         min_degree (int): Minimum polynomial degree to test (default: 1)
@@ -216,7 +226,8 @@ def find_best_polynomial_degree(
     Example:
         >>> from simopt.directory import problem_directory
         >>> problem = problem_directory['DYNAMNEWS-1'](fixed_factors={'budget': 600})
-        >>> result = find_best_polynomial_degree(problem, subspace_dimension=3, n_macroreps=5)
+        >>> result = find_best_polynomial_degree(problem, subspace_dimension=3,
+        n_macroreps=5)
         >>> print(f"Optimal degree: {result['optimal_degree']}")
         Optimal degree: 2
 
@@ -426,8 +437,9 @@ def find_best_polynomial_degree(
     }
 
 
-def _test_single_dimension(args):
+def _test_single_dimension(args):  # noqa: ANN001, ANN202
     """Worker function to test a single dimension in parallel.
+
     Must be at module level for pickling with ProcessPoolExecutor.
 
     Args:
@@ -486,13 +498,13 @@ def _test_single_dimension(args):
         # Calculate statistics
         mean_obj = np.mean(final_objectives)
         # Handle std calculation: need at least 2 values for ddof=1
-        if len(final_objectives) > 1:
+        if len(final_objectives) > 1:  # noqa: SIM108
             std_obj = np.std(final_objectives, ddof=1)
         else:
             std_obj = 0.0  # Only one value, no variation
 
         # Calculate CV, avoiding inf values
-        if abs(mean_obj) > 1e-10:
+        if abs(mean_obj) > 1e-10:  # noqa: SIM108
             cv_obj = std_obj / abs(mean_obj)
         else:
             # Mean is near zero, CV is undefined
@@ -536,7 +548,8 @@ def find_best_subspace_dimension(
     quality_weight: float = 0.7,
     verbose: bool = True,
 ) -> dict:
-    """Find the optimal subspace dimension for ASTROMORF that achieves consistent,
+    """Find the optimal subspace dimension for ASTROMORF that achieves consistent,.
+
     high-quality optimization trajectories across multiple macroreplications.
 
     This function evaluates different subspace dimensions by running the solver
@@ -550,8 +563,10 @@ def find_best_subspace_dimension(
     Args:
         problem (Problem): The simulation-optimization problem to solve
         solver_name (str): Name of the solver to use (default: "ASTROMORF")
-        n_macroreps (int): Number of macroreplications to run per dimension (default: 10)
-                          More macroreps give better consistency estimates but take longer
+        n_macroreps (int): Number of macroreplications to run per dimension (default:
+        10)
+                          More macroreps give better consistency estimates but take
+                          longer
         max_dimension (int | None): Maximum subspace dimension to test
                                    If None, uses problem.dim
         min_dimension (int): Minimum subspace dimension to test (default: 1)
@@ -568,7 +583,8 @@ def find_best_subspace_dimension(
             - 'all_dimensions' (list[int]): All tested dimensions
             - 'consistency_scores' (list[float]): Consistency score for each dimension
             - 'quality_scores' (list[float]): Quality score for each dimension
-            - 'combined_scores' (list[float]): Combined weighted score for each dimension
+            - 'combined_scores' (list[float]): Combined weighted score for each
+            dimension
             - 'final_objectives' (dict): Final objective values for each dimension
             - 'statistics' (dict): Detailed statistics for each dimension
 
@@ -578,7 +594,8 @@ def find_best_subspace_dimension(
         >>> result = find_best_subspace_dimension(problem, n_macroreps=10)
         >>> print(f"Optimal dimension: {result['optimal_dimension']}")
         Optimal dimension: 3
-        >>> print(f"Score: {result['combined_scores'][result['optimal_dimension']-1]:.4f}")
+        >>> print(f"Score:
+        {result['combined_scores'][result['optimal_dimension']-1]:.4f}")
         Score: 0.8456
 
     Notes:
@@ -721,7 +738,7 @@ def find_best_subspace_dimension(
     # Use epsilon to avoid division by zero
     eps = 1e-10
     mean_range = max(mean_max - mean_min, eps)
-    cv_range = max(cv_max - cv_min, eps)
+    max(cv_max - cv_min, eps)
     std_range = max(std_max - std_min, eps)
 
     consistency_scores = []

@@ -1,9 +1,11 @@
 """Base classes for simulation optimization problems and models."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from copy import deepcopy
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar, Union
 
 import numpy as np
 from boltons.typeutils import classproperty
@@ -13,6 +15,14 @@ from mrg32k3a.mrg32k3a import MRG32k3a
 from simopt.model import Model
 from simopt.problem_types import ConstraintType, VariableType
 from simopt.utils import get_specifications
+
+if TYPE_CHECKING:
+    from simopt.multistage_problem import MultistageProblem
+
+#: Type alias for any problem-like object that solvers can operate on.
+#: Both :class:`Problem` and :class:`MultistageProblem` expose the same
+#: interface needed by solvers (``dim``, ``simulate``, ``factors``, etc.).
+ProblemLike = Union["Problem", "MultistageProblem"]
 
 
 def _to_grad_array(gradients: float | Iterable[float]) -> np.ndarray:
@@ -272,6 +282,15 @@ class Problem(ABC):
         """Number of decision variables."""
         raise NotImplementedError
 
+    @dim.setter
+    def dim(self, value: int) -> None:
+        """Set the number of decision variables.
+
+        Args:
+            value (int): The number of decision variables.
+        """
+        raise NotImplementedError("dim is a read-only property and cannot be set.")
+
     @property
     @abstractmethod
     def lower_bounds(self) -> tuple[float, ...]:
@@ -313,6 +332,18 @@ class Problem(ABC):
                 problem instance.
         """
         self.rng_list = rng_list
+
+    def _clone_problem(self) -> Problem:
+        """Create a fresh problem instance with the same static factors."""
+        cloned = type(self)(
+            fixed_factors=dict(self.factors),
+            model_fixed_factors=dict(self.model.factors),
+        )
+        cloned.name = self.name
+        cloned.rng_list = list(self.rng_list)
+        cloned.before_replicate_override = self.before_replicate_override
+        cloned.model.model_created()
+        return cloned
 
     @abstractmethod
     def vector_to_factor_dict(self, vector: tuple) -> dict:
@@ -390,7 +421,7 @@ class Problem(ABC):
         """
         raise NotImplementedError
 
-    def simulate(self, solution: "Solution", num_macroreps: int = 1) -> None:
+    def simulate(self, solution: Solution, num_macroreps: int = 1) -> None:
         """Simulate `m` i.i.d. replications at solution `x`.
 
         Args:
@@ -418,7 +449,7 @@ class Problem(ABC):
             for rng in solution.rng_list:
                 rng.advance_subsubstream()
 
-    def simulate_up_to(self, solutions: list["Solution"], n_reps: int) -> None:
+    def simulate_up_to(self, solutions: list[Solution], n_reps: int) -> None:
         """Simulate a list of solutions up to a given number of replications.
 
         Args:
@@ -600,17 +631,19 @@ class Solution:
     #     ]
     # )
 
-    def __init__(self, x: tuple, problem: Problem) -> None:
+    def __init__(self, x: tuple, problem: ProblemLike) -> None:
         """Initialize a solution object.
 
         Args:
             x (tuple): Vector of decision variables.
-            problem (Problem): Problem to which `x` is a solution.
+            problem: Problem (or MultistageProblem) to which ``x`` is a
+                solution.  Only ``vector_to_factor_dict`` is called.
         """
         super().__init__()
         self.x = x
         self.decision_factors = problem.vector_to_factor_dict(x)
-        # self.n_reps = 0
+
+        self.policy: Callable | None = None
 
         self._objectives = []
         self._objectives_gradients = []

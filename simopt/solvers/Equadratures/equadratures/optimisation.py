@@ -1,5 +1,6 @@
 """Perform unconstrained or constrained optimisation."""
 
+import contextlib
 import warnings
 
 import numpy as np
@@ -16,15 +17,22 @@ warnings.filterwarnings("ignore")
 
 
 class Optimisation:
-    """This class performs unconstrained or constrained optimisation of poly objects or custom functions using scipy.optimize.minimize or an in-house trust-region method.
+    """This class performs unconstrained or constrained optimisation of poly objects or.
+
+    custom functions using scipy.optimize.minimize or an in-house trust-region
+    method.
 
     Parameters
     ----------
     method : str
-            A string specifying the method that will be used for optimisation. Any of the methods available from :obj:`scipy.optimize.minimize` can be chosen. In the case of general constrained optimisation, the options are ``COBYLA``, ``SLSQP``, and ``trust-constr``. The in-house options ``trust-region`` and ``omorf`` are also available.
+            A string specifying the method that will be used for optimisation. Any of
+            the methods available from :obj:`scipy.optimize.minimize` can be chosen. In
+            the case of general constrained optimisation, the options are ``COBYLA``,
+            ``SLSQP``, and ``trust-constr``. The in-house options ``trust-region`` and
+            ``omorf`` are also available.
     """
 
-    def __init__(self, method):
+    def __init__(self, method) -> None:  # noqa: ANN001, D107
         self.method = method
         self.objective = {"function": None, "gradient": None, "hessian": None}
         self.maximise = False
@@ -38,7 +46,7 @@ class Optimisation:
             self.f = np.array([])
             self.g = np.array([])
 
-    def add_objective(self, poly=None, custom=None, maximise=False):
+    def add_objective(self, poly=None, custom=None, maximise=False) -> None:  # noqa: ANN001
         """Adds objective function to be optimised.
 
         Parameters
@@ -49,10 +57,13 @@ class Optimisation:
                 Dictionary containing optional arguments:
 
                 - **function** (Callable): The objective function to be called.
-                - **jac_function** (Callable, *optional*): The gradient (or derivative) of the objective.
-                - **hess_function** (Callable, *optional*): The Hessian of the objective function.
+                - **jac_function** (Callable, *optional*): The gradient (or derivative)
+                of the objective.
+                - **hess_function** (Callable, *optional*): The Hessian of the objective
+                function.
         maximise : bool, optional
-                A flag to specify if the user would like to maximise the function instead of minimising it.
+                A flag to specify if the user would like to maximise the function
+                instead of minimising it.
         """
         assert poly is not None or custom is not None
         if self.method == "trust-region":
@@ -66,18 +77,31 @@ class Optimisation:
             f = poly.get_polyfit_function()
             jac = poly.get_polyfit_grad_function()
             hess = poly.get_polyfit_hess_function()
-            objective = lambda x: k * np.asscalar(f(x))
-            objective_deriv = lambda x: k * jac(x)[:, 0]
-            objective_hess = lambda x: k * hess(x)[:, :, 0]
+
+            def objective(x):  # noqa: ANN001, ANN202
+                return k * np.asscalar(f(x))
+
+            def objective_deriv(x):  # noqa: ANN001, ANN202
+                return k * jac(x)[:, 0]
+
+            def objective_hess(x):  # noqa: ANN001, ANN202
+                return k * hess(x)[:, :, 0]
         elif custom is not None:
             assert "function" in custom
-            objective = lambda s: k * custom["function"](s)
+
+            def objective(s):  # noqa: ANN001, ANN202
+                return k * custom["function"](s)
+
             if "jac_function" in custom:
-                objective_deriv = lambda s: k * custom["jac_function"](s)
+
+                def objective_deriv(s):  # noqa: ANN001, ANN202
+                    return k * custom["jac_function"](s)
             else:
                 objective_deriv = "2-point"
             if "hess_function" in custom:
-                objective_hess = lambda s: k * custom["hess_function"](s)
+
+                def objective_hess(s):  # noqa: ANN001, ANN202
+                    return k * custom["hess_function"](s)
             else:
                 objective_hess = optimize.BFGS()
         self.objective = {
@@ -86,8 +110,11 @@ class Optimisation:
             "hessian": objective_hess,
         }
 
-    def add_bounds(self, lb, ub):
-        """Adds bounds :math:`lb <= x <=ub` to the optimisation problem. Only ``L-BFGS-B``, ``TNC``, ``SLSQP``, ``trust-constr``, ``trust-region``, and ``COBYLA`` methods can handle bounds.
+    def add_bounds(self, lb, ub) -> None:  # noqa: ANN001
+        """Adds bounds :math:`lb <= x <=ub` to the optimisation problem. Only.
+
+        ``L-BFGS-B``, ``TNC``, ``SLSQP``, ``trust-constr``, ``trust-region``, and
+        ``COBYLA`` methods can handle bounds.
 
         Parameters
         ----------
@@ -116,24 +143,34 @@ class Optimisation:
         else:
             for factor in range(lb.size):
                 if not np.isinf(lb[factor]):
-                    l = {"type": "ineq", "fun": lambda x, i=factor: x[i] - lb[i]}
+                    l = {"type": "ineq", "fun": lambda x, i=factor: x[i] - lb[i]}  # noqa: E741
                     self.constraints.append(l)
                 if not np.isinf(ub[factor]):
                     u = {"type": "ineq", "fun": lambda x, i=factor: ub[i] - x[i]}
                     self.constraints.append(u)
 
-    def add_linear_ineq_con(self, A, b_l, b_u):
-        """Adds linear inequality constraints :math:`b_l <= A x <= b_u` to the optimisation problem.
-        Only ``trust-constr``, ``COBYLA``, and ``SLSQP`` methods can handle general constraints.
+    def add_linear_ineq_con(self, A, b_l, b_u) -> None:  # noqa: ANN001, N803
+        """Adds linear inequality constraints :math:`b_l <= A x <= b_u` to the.
+
+        optimisation problem.
+
+
+        Only ``trust-constr``, ``COBYLA``, and ``SLSQP`` methods can handle general
+        constraints.
 
         Parameters
         ----------
         A : numpy.ndarray
-                An (M,n) matrix that contains coefficients of the linear inequality constraints.
+                An (M,n) matrix that contains coefficients of the linear inequality
+                constraints.
         b_l : numpy.ndarray
-                An (M,1) matrix that specifies lower bounds of the linear inequality constraints. If there is no lower bound, set ``b_l = -np.inf * np.ones(M)``.
+                An (M,1) matrix that specifies lower bounds of the linear inequality
+                constraints. If there is no lower bound, set ``b_l = -np.inf *
+                np.ones(M)``.
         b_u : numpy.ndarray
-                An (M,1) matrix that specifies upper bounds of the linear inequality constraints. If there is no upper bound, set ``b_u = np.inf * np.ones(M)``.
+                An (M,1) matrix that specifies upper bounds of the linear inequality
+                constraints. If there is no upper bound, set ``b_u = np.inf *
+                np.ones(M)``.
         """
         # trust-constr method has its own linear constraint handler
         assert self.method in ["SLSQP", "trust-constr", "COBYLA"]
@@ -146,7 +183,7 @@ class Optimisation:
                     {
                         "type": "ineq",
                         "fun": lambda x: np.dot(A, x) - b_l,
-                        "jac": lambda x: A,
+                        "jac": lambda x: A,  # noqa: ARG005
                     }
                 )
             if not np.any(np.isinf(b_u)):
@@ -154,16 +191,25 @@ class Optimisation:
                     {
                         "type": "ineq",
                         "fun": lambda x: -np.dot(A, x) + b_u,
-                        "jac": lambda x: -A,
+                        "jac": lambda x: -A,  # noqa: ARG005
                     }
                 )
 
-    def add_nonlinear_ineq_con(self, poly=None, custom=None):
-        """Adds nonlinear inequality constraints :math:`lb <= g(x) <= ub` (for poly option) with :math:`lb`, :math:`ub = bounds` or :math:`g(x) >= 0` (for function option) to the optimisation problem.
+    def add_nonlinear_ineq_con(self, poly=None, custom=None) -> None:  # noqa: ANN001
+        """Adds nonlinear inequality constraints :math:`lb <= g(x) <= ub` (for poly.
 
-        Only ``trust-constr``, ``COBYLA``, and ``SLSQP`` methods can handle general constraints.
-        If Poly object is provided in the poly dictionary, gradients and Hessians will be computed automatically. If a lambda function is provided via ``function`` dictionary, the user may also provide ``jac_function`` for gradients and ``hess_function`` for Hessians; otherwise, a 2-point differentiation rule
-        will be used to approximate the derivative and a BFGS update will be used to approximate the Hessian.
+        option) with :math:`lb`, :math:`ub = bounds` or :math:`g(x) >= 0` (for
+        function option) to the optimisation problem.
+
+
+        Only ``trust-constr``, ``COBYLA``, and ``SLSQP`` methods can handle general
+        constraints.
+        If Poly object is provided in the poly dictionary, gradients and Hessians will
+        be computed automatically. If a lambda function is provided via ``function``
+        dictionary, the user may also provide ``jac_function`` for gradients and
+        ``hess_function`` for Hessians; otherwise, a 2-point differentiation rule
+        will be used to approximate the derivative and a BFGS update will be used to
+        approximate the Hessian.
 
         Parameters
         ----------
@@ -171,14 +217,19 @@ class Optimisation:
                 Dictionary containing a Poly and bounds for constraints:
 
                         - **poly** (Poly): An instance of the Poly class.
-                        - **bounds** (numpy.ndarray): An array with two entries specifying the lower and upper bounds of the inequality. If there is no lower bound, set ``bounds[0] = -np.inf``. If there is no upper bound, set ``bounds[1] = np.inf``.
+                        - **bounds** (numpy.ndarray): An array with two entries
+                        specifying the lower and upper bounds of the inequality. If
+                        there is no lower bound, set ``bounds[0] = -np.inf``. If there
+                        is no upper bound, set ``bounds[1] = np.inf``.
 
         custom : dict, optional
                 Dictionary containing additional custom callable arguments:
 
                         - **function** (Callable): The constraint function to be called.
-                        - **jac_function** (Callable, *optional*): The gradient (or derivative) of the constraint.
-                        - **hess_function** (Callable, *optional*): The Hessian of the constraint function.
+                        - **jac_function** (Callable, *optional*): The gradient (or
+                        derivative) of the constraint.
+                        - **hess_function** (Callable, *optional*): The Hessian of the
+                        constraint function.
         """
         assert self.method in ["SLSQP", "trust-constr", "COBYLA"]
         assert poly is not None or custom is not None
@@ -191,9 +242,16 @@ class Optimisation:
             g = gpoly.get_polyfit_function()
             jac = gpoly.get_polyfit_grad_function()
             hess = gpoly.get_polyfit_hess_function()
-            constraint = lambda x: g(x)[0]
-            constraint_deriv = lambda x: jac(x)[:, 0]
-            constraint_hess = lambda x, v: hess(x)[:, :, 0]
+
+            def constraint(x):  # noqa: ANN001, ANN202
+                return g(x)[0]
+
+            def constraint_deriv(x):  # noqa: ANN001, ANN202
+                return jac(x)[:, 0]
+
+            def constraint_hess(x, v):  # noqa: ANN001, ANN202, ARG001
+                return hess(x)[:, :, 0]
+
             if self.method == "trust-constr":
                 self.constraints.append(
                     optimize.NonlinearConstraint(
@@ -239,7 +297,9 @@ class Optimisation:
             else:
                 constraint_deriv = "2-point"
             if "hess_function" in custom:
-                constraint_hess = lambda x, v: custom["hess_function"](x)
+
+                def constraint_hess(x, v):  # noqa: ANN001, ANN202, ARG001
+                    return custom["hess_function"](x)
             else:
                 constraint_hess = optimize.BFGS()
             if self.method == "trust-constr":
@@ -262,28 +322,37 @@ class Optimisation:
             else:
                 self.constraints.append({"type": "ineq", "fun": constraint})
 
-    def add_linear_eq_con(self, A, b):
-        """Adds linear equality constraints  :math:`Ax = b` to the optimisation routine. Only ``trust-constr`` and ``SLSQP`` methods can handle equality constraints.
+    def add_linear_eq_con(self, A, b) -> None:  # noqa: ANN001, N803
+        """Adds linear equality constraints  :math:`Ax = b` to the optimisation routine.
+
+        Only ``trust-constr`` and ``SLSQP`` methods can handle equality constraints.
 
         Parameters
         ----------
         A : numpy.ndarray
-                An (M, n) matrix that contains coefficients of the linear equality constraints.
+                An (M, n) matrix that contains coefficients of the linear equality
+                constraints.
         b : numpy.ndarray
-                An (M, 1) matrix that specifies right hand side of the linear equality constraints.
+                An (M, 1) matrix that specifies right hand side of the linear equality
+                constraints.
         """
-        assert self.method == "trust-constr" or "SLSQP"
+        assert True
         if self.method == "trust-constr":
             self.constraints.append(optimize.LinearConstraint(A, b, b))
         else:
             self.constraints.append(
-                {"type": "eq", "fun": lambda x: A.dot(x) - b, "jac": lambda x: A}
+                {"type": "eq", "fun": lambda x: A.dot(x) - b, "jac": lambda x: A}  # noqa: ARG005
             )
 
-    def add_nonlinear_eq_con(self, poly=None, custom=None):
-        """Adds nonlinear inequality constraints :math:`g(x) = value` (for poly option) or :math:`g(x) = 0` (for function option) to the optimisation routine.
+    def add_nonlinear_eq_con(self, poly=None, custom=None) -> None:  # noqa: ANN001
+        """Adds nonlinear inequality constraints :math:`g(x) = value` (for poly option).
 
-        Only ``trust-constr`` and ``SLSQP`` methods can handle equality constraints. If poly object is provided in the poly dictionary, gradients and Hessians will be computed automatically.
+        or :math:`g(x) = 0` (for function option) to the optimisation routine.
+
+
+        Only ``trust-constr`` and ``SLSQP`` methods can handle equality constraints. If
+        poly object is provided in the poly dictionary, gradients and Hessians will be
+        computed automatically.
 
         Parameters
         ----------
@@ -297,10 +366,12 @@ class Optimisation:
                 Dictionary containing additional custom callable arguments:
 
                         - **function** (Callable): The constraint function to be called.
-                        - **jac_function** (Callable, *optional*): The gradient (or derivative) of the constraint.
-                        - **hess_function** (Callable, *optional*): The Hessian of the constraint function.
+                        - **jac_function** (Callable, *optional*): The gradient (or
+                        derivative) of the constraint.
+                        - **hess_function** (Callable, *optional*): The Hessian of the
+                        constraint function.
         """
-        assert self.method == "trust-constr" or "SLSQP"
+        assert True
         assert poly is not None or custom is not None
         if poly is not None:
             assert "value" in poly
@@ -308,9 +379,16 @@ class Optimisation:
             g = poly.get_polyfit_function()
             jac = poly.get_polyfit_grad_function()
             hess = poly.get_polyfit_hess_function()
-            constraint = lambda x: np.asscalar(g(x))
-            constraint_deriv = lambda x: jac(x)[:, 0]
-            constraint_hess = lambda x, v: hess(x)[:, :, 0]
+
+            def constraint(x):  # noqa: ANN001, ANN202
+                return np.asscalar(g(x))
+
+            def constraint_deriv(x):  # noqa: ANN001, ANN202
+                return jac(x)[:, 0]
+
+            def constraint_hess(x, v):  # noqa: ANN001, ANN202, ARG001
+                return hess(x)[:, :, 0]
+
             if self.method == "trust-constr":
                 self.constraints.append(
                     optimize.NonlinearConstraint(
@@ -337,7 +415,9 @@ class Optimisation:
             else:
                 constraint_deriv = "2-point"
             if "hess_function" in custom:
-                constraint_hess = lambda x, v: custom["hess_function"](x)
+
+                def constraint_hess(x, v):  # noqa: ANN001, ANN202, ARG001
+                    return custom["hess_function"](x)
             else:
                 constraint_hess = optimize.BFGS()
             if self.method == "trust-constr":
@@ -354,8 +434,11 @@ class Optimisation:
                 else:
                     self.constraints.append({"type": "eq", "fun": constraint})
 
-    def optimise(self, x0, *args, **kwargs):
-        """Performs optimisation on a specified function, provided the objective has been added using :meth:'~equadratures.optimisation.add_objective'
+    def optimise(self, x0, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN201, ARG002
+        """Performs optimisation on a specified function, provided the objective has.
+
+        been added using :meth:'~equadratures.optimisation.add_objective'.
+
         and constraints have been added using the relevant method.
 
         Parameters
@@ -365,18 +448,22 @@ class Optimisation:
         del_k : float
                 Initial trust-region radius for ``trust-region`` or ``omorf`` methods
         delmin : float
-                Minimum allowable trust-region radius for ``trust-region`` or ``omorf`` methods
+                Minimum allowable trust-region radius for ``trust-region`` or ``omorf``
+                methods
         delmax : float
-                Maximum allowable trust-region radius for ``trust-region`` or ``omorf`` methods
+                Maximum allowable trust-region radius for ``trust-region`` or ``omorf``
+                methods
         d : int
                 Reduced dimension for ``omorf`` method
         subspace_method : str
-                Subspace method for ``omorf`` method with options ``variable-projection`` or ``active-subspaces``
+                Subspace method for ``omorf`` method with options ``variable-
+                projection`` or ``active-subspaces``
 
         Returns:
         -------
         dict
-                A dictionary containing the optimisation result. Important attributes are: the solution array ``x``, and a Boolean flag ``success`` indicating
+                A dictionary containing the optimisation result. Important attributes
+                are: the solution array ``x``, and a Boolean flag ``success`` indicating
                 if the optimiser exited successfully.
         """
         assert self.objective["function"] is not None
@@ -477,7 +564,7 @@ class Optimisation:
             sol["fun"] *= -1.0
         return sol
 
-    def _set_iterate(self):
+    def _set_iterate(self) -> None:
         ind_min = np.argmin(self.f)  # get the index of the smallest function value
         self.s_old = self.S[
             ind_min, :
@@ -485,20 +572,20 @@ class Optimisation:
         self.f_old = np.asscalar(self.f[ind_min])  # get the smallest function value
         self._update_bounds()
 
-    def _set_del_k(self, value):
+    def _set_del_k(self, value) -> None:  # noqa: ANN001
         self.del_k = value
         self._update_bounds()
 
-    def _set_rho_k(self, value):
+    def _set_rho_k(self, value) -> None:  # noqa: ANN001
         self.rho_k = value
 
-    def _set_unsuccessful_iterate_counter(self, count):
+    def _set_unsuccessful_iterate_counter(self, count) -> None:  # noqa: ANN001
         self.count = count
 
-    def _set_ratio(self, r_k):
+    def _set_ratio(self, r_k) -> None:  # noqa: ANN001
         self.r_k = r_k
 
-    def _calculate_subspace(self, S, f):
+    def _calculate_subspace(self, S, f) -> None:  # noqa: ANN001, N803
         # Build Model
         parameters = [
             Parameter(
@@ -518,22 +605,26 @@ class Optimisation:
         poly.set_model()
 
         # Build Subspace
-        Subs = Subspaces(
+        Subs = Subspaces(  # noqa: N806
             full_space_poly=poly, method="active-subspace", subspace_dimension=self.d
         )
-        U0 = Subs.get_subspace()[:, 0].reshape(-1, 1)  # this is a column vector
-        U1 = Subs.get_subspace()[:, 1:]
+        U0 = Subs.get_subspace()[:, 0].reshape(  # noqa: N806
+            -1, 1
+        )  # this is a column vector
+        U1 = Subs.get_subspace()[:, 1:]  # noqa: N806
 
         # Add the other d-1 columns to U0 by selecting the columns of U1 with the largest coefficients of determination
-        for i in range(self.d - 1):
-            R = []
+        for _i in range(self.d - 1):
+            R = []  # noqa: N806
             # loop through each column
             for j in range(U1.shape[1]):
                 # stack U with the AS and the jth column of the orthogonal complement
-                U = np.hstack((U0, U1[:, j].reshape(-1, 1)))
-                Y = np.dot(S, U)  # map the sample points to the reduced subspace
+                U = np.hstack((U0, U1[:, j].reshape(-1, 1)))  # noqa: N806
+                Y = np.dot(  # noqa: N806
+                    S, U
+                )  # map the sample points to the reduced subspace
 
-                myParameters = [
+                myParameters = [  # noqa: N806
                     Parameter(
                         distribution="uniform",
                         lower=np.min(Y[:, k]),
@@ -542,7 +633,7 @@ class Optimisation:
                     )
                     for k in range(Y.shape[1])
                 ]
-                myBasis = Basis("total-order")
+                myBasis = Basis("total-order")  # noqa: N806
                 poly = Poly(
                     myParameters,
                     myBasis,
@@ -554,14 +645,14 @@ class Optimisation:
                 _, _, r, _, _ = linregress(poly.get_polyfit(Y).flatten(), f.flatten())
                 R.append(r**2)  # coefficient of determination
             index = np.argmax(R)
-            U0 = np.hstack(
+            U0 = np.hstack(  # noqa: N806
                 (U0, U1[:, index].reshape(-1, 1))
             )  # add the column corresponding to the largest coefficient of determination in the orthogonal complement to AS
-            U1 = np.delete(U1, index, 1)  # remove feature that was added
+            U1 = np.delete(U1, index, 1)  # remove feature that was added  # noqa: N806
 
         if self.subspace_method == "variable-projection":
             vp_args = {"U0": U0, "maxiter": 2 * self.d * self.n}
-            Subs = Subspaces(
+            Subs = Subspaces(  # noqa: N806
                 method="variable-projection",
                 sample_points=S,
                 sample_outputs=f,
@@ -572,8 +663,8 @@ class Optimisation:
         elif self.subspace_method == "active-subspaces":
             self.U = U0
 
-    def _blackbox_evaluation(self, s):
-        """Evaluates the point s for ``trust-region`` or ``omorf`` methods"""
+    def _blackbox_evaluation(self, s):  # noqa: ANN001, ANN202
+        """Evaluates the point s for ``trust-region`` or ``omorf`` methods."""
         s = s.reshape(1, -1)
         if (
             self.S.size > 0
@@ -594,7 +685,7 @@ class Optimisation:
                 self.f = np.vstack((self.f, f))
         return np.asscalar(f)
 
-    def _update_bounds(self):
+    def _update_bounds(self) -> None:
         if self.bounds is not None:
             if self.scale_bounds:
                 self.bounds_l = np.maximum(np.zeros(self.n), self.s_old - self.del_k)
@@ -607,8 +698,11 @@ class Optimisation:
             self.bounds_u = self.s_old + self.del_k
         return
 
-    def _generate_set(self, num):
-        """Generates an initial set of samples using either coordinate directions or orthogonal, random directions"""
+    def _generate_set(self, num):  # noqa: ANN001, ANN202
+        """Generates an initial set of samples using either coordinate directions or.
+
+        orthogonal, random directions.
+        """
         if self.random_initial:
             direcs = self._random_directions(
                 num, self.bounds_l - self.s_old, self.bounds_u - self.s_old
@@ -617,7 +711,7 @@ class Optimisation:
             direcs = self._coordinate_directions(
                 num, self.bounds_l - self.s_old, self.bounds_u - self.s_old
             )
-        S = np.zeros((num, self.n))
+        S = np.zeros((num, self.n))  # noqa: N806
         S[0, :] = self.s_old
         for i in range(1, num):
             S[i, :] = self.s_old + np.minimum(
@@ -626,8 +720,8 @@ class Optimisation:
             )
         return S
 
-    def _coordinate_directions(self, num_pnts, lower, upper):
-        """Generates coordinate directions"""
+    def _coordinate_directions(self, num_pnts, lower, upper):  # noqa: ANN001, ANN202
+        """Generates coordinate directions."""
         at_lower_boundary = lower > -1.0e-8 * self.del_k
         at_upper_boundary = upper < 1.0e-8 * self.del_k
         direcs = np.zeros((num_pnts, self.n))
@@ -654,8 +748,8 @@ class Optimisation:
                 direcs[i, q - 1] = direcs[q, q - 1]
         return direcs
 
-    def _random_directions(self, num_pnts, lower, upper):
-        """Generates orthogonal, random directions"""
+    def _random_directions(self, num_pnts, lower, upper):  # noqa: ANN001, ANN202
+        """Generates orthogonal, random directions."""
         direcs = np.zeros((self.n, max(2 * self.n + 1, num_pnts)))
         idx_l = lower == 0
         idx_u = upper == 0
@@ -664,9 +758,9 @@ class Optimisation:
         nactive = np.sum(active)
         ninactive = self.n - nactive
         if ninactive > 0:
-            A = np.random.normal(size=(ninactive, ninactive))
-            Qred = np.linalg.qr(A)[0]
-            Q = np.zeros((self.n, ninactive))
+            A = np.random.normal(size=(ninactive, ninactive))  # noqa: N806
+            Qred = np.linalg.qr(A)[0]  # noqa: N806
+            Q = np.zeros((self.n, ninactive))  # noqa: N806
             Q[inactive, :] = Qred
             for i in range(ninactive):
                 scale = self._get_scale(Q[:, i], self.del_k, lower, upper)
@@ -705,7 +799,7 @@ class Optimisation:
         return np.vstack((np.zeros(self.n), direcs[:, :num_pnts].T))
 
     @staticmethod
-    def _get_scale(dirn, delta, lower, upper):
+    def _get_scale(dirn, delta, lower, upper):  # noqa: ANN001, ANN205
         scale = delta
         for j in range(len(dirn)):
             if dirn[j] < 0.0:
@@ -714,25 +808,25 @@ class Optimisation:
                 scale = min(scale, upper[j] / dirn[j])
         return scale
 
-    def _apply_scaling(self, S):
+    def _apply_scaling(self, S):  # noqa: ANN001, ANN202, N803
         if self.bounds is not None and self.scale_bounds:
             shift = self.bounds[0].copy()
             scale = self.bounds[1] - self.bounds[0]
             return np.divide((S - shift), scale)
         return S
 
-    def _remove_scaling(self, S):
+    def _remove_scaling(self, S):  # noqa: ANN001, ANN202, N803
         if self.bounds is not None and self.scale_bounds:
             shift = self.bounds[0].copy()
             scale = self.bounds[1] - self.bounds[0]
             return shift + np.multiply(S, scale)
         return S
 
-    def _update_geometry_trust_region(self, S, f):
+    def _update_geometry_trust_region(self, S, f):  # noqa: ANN001, ANN202, N803
         if max(np.linalg.norm(S - self.s_old, axis=1, ord=np.inf)) > max(
             self.epsilon_1 * self.del_k, self.epsilon_2 * self.rho_k
         ):
-            S, f = self._sample_set("improve", S, f)
+            S, f = self._sample_set("improve", S, f)  # noqa: N806
         elif self.del_k == self.rho_k:
             self._set_del_k(self.alpha_2 * self.rho_k)
             if self.count >= 3 and self.r_k < 0:
@@ -744,16 +838,14 @@ class Optimisation:
                     self._set_rho_k(self.rho_min)
         return S, f
 
-    def _update_geometry_omorf(self, S_full, f_full, S_red, f_red):
+    def _update_geometry_omorf(self, S_full, f_full, S_red, f_red):  # noqa: ANN001, ANN202, N803
         dist = max(self.epsilon_1 * self.del_k, self.epsilon_2 * self.rho_k)
         if max(np.linalg.norm(S_full - self.s_old, axis=1, ord=np.inf)) > dist:
-            S_full, f_full = self._sample_set("improve", S_full, f_full)
-            try:
+            S_full, f_full = self._sample_set("improve", S_full, f_full)  # noqa: N806
+            with contextlib.suppress(BaseException):
                 self._calculate_subspace(S_full, f_full)
-            except:
-                pass
         elif max(np.linalg.norm(S_red - self.s_old, axis=1, ord=np.inf)) > dist:
-            S_red, f_red = self._sample_set("improve", S_red, f_red, full_space=False)
+            S_red, f_red = self._sample_set("improve", S_red, f_red, full_space=False)  # noqa: N806
         elif self.del_k == self.rho_k:
             self._set_del_k(self.alpha_2 * self.rho_k)
             if self.count >= 3 and self.r_k < 0:
@@ -765,66 +857,63 @@ class Optimisation:
                     self._set_rho_k(self.rho_min)
         return S_full, f_full, S_red, f_red
 
-    def _sample_set(
-        self, method, S=None, f=None, s_new=None, f_new=None, full_space=True
+    def _sample_set(  # noqa: ANN202
+        self,
+        method,  # noqa: ANN001
+        S=None,  # noqa: ANN001, N803
+        f=None,  # noqa: ANN001
+        s_new=None,  # noqa: ANN001
+        f_new=None,  # noqa: ANN001
+        full_space=True,  # noqa: ANN001
     ):
-        if full_space:
-            q = self.p
-        else:
-            q = self.q
+        q = self.p if full_space else self.q
         dist = max(self.epsilon_1 * self.del_k, self.epsilon_2 * self.rho_k)
         if method == "replace":
-            S_hat = np.vstack((S, s_new))
+            S_hat = np.vstack((S, s_new))  # noqa: N806
             f_hat = np.vstack((f, f_new))
             if S_hat.shape != np.unique(S_hat, axis=0).shape:
-                S_hat, indices = np.unique(S_hat, axis=0, return_index=True)
+                S_hat, indices = np.unique(S_hat, axis=0, return_index=True)  # noqa: N806
                 f_hat = f_hat[indices]
             elif (
                 f_hat.size > q
                 and max(np.linalg.norm(S_hat - self.s_old, axis=1, ord=np.inf)) > dist
             ):
-                S_hat, f_hat = self._remove_furthest_point(S_hat, f_hat, self.s_old)
-            S_hat, f_hat = self._remove_point_from_set(S_hat, f_hat, self.s_old)
-            S = np.zeros((q, self.n))
+                S_hat, f_hat = self._remove_furthest_point(S_hat, f_hat, self.s_old)  # noqa: N806
+            S_hat, f_hat = self._remove_point_from_set(S_hat, f_hat, self.s_old)  # noqa: N806
+            S = np.zeros((q, self.n))  # noqa: N806
             f = np.zeros((q, 1))
             S[0, :] = self.s_old
             f[0, :] = self.f_old
-            S, f = self._LU_pivoting(S, f, S_hat, f_hat, full_space)
+            S, f = self._LU_pivoting(S, f, S_hat, f_hat, full_space)  # noqa: N806
         elif method == "improve":
-            S_hat = np.copy(S)
+            S_hat = np.copy(S)  # noqa: N806
             f_hat = np.copy(f)
             if max(np.linalg.norm(S_hat - self.s_old, axis=1, ord=np.inf)) > dist:
-                S_hat, f_hat = self._remove_furthest_point(S_hat, f_hat, self.s_old)
-            S_hat, f_hat = self._remove_point_from_set(S_hat, f_hat, self.s_old)
-            S = np.zeros((q, self.n))
+                S_hat, f_hat = self._remove_furthest_point(S_hat, f_hat, self.s_old)  # noqa: N806
+            S_hat, f_hat = self._remove_point_from_set(S_hat, f_hat, self.s_old)  # noqa: N806
+            S = np.zeros((q, self.n))  # noqa: N806
             f = np.zeros((q, 1))
             S[0, :] = self.s_old
             f[0, :] = self.f_old
-            S, f = self._LU_pivoting(S, f, S_hat, f_hat, full_space, "improve")
+            S, f = self._LU_pivoting(S, f, S_hat, f_hat, full_space, "improve")  # noqa: N806
         elif method == "new":
-            S_hat = f_hat = np.array([])
-            S = np.zeros((q, self.n))
+            S_hat = f_hat = np.array([])  # noqa: N806
+            S = np.zeros((q, self.n))  # noqa: N806
             f = np.zeros((q, 1))
             S[0, :] = self.s_old
             f[0, :] = self.f_old
-            S, f = self._LU_pivoting(S, f, S_hat, f_hat, full_space, "new")
+            S, f = self._LU_pivoting(S, f, S_hat, f_hat, full_space, "new")  # noqa: N806
         return S, f
 
-    def _LU_pivoting(self, S, f, S_hat, f_hat, full_space, method=None):
+    def _LU_pivoting(self, S, f, S_hat, f_hat, full_space, method=None):  # noqa: ANN001, ANN202, N802, N803
         psi_1 = 1.0e-4
-        if self.method == "omorf" and full_space:
-            psi_2 = 1.0
-        else:
-            psi_2 = 0.25
+        psi_2 = 1.0 if self.method == "omorf" and full_space else 0.25
         phi_function, phi_function_deriv = self._get_phi_function_and_derivative(
             S_hat, full_space
         )
-        if full_space:
-            q = self.p
-        else:
-            q = self.q
+        q = self.p if full_space else self.q
         #       Initialise U matrix of LU factorisation of M matrix (see Conn et al.)
-        U = np.zeros((q, q))
+        U = np.zeros((q, q))  # noqa: N806
         U[0, :] = phi_function(self.s_old)
         #       Perform the LU factorisation algorithm for the rest of the points
         for k in range(1, q):
@@ -836,7 +925,7 @@ class Optimisation:
             #           If there are still points to choose from, find if points meet criterion. If so, use the index to choose
             #           point with given index to be next point in regression/interpolation set
             if f_hat.size > 0:
-                M = np.absolute(np.dot(phi_function(S_hat), v).flatten())
+                M = np.absolute(np.dot(phi_function(S_hat), v).flatten())  # noqa: N806
                 index = np.argmax(M)
                 if (
                     M[index] < psi_1
@@ -851,7 +940,7 @@ class Optimisation:
                 s = S_hat[index, :]
                 S[k, :] = s
                 f[k, :] = f_hat[index]
-                S_hat = np.delete(S_hat, index, 0)
+                S_hat = np.delete(S_hat, index, 0)  # noqa: N806
                 f_hat = np.delete(f_hat, index, 0)
             #           If index doesn't exist, solve an optimisation problem to find the point in the range which best satisfies criterion
             else:
@@ -861,13 +950,13 @@ class Optimisation:
                     )
                     if np.unique(np.vstack((S[:k, :], s)), axis=0).shape[0] != k + 1:
                         s = self._find_new_point_alternative(v, phi_function, S[:k, :])
-                except:
+                except Exception:
                     s = self._find_new_point_alternative(v, phi_function, S[:k, :])
                 if f_hat.size > 0 and M[index] >= abs(np.dot(v, phi_function(s))):
                     s = S_hat[index, :]
                     S[k, :] = s
                     f[k, :] = f_hat[index]
-                    S_hat = np.delete(S_hat, index, 0)
+                    S_hat = np.delete(S_hat, index, 0)  # noqa: N806
                     f_hat = np.delete(f_hat, index, 0)
                 else:
                     S[k, :] = s
@@ -881,17 +970,17 @@ class Optimisation:
                     U[k, i] -= (phi[j] * U[j, i]) / U[j, j]
         return S, f
 
-    def _get_phi_function_and_derivative(self, S_hat, full_space):
-        Del_S = self.del_k
+    def _get_phi_function_and_derivative(self, S_hat, full_space):  # noqa: ANN001, ANN202, N803
+        Del_S = self.del_k  # noqa: N806
         if self.method == "trust-region":
             if S_hat.size > 0:
-                Del_S = max(np.linalg.norm(S_hat - self.s_old, axis=1, ord=np.inf))
+                Del_S = max(np.linalg.norm(S_hat - self.s_old, axis=1, ord=np.inf))  # noqa: N806
 
-            def phi_function(s):
+            def phi_function(s):  # noqa: ANN001, ANN202
                 s_tilde = np.divide((s - self.s_old), Del_S)
                 try:
-                    m, n = s_tilde.shape
-                except:
+                    m, _n = s_tilde.shape
+                except Exception:
                     m = 1
                     s_tilde = s_tilde.reshape(1, -1)
                 phi = np.zeros((m, self.q))
@@ -907,7 +996,7 @@ class Optimisation:
                     return phi.flatten()
                 return phi
 
-            def phi_function_deriv(s):
+            def phi_function_deriv(s):  # noqa: ANN001, ANN202
                 s_tilde = np.divide((s - self.s_old), Del_S)
                 phi_deriv = np.zeros((self.n, self.q))
                 for i in range(self.n):
@@ -924,13 +1013,13 @@ class Optimisation:
                 return np.divide(phi_deriv.T, Del_S).T
         elif self.method == "omorf" and full_space:
             if S_hat.size > 0:
-                Del_S = max(np.linalg.norm(S_hat - self.s_old, axis=1, ord=np.inf))
+                Del_S = max(np.linalg.norm(S_hat - self.s_old, axis=1, ord=np.inf))  # noqa: N806
 
-            def phi_function(s):
+            def phi_function(s):  # noqa: ANN001, ANN202
                 s_tilde = np.divide((s - self.s_old), Del_S)
                 try:
-                    m, n = s_tilde.shape
-                except:
+                    m, _n = s_tilde.shape
+                except Exception:
                     m = 1
                     s_tilde = s_tilde.reshape(1, -1)
                 phi = np.zeros((m, self.p))
@@ -943,13 +1032,13 @@ class Optimisation:
             phi_function_deriv = None
         elif self.method == "omorf":
             if S_hat.size > 0:
-                Del_S = max(np.linalg.norm(np.dot(S_hat - self.s_old, self.U), axis=1))
+                Del_S = max(np.linalg.norm(np.dot(S_hat - self.s_old, self.U), axis=1))  # noqa: N806
 
-            def phi_function(s):
+            def phi_function(s):  # noqa: ANN001, ANN202
                 u = np.divide(np.dot((s - self.s_old), self.U), Del_S)
                 try:
-                    m, n = u.shape
-                except:
+                    m, _n = u.shape
+                except Exception:
                     m = 1
                     u = u.reshape(1, -1)
                 phi = np.zeros((m, self.q))
@@ -964,7 +1053,7 @@ class Optimisation:
                     return phi.flatten()
                 return phi
 
-            def phi_function_deriv(s):
+            def phi_function_deriv(s):  # noqa: ANN001, ANN202
                 u = np.divide(np.dot((s - self.s_old), self.U), Del_S)
                 phi_deriv = np.zeros((self.d, self.q))
                 for i in range(self.d):
@@ -983,7 +1072,7 @@ class Optimisation:
 
         return phi_function, phi_function_deriv
 
-    def _find_new_point(self, v, phi_function, phi_function_deriv, full_space=False):
+    def _find_new_point(self, v, phi_function, phi_function_deriv, full_space=False):  # noqa: ANN001, ANN202
         bounds = []
         for i in range(self.n):
             bounds.append((self.bounds_l[i], self.bounds_u[i]))
@@ -998,10 +1087,19 @@ class Optimisation:
             else:
                 s = res2["x"]
         else:
-            obj1 = lambda s: np.dot(v, phi_function(s))
-            jac1 = lambda s: np.dot(phi_function_deriv(s), v)
-            obj2 = lambda s: -np.dot(v, phi_function(s))
-            jac2 = lambda s: -np.dot(phi_function_deriv(s), v)
+
+            def obj1(s):  # noqa: ANN001, ANN202
+                return np.dot(v, phi_function(s))
+
+            def jac1(s):  # noqa: ANN001, ANN202
+                return np.dot(phi_function_deriv(s), v)
+
+            def obj2(s):  # noqa: ANN001, ANN202
+                return -np.dot(v, phi_function(s))
+
+            def jac2(s):  # noqa: ANN001, ANN202
+                return -np.dot(phi_function_deriv(s), v)
+
             res1 = optimize.minimize(
                 obj1,
                 self.s_old,
@@ -1018,15 +1116,12 @@ class Optimisation:
                 bounds=bounds,
                 options={"disp": False},
             )
-            if abs(res1["fun"]) > abs(res2["fun"]):
-                s = res1["x"]
-            else:
-                s = res2["x"]
+            s = res1["x"] if abs(res1["fun"]) > abs(res2["fun"]) else res2["x"]
         return s
 
-    def _find_new_point_alternative(self, v, phi_function, S):
-        S_tmp = self._generate_set(int(0.5 * (self.n + 1) * (self.n + 2)))
-        M = np.absolute(np.dot(phi_function(S_tmp), v).flatten())
+    def _find_new_point_alternative(self, v, phi_function, S):  # noqa: ANN001, ANN202, N803
+        S_tmp = self._generate_set(int(0.5 * (self.n + 1) * (self.n + 2)))  # noqa: N806
+        M = np.absolute(np.dot(phi_function(S_tmp), v).flatten())  # noqa: N806
         indices = np.argsort(M)[::-1][: len(M)]
         for index in indices:
             s = S_tmp[index, :]
@@ -1035,32 +1130,32 @@ class Optimisation:
         return S_tmp[indices[0], :]
 
     @staticmethod
-    def _remove_point_from_set(S, f, s):
+    def _remove_point_from_set(S, f, s):  # noqa: ANN001, ANN205, N803
         ind_current = np.where(np.linalg.norm(S - s, axis=1, ord=np.inf) == 0.0)[0]
-        S = np.delete(S, ind_current, 0)
+        S = np.delete(S, ind_current, 0)  # noqa: N806
         f = np.delete(f, ind_current, 0)
         return S, f
 
     @staticmethod
-    def _remove_furthest_point(S, f, s):
+    def _remove_furthest_point(S, f, s):  # noqa: ANN001, ANN205, N803
         ind_distant = np.argmax(np.linalg.norm(S - s, axis=1, ord=np.inf))
-        S = np.delete(S, ind_distant, 0)
+        S = np.delete(S, ind_distant, 0)  # noqa: N806
         f = np.delete(f, ind_distant, 0)
         return S, f
 
-    def _remove_points_outside_limits(self):
+    def _remove_points_outside_limits(self):  # noqa: ANN202
         ind_inside = np.where(
             np.linalg.norm(self.S - self.s_old, axis=1, ord=np.inf)
             <= max(self.epsilon_1 * self.del_k, self.epsilon_2 * self.rho_k)
         )[0]
-        S = self.S[ind_inside, :]
+        S = self.S[ind_inside, :]  # noqa: N806
         f = self.f[ind_inside]
         return S, f
 
-    def _build_model(self, S, f):
-        """Constructs quadratic model for ``trust-region`` or ``omorf`` methods"""
+    def _build_model(self, S, f):  # noqa: ANN001, ANN202, N803
+        """Constructs quadratic model for ``trust-region`` or ``omorf`` methods."""
         if self.method == "trust-region":
-            myParameters = [
+            myParameters = [  # noqa: N806
                 Parameter(
                     distribution="uniform",
                     lower=self.bounds_l[i],
@@ -1069,7 +1164,7 @@ class Optimisation:
                 )
                 for i in range(self.n)
             ]
-            myBasis = Basis("total-order")
+            myBasis = Basis("total-order")  # noqa: N806
             my_poly = Poly(
                 myParameters,
                 myBasis,
@@ -1077,8 +1172,8 @@ class Optimisation:
                 sampling_args={"sample-points": S, "sample-outputs": f},
             )
         elif self.method == "omorf":
-            Y = np.dot(S, self.U)
-            myParameters = [
+            Y = np.dot(S, self.U)  # noqa: N806
+            myParameters = [  # noqa: N806
                 Parameter(
                     distribution="uniform",
                     lower=np.min(Y[:, i]),
@@ -1087,7 +1182,7 @@ class Optimisation:
                 )
                 for i in range(self.d)
             ]
-            myBasis = Basis("total-order")
+            myBasis = Basis("total-order")  # noqa: N806
             my_poly = Poly(
                 myParameters,
                 myBasis,
@@ -1097,8 +1192,11 @@ class Optimisation:
         my_poly.set_model()
         return my_poly
 
-    def _compute_step(self, my_poly):
-        """Solves the trust-region subproblem for ``trust-region`` or ``omorf`` methods"""
+    def _compute_step(self, my_poly):  # noqa: ANN001, ANN202
+        """Solves the trust-region subproblem for ``trust-region`` or ``omorf``.
+
+        methods.
+        """
         bounds = []
         for i in range(self.n):
             bounds.append((self.bounds_l[i], self.bounds_u[i]))
@@ -1128,16 +1226,16 @@ class Optimisation:
 
     def _start(
         self,
-        s_old,
-        del_k,
-        rho_min,
-        random_initial,
-        scale_bounds,
-        alpha_1,
-        alpha_2,
-        d=None,
-        subspace_method=None,
-    ):
+        s_old,  # noqa: ANN001
+        del_k,  # noqa: ANN001
+        rho_min,  # noqa: ANN001
+        random_initial,  # noqa: ANN001
+        scale_bounds,  # noqa: ANN001
+        alpha_1,  # noqa: ANN001
+        alpha_2,  # noqa: ANN001
+        d=None,  # noqa: ANN001
+        subspace_method=None,  # noqa: ANN001
+    ) -> None:
         self.n = s_old.size
         self.random_initial = random_initial
         self.scale_bounds = scale_bounds
@@ -1149,14 +1247,14 @@ class Optimisation:
         if self.method == "trust-region":
             self.q = int(0.5 * (self.n + 1) * (self.n + 2))
             self.p = int(0.5 * (self.n + 1) * (self.n + 2))
-            Base = Basis("total-order", orders=np.tile([2], self.n))
+            Base = Basis("total-order", orders=np.tile([2], self.n))  # noqa: N806
             self.basis = Base.get_basis()[:, range(self.n - 1, -1, -1)]
         elif self.method == "omorf":
             self.d = d
             self.subspace_method = subspace_method
             self.q = int(0.5 * (self.d + 1) * (self.d + 2))
             self.p = self.n + 1
-            Base = Basis("total-order", orders=np.tile([2], self.d))
+            Base = Basis("total-order", orders=np.tile([2], self.d))  # noqa: N806
             self.basis = Base.get_basis()[:, range(self.d - 1, -1, -1)]
         self.s_old = self._apply_scaling(s_old)
         self.f_old = self._blackbox_evaluation(self.s_old)
@@ -1178,35 +1276,35 @@ class Optimisation:
         self._set_unsuccessful_iterate_counter(0)
         self._set_rho_k(self.del_k)
 
-    def _finish(self):
+    def _finish(self) -> None:
         self.S = self._remove_scaling(self.S)
         self._set_iterate()
 
     def _trust_region(
         self,
-        s_old,
-        del_k,
-        rho_min,
-        eta_1,
-        eta_2,
-        gam_dec,
-        gam_inc,
-        gam_inc_overline,
-        alpha_1,
-        alpha_2,
-        omega_s,
-        max_evals,
-        random_initial,
-        scale_bounds,
-    ):
-        """Computes optimum using the ``trust-region`` method"""
+        s_old,  # noqa: ANN001
+        del_k,  # noqa: ANN001
+        rho_min,  # noqa: ANN001
+        eta_1,  # noqa: ANN001
+        eta_2,  # noqa: ANN001
+        gam_dec,  # noqa: ANN001
+        gam_inc,  # noqa: ANN001
+        gam_inc_overline,  # noqa: ANN001
+        alpha_1,  # noqa: ANN001
+        alpha_2,  # noqa: ANN001
+        omega_s,  # noqa: ANN001
+        max_evals,  # noqa: ANN001
+        random_initial,  # noqa: ANN001
+        scale_bounds,  # noqa: ANN001
+    ) -> None:
+        """Computes optimum using the ``trust-region`` method."""
         itermax = 10000
         self._start(
             s_old, del_k, rho_min, random_initial, scale_bounds, alpha_1, alpha_2
         )
 
         # Construct the sample set
-        S = self._generate_set(self.p)
+        S = self._generate_set(self.p)  # noqa: N806
         f = np.zeros((self.p, 1))
         f[0, :] = self.f_old
         for i in range(1, self.p):
@@ -1214,13 +1312,13 @@ class Optimisation:
             if self.num_evals >= max_evals:
                 self._finish()
                 return
-        for i in range(itermax):
+        for i in range(itermax):  # noqa: B007
             if self.num_evals >= max_evals or self.rho_k <= rho_min:
                 break
             try:
                 my_poly = self._build_model(S, f)
-            except:
-                S, f = self._sample_set("improve", S, f)
+            except Exception:
+                S, f = self._sample_set("improve", S, f)  # noqa: N806
                 continue
             s_new, m_new = self._compute_step(my_poly)
             step_dist = np.linalg.norm(s_new - self.s_old, ord=np.inf)
@@ -1229,13 +1327,13 @@ class Optimisation:
                 self._set_ratio(-0.1)
                 self._set_unsuccessful_iterate_counter(3)
                 self._set_del_k(max(gam_dec * self.del_k, self.rho_k))
-                S, f = self._update_geometry_trust_region(S, f)
+                S, f = self._update_geometry_trust_region(S, f)  # noqa: N806
                 continue
             f_new = self._blackbox_evaluation(s_new)
             if self.num_evals >= max_evals or self.rho_k <= self.rho_min:
                 self._finish()
                 return
-            S, f = self._sample_set("replace", S, f, s_new, f_new)
+            S, f = self._sample_set("replace", S, f, s_new, f_new)  # noqa: N806
             # Calculate trust-region factor
             del_f = self.f_old - f_new
             del_m = np.asscalar(my_poly.get_polyfit(self.s_old)) - m_new
@@ -1253,30 +1351,30 @@ class Optimisation:
             else:
                 self._set_unsuccessful_iterate_counter(self.count + 1)
                 self._set_del_k(max(min(gam_dec * self.del_k, step_dist), self.rho_k))
-                S, f = self._update_geometry_trust_region(S, f)
+                S, f = self._update_geometry_trust_region(S, f)  # noqa: N806
         self._finish()
         return
 
     def _omorf(
         self,
-        s_old,
-        d,
-        subspace_method,
-        del_k,
-        rho_min,
-        eta_1,
-        eta_2,
-        gam_dec,
-        gam_inc,
-        gam_inc_overline,
-        alpha_1,
-        alpha_2,
-        omega_s,
-        max_evals,
-        random_initial,
-        scale_bounds,
-    ):
-        """Computes optimum using the ``omorf`` method"""
+        s_old,  # noqa: ANN001
+        d,  # noqa: ANN001
+        subspace_method,  # noqa: ANN001
+        del_k,  # noqa: ANN001
+        rho_min,  # noqa: ANN001
+        eta_1,  # noqa: ANN001
+        eta_2,  # noqa: ANN001
+        gam_dec,  # noqa: ANN001
+        gam_inc,  # noqa: ANN001
+        gam_inc_overline,  # noqa: ANN001
+        alpha_1,  # noqa: ANN001
+        alpha_2,  # noqa: ANN001
+        omega_s,  # noqa: ANN001
+        max_evals,  # noqa: ANN001
+        random_initial,  # noqa: ANN001
+        scale_bounds,  # noqa: ANN001
+    ) -> None:
+        """Computes optimum using the ``omorf`` method."""
         itermax = 10000
         self._start(
             s_old,
@@ -1291,7 +1389,7 @@ class Optimisation:
         )
 
         # Construct the sample set for the
-        S_full = self._generate_set(self.p)
+        S_full = self._generate_set(self.p)  # noqa: N806
         f_full = np.zeros((self.p, 1))
         f_full[0, :] = self.f_old  # first row gets
 
@@ -1302,17 +1400,17 @@ class Optimisation:
                 return
 
         self._calculate_subspace(S_full, f_full)
-        S_red, f_red = self._sample_set("new", full_space=False)
+        S_red, f_red = self._sample_set("new", full_space=False)  # noqa: N806
 
-        for i in range(itermax):
+        for i in range(itermax):  # noqa: B007
             if self.num_evals >= max_evals or self.rho_k <= self.rho_min:
                 self._finish()
                 return
 
             try:
                 my_poly = self._build_model(S_red, f_red)
-            except:
-                S_red, f_red = self._sample_set(
+            except Exception:
+                S_red, f_red = self._sample_set(  # noqa: N806
                     "improve", S_red, f_red, full_space=False
                 )
                 continue
@@ -1324,7 +1422,7 @@ class Optimisation:
                 self._set_ratio(-0.1)
                 self._set_unsuccessful_iterate_counter(3)
                 self._set_del_k(max(0.5 * self.del_k, self.rho_k))
-                S_full, f_full, S_red, f_red = self._update_geometry_omorf(
+                S_full, f_full, S_red, f_red = self._update_geometry_omorf(  # noqa: N806
                     S_full, f_full, S_red, f_red
                 )
                 continue
@@ -1341,10 +1439,10 @@ class Optimisation:
             else:
                 self._set_ratio(del_f / del_m)
             self._set_iterate()
-            S_red, f_red = self._sample_set(
+            S_red, f_red = self._sample_set(  # noqa: N806
                 "replace", S_red, f_red, s_new, f_new, full_space=False
             )
-            S_full, f_full = self._sample_set("replace", S_full, f_full, s_new, f_new)
+            S_full, f_full = self._sample_set("replace", S_full, f_full, s_new, f_new)  # noqa: N806
 
             if self.r_k >= eta_2:
                 self._set_unsuccessful_iterate_counter(0)
@@ -1355,7 +1453,7 @@ class Optimisation:
             else:
                 self._set_unsuccessful_iterate_counter(self.count + 1)
                 self._set_del_k(max(min(gam_dec * self.del_k, step_dist), self.rho_k))
-                S_full, f_full, S_red, f_red = self._update_geometry_omorf(
+                S_full, f_full, S_red, f_red = self._update_geometry_omorf(  # noqa: N806
                     S_full, f_full, S_red, f_red
                 )
 

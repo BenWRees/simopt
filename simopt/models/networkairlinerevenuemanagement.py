@@ -1,12 +1,16 @@
-"""Defines a Network Airline Revenue Management Model and Problem as presented in
-'Simulation-Based Booking Limits for Airline Revenue Management' 
+"""Defines a Network Airline Revenue Management Model and Problem as presented in.
+
+'Simulation-Based Booking Limits for Airline Revenue Management'
 by Dimitri Bertsimas and Sanne de Boer.
 
-The simulation model captures the dynamics of booking requests across multiple fare classes,
-for a single time window 
+The simulation model captures the dynamics of booking requests across multiple fare
+classes,
+for a single time window
 """
+
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Annotated, ClassVar, Self
 
 import numpy as np
@@ -27,7 +31,8 @@ from simopt.base import (
 class AirlineRevenueModelConfig(BaseModel):
     """Configuration model for Airline Revenue Management simulation.
 
-    A model for airline revenue management with multiple fare classes and stochastic demand.
+    A model for airline revenue management with multiple fare classes and stochastic
+    demand.
     """
 
     num_classes: Annotated[
@@ -63,7 +68,7 @@ class AirlineRevenueModelConfig(BaseModel):
         tuple[int, ...],
         Field(
             default=(10, 10, 10, 10, 10, 10),
-            description="booking limits for each fare class and each origin-destination pair",
+            description="booking limits for each fare class and each origin-destination pair",  # noqa: E501
             alias="booking limits",
         ),
     ]
@@ -71,28 +76,28 @@ class AirlineRevenueModelConfig(BaseModel):
         tuple[float, ...],
         Field(
             default=(2.0, 2.0, 2.0, 2.0, 2.0, 2.0),
-            description="parameters for the Polya process governing booking requests for each odf",
+            description="parameters for the Polya process governing booking requests for each odf",  # noqa: E501
         ),
     ]
     beta: Annotated[
         tuple[float, ...],
         Field(
             default=(1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
-            description="parameters for the Polya process governing booking requests for each odf",
+            description="parameters for the Polya process governing booking requests for each odf",  # noqa: E501
         ),
     ]
     gamma_shape: Annotated[
         tuple[float, ...],
         Field(
             default=(2.0, 2.0, 2.0, 2.0, 2.0, 2.0),
-            description="shape parameters for the gamma distribution governing expected demand for each odf",
+            description="shape parameters for the gamma distribution governing expected demand for each odf",  # noqa: E501
         ),
     ]
     gamma_scale: Annotated[
         tuple[float, ...],
         Field(
             default=(50.0, 50.0, 50.0, 50.0, 50.0, 50.0),
-            description="scale parameters for the gamma distribution governing expected demand for each odf",
+            description="scale parameters for the gamma distribution governing expected demand for each odf",  # noqa: E501
         ),
     ]
     time_steps: Annotated[
@@ -124,7 +129,11 @@ class AirlineRevenueModelConfig(BaseModel):
 
     def _check_odf_leg_matrix(self) -> None:
         adjacency_matrix = np.array(self.ODF_leg_matrix)
-        if len(adjacency_matrix.shape) != 2 or adjacency_matrix.shape[0] == 0 or adjacency_matrix.shape[1] == 0:
+        if (
+            len(adjacency_matrix.shape) != 2
+            or adjacency_matrix.shape[0] == 0
+            or adjacency_matrix.shape[1] == 0
+        ):
             raise ValueError("ODF_leg_matrix must be a non-empty 2D list or array.")
         if not np.all(np.isin(adjacency_matrix, [0, 1])):
             raise ValueError("ODF_leg_matrix must contain only 0s and 1s.")
@@ -135,7 +144,9 @@ class AirlineRevenueModelConfig(BaseModel):
         odf, _ = np.array(self.ODF_leg_matrix).shape
         prices = list(self.prices)
         if len(prices) != odf:
-            raise ValueError("Length of prices must equal number of origin-destination fare classes.")
+            raise ValueError(
+                "Length of prices must equal number of origin-destination fare classes."
+            )
         if np.any(np.array(prices) <= 0):
             raise ValueError("All prices must be positive.")
 
@@ -153,9 +164,13 @@ class AirlineRevenueModelConfig(BaseModel):
         booking_limit_per_fare = (booking_limits.T @ odf_matrix).flatten()
 
         if len(booking_limits) != odf:
-            raise ValueError("The length of the booking limits should be equal to the number of odf classes.")
+            raise ValueError(
+                "The length of the booking limits should be equal to the number of odf classes."  # noqa: E501
+            )
         if np.all(np.subtract(booking_limit_per_fare, np.array(self.capacity)) > 0):
-            raise ValueError("The booking limits for all fare classes across a flight must not exceed the capacity of that flight.")
+            raise ValueError(
+                "The booking limits for all fare classes across a flight must not exceed the capacity of that flight."  # noqa: E501
+            )
 
     def _check_alpha(self) -> None:
         odf, _ = np.array(self.ODF_leg_matrix).shape
@@ -206,7 +221,10 @@ class AirlineRevenueModelConfig(BaseModel):
 
 
 class AirlineRevenueModel(Model):
-    """A model for airline revenue management with multiple fare classes and stochastic demand."""
+    """A model for airline revenue management with multiple fare classes and stochastic.
+
+    demand.
+    """
 
     class_name_abbr: ClassVar[str] = "AIRLINE_REV"
     class_name: ClassVar[str] = "Airline Revenue Management"
@@ -214,11 +232,10 @@ class AirlineRevenueModel(Model):
     n_rngs: ClassVar[int] = 2
     n_responses: ClassVar[int] = 2
 
-    def __init__(self, fixed_factors: dict | None = None) -> None:
+    def __init__(self, fixed_factors: dict | None = None) -> None:  # noqa: D107
         super().__init__(fixed_factors)
-    
 
-    def compute_leg_number(self, odf_class: int) -> list[int] :
+    def compute_leg_number(self, odf_class: int) -> list[int]:
         """Compute the legs involved for the given odf class.
 
         Args:
@@ -227,13 +244,12 @@ class AirlineRevenueModel(Model):
         Returns:
             list[int]: List of leg numbers that the odf class travels on.
         """
-        adjacency_matrix = np.array(self.factors['ODF_leg_matrix'])
-        odf_vector = np.zeros((1,adjacency_matrix.shape[0]))
-        odf_vector[:,odf_class] = 1
+        adjacency_matrix = np.array(self.factors["ODF_leg_matrix"])
+        odf_vector = np.zeros((1, adjacency_matrix.shape[0]))
+        odf_vector[:, odf_class] = 1
         leg_numbers = odf_vector @ adjacency_matrix
-        leg_number_filtered = np.nonzero(leg_numbers)[1].tolist()
-        return leg_number_filtered
-    
+        return np.nonzero(leg_numbers)[1].tolist()
+
     def beta_distribution(self, t: int, tau: int, alpha: float, beta: float) -> float:
         """Compute the cumulative distribution function (CDF) of the Beta distribution.
 
@@ -246,14 +262,12 @@ class AirlineRevenueModel(Model):
         Returns:
             float: CDF value at time t.
         """
-        t = t + 1 # Adjust for 1-based indexing
-        first_term = (1/tau)*(t/tau)**(alpha-1) * (1 - t/tau)**(beta-1)
+        t = t + 1  # Adjust for 1-based indexing
+        first_term = (1 / tau) * (t / tau) ** (alpha - 1) * (1 - t / tau) ** (beta - 1)
         second_term = gamma(alpha + beta) / (gamma(alpha) * gamma(beta))
         return first_term * second_term
 
-
-    
-    def gamma_variate(self, rand: MRG32k3a, shape: float, scale: float) -> float:
+    def gamma_variate(self, rand: MRG32k3a, shape: float, scale: float) -> float:  # noqa: D417
         """Generate a random value that obeys the Gamma distribution.
 
         Args:
@@ -262,15 +276,14 @@ class AirlineRevenueModel(Model):
 
         Returns:
             float: Random variate from the Gamma distribution.
-        """    
+        """
         # Warning: a few older sources define the gamma distribution in terms
         # of alpha > -1.0
         if shape <= 0.0 or scale <= 0.0:
-            raise ValueError('gammavariate: shape and scale must be > 0.0')
+            raise ValueError("gammavariate: shape and scale must be > 0.0")
 
         random = rand.random
         if shape > 1.0:
-
             # Uses R.C.H. Cheng, "The generation of Gamma
             # variables with non-integral shape parameters",
             # Applied Statistics, (1977), 26, No. 1, p71-74
@@ -302,106 +315,108 @@ class AirlineRevenueModel(Model):
                 u = random()
                 b = (np.e + shape) / np.e
                 p = b * u
-                if p <= 1.0:
-                    x = p ** (1.0 / shape)
-                else:
-                    x = -np.log((b - p) / shape)
+                x = p ** (1.0 / shape) if p <= 1.0 else -np.log((b - p) / shape)
                 u1 = random()
                 if p > 1.0:
                     if u1 <= x ** (shape - 1.0):
                         break
                 elif u1 <= np.exp(-x):
                     break
-            return x * scale  
-         
-    
-    def compute_arrivals(self, rand: MRG32k3a, t: int) -> list[int] :
+            return x * scale
+
+    def compute_arrivals(self, rand: MRG32k3a, t: int) -> list[int]:
         """Compute the number of arrivals for a given fare class at time t.
 
         Args:
             rand (MRG32k3a): Random number generator.
             t (int): Current time step.
-            remaining_capacity (list[int]): Remaining capacity for each leg of the network.  
+            remaining_capacity (list[int]): Remaining capacity for each leg of the
+            network.
 
         Returns:
             list[int]: Number of arrivals for each odf class at time t.
         """
-        booking_limits = list(self.factors['booking limits'])
+        booking_limits = list(self.factors["booking limits"])
         odf_classes = len(booking_limits)
         arrivals = [0] * odf_classes
 
-        tau = self.factors['tau'][t]
-        alpha = list(self.factors['alpha'])
-        beta = list(self.factors['beta'])
-        shape = list(self.factors['gamma_shape'])
-        scale = list(self.factors['gamma_scale'])
+        tau = self.factors["tau"][t]
+        alpha = list(self.factors["alpha"])
+        beta = list(self.factors["beta"])
+        shape = list(self.factors["gamma_shape"])
+        scale = list(self.factors["gamma_scale"])
 
-       
-        for x in range(odf_classes) :       
+        for x in range(odf_classes):
             # Compute the expected demand using the Gamma distribution
-            if t==0:
-                # For the first time step, we sample from the gamma distribution to get the expected demand
+            if t == 0:
+                # For the first time step, we sample from the gamma distribution to get the expected demand  # noqa: E501
                 expected_demand = self.gamma_variate(rand, shape[x], scale[x])
-            #TODO: Work out parameters for gamma variable as they depend on number of booking requests up to time t-1
-            else : 
-                # For subsequent time steps, we use the gamma distribution with values from the number of booking requests up to time t-1
-                expected_demand = self.gamma_variate()
-            
+            # TODO: Work out parameters for gamma variable as they depend on number of booking requests up to time t-1  # noqa: E501
+            else:
+                # For subsequent time steps, we use the gamma distribution with values from the number of booking requests up to time t-1  # noqa: E501
+                expected_demand = self.gamma_variate(rand, shape[x], scale[x])
+
             # Compute the probability of arrival using the Beta CDF
             prob_arrival = self.beta_distribution(t, tau, alpha[x], beta[x])
-            
+
             # Compute the number of arrivals as a Poisson random variable
             arrivals[x] = np.random.poisson(expected_demand * prob_arrival)
-        
+
         return arrivals
 
-
-    def sell_seats(self, selling_rng: MRG32k3a, arrivals: list[int], seats_sold: list[int], remaining_capacity: list[int]) -> tuple[list[int], list[int]]:
-
-        booking_limits = list(self.factors['booking limits'])
+    def sell_seats(  # noqa: D102
+        self,
+        selling_rng: MRG32k3a,
+        arrivals: Sequence[int],
+        seats_sold: list[int],
+        remaining_capacity: list[int],
+    ) -> tuple[list[int], list[int]]:
+        booking_limits = list(self.factors["booking limits"])
         arrivals_left = list(arrivals)
-        odf_classes = len(booking_limits)
+        len(booking_limits)
 
-        #Randomly generate an odf class to arrive, check if they have any more arrivals 
-        while any(a > 0 for a in arrivals_left) : 
+        # Randomly generate an odf class to arrive, check if they have any more arrivals
+        while any(a > 0 for a in arrivals_left):
             # Get indices of OD classes that still have arrivals left
             available_odfs = [i for i, a in enumerate(arrivals_left) if a > 0]
 
             # Pick one uniformly at random
             odf_to_arrive = int(selling_rng.uniform(0, len(available_odfs)))
             odf_to_arrive = available_odfs[odf_to_arrive]
-            
-            #else assume that this arrival has occurred 
-            arrivals_left[odf_to_arrive] -= 1 
+
+            # else assume that this arrival has occurred
+            arrivals_left[odf_to_arrive] -= 1
             leg_nos = self.compute_leg_number(odf_to_arrive)
 
             # check the remaining capacity for the legs being flown
             current_caps = [remaining_capacity[leg_no] for leg_no in leg_nos]
 
             # if any leg that the odf class flies on is at capacity then skip selling
-            if any(cap <= 0 for cap in current_caps) :
-                print(f'The capacity for the odf {odf_to_arrive} is full')
-                continue 
+            if any(cap <= 0 for cap in current_caps):
+                print(f"The capacity for the odf {odf_to_arrive} is full")
+                continue
             # if booking limit is reached for this capacity then skip selling
             if seats_sold[odf_to_arrive] >= booking_limits[odf_to_arrive]:
-                print(f'The booking limit for the odf {odf_to_arrive} has been reached with seats_sold \n {seats_sold}')
+                print(
+                    f"The booking limit for the odf {odf_to_arrive} has been reached with seats_sold \n {seats_sold}"  # noqa: E501
+                )
                 arrivals_left[odf_to_arrive] = 0
-                continue 
-            #Sell a seat for the odf class and reduce capacity across legs the odf class flies on
+                continue
+            # Sell a seat for the odf class and reduce capacity across legs the odf class flies on  # noqa: E501
             seats_sold[odf_to_arrive] += 1
             for leg_no in leg_nos:
-                remaining_capacity[leg_no] =  remaining_capacity[leg_no] - 1
+                remaining_capacity[leg_no] = remaining_capacity[leg_no] - 1
 
-        print(f'The remaining capacity after a round of selling seats is {remaining_capacity}')
-        print(f'The seats that were sold are: {seats_sold}')
+        print(
+            f"The remaining capacity after a round of selling seats is {remaining_capacity}"  # noqa: E501
+        )
+        print(f"The seats that were sold are: {seats_sold}")
         return seats_sold, remaining_capacity
 
-
-
-    # def sell_seats(self, selling_rng: MRG32k3a, arrivals: list[int], seats_sold: list[int], remaining_capacity: list[int]) -> tuple[list[int], list[int]]:
+    # def sell_seats(self, selling_rng: MRG32k3a, arrivals: list[int], seats_sold: list[int], remaining_capacity: list[int]) -> tuple[list[int], list[int]]:  # noqa: E501
     #     """
-    #     For a single time step, sell as many seats as possible given the arrivals, 
-    #     booking limits, and remaining capacity. 
+    #     For a single time step, sell as many seats as possible given the arrivals,
+    #     booking limits, and remaining capacity.
     #     """
     #     booking_limits = list(self.factors['booking limits'])
     #     odf_classes = len(booking_limits)
@@ -416,8 +431,8 @@ class AirlineRevenueModel(Model):
     #             # check the remaining capacity for the legs being flown
     #             current_caps = [remaining_capacity[leg_no] for leg_no in leg_nos]
 
-    #             # if any leg is full, can't sell this itinerary or if booking limit is reached, stop selling this ODF
-    #             if all(cap > 0 for cap in current_caps) and seats_sold[odf] < booking_limits[odf]:
+    #             # if any leg is full, can't sell this itinerary or if booking limit is reached, stop selling this ODF  # noqa: E501
+    #             if all(cap > 0 for cap in current_caps) and seats_sold[odf] < booking_limits[odf]:  # noqa: E501
     #                 # sell one seat
     #                 seats_sold[odf] += 1
 
@@ -425,32 +440,42 @@ class AirlineRevenueModel(Model):
     #                 for leg_no in leg_nos:
     #                     remaining_capacity[leg_no] =  remaining_capacity[leg_no] - 1
 
-    #     print(f'The remaining capacity after a round of selling seats is {remaining_capacity}')
+    #     print(f'The remaining capacity after a round of selling seats is {remaining_capacity}')  # noqa: E501
     #     print(f'The seats that were sold are: {seats_sold}')
 
     #     return seats_sold, remaining_capacity
-    
 
-    def compute_revenue(self, seats_sold: list[list[int]]) -> list[float]:
-        """Compute the total revenue for all the seats_sold across fare classes for a single time step
+    def compute_revenue(self, seats_sold: list[list[int]]) -> list[int | float]:
+        """Compute the total revenue for all the seats_sold across fare classes for a.
+
+        single time step.
 
         Args:
-            seats_sold (list[list[int]]): Number of seats sold for each odf class at each time step. 
-                                     
-            
+            seats_sold (list[list[int]]): Number of seats sold for each odf class at
+            each time step.
+
+
         Returns:
-            list[float]: Revenue generated from each odf class indexed at each time step.
+            list[float]: Revenue generated from each odf class indexed at each time
+            step.
         """
         # total_revenue = 0.0
-        odfs = len(seats_sold[0]) 
-        prices = list(self.factors['prices'])
-        revenue_over_time_steps = [0] * odfs
+        odfs = len(seats_sold[0])
+        prices = list(self.factors["prices"])
+        revenue_over_time_steps = [0.0] * odfs
 
-        for seat_sold_per_time_step in seats_sold : 
-            #First calculate the revenue made for this time step
-            revenue_per_time_step = [p*x for x,p in zip(seat_sold_per_time_step,prices)]
-            #then add on the revenue made in this time step to the total revenue made in the previous time steps 
-            revenue_over_time_steps = [total_rev + new_rev for new_rev, total_rev  in zip(revenue_per_time_step, revenue_over_time_steps)]
+        for seat_sold_per_time_step in seats_sold:
+            # First calculate the revenue made for this time step
+            revenue_per_time_step = [
+                p * x for x, p in zip(seat_sold_per_time_step, prices, strict=False)
+            ]
+            # then add on the revenue made in this time step to the total revenue made in the previous time steps  # noqa: E501
+            revenue_over_time_steps = [
+                total_rev + new_rev
+                for new_rev, total_rev in zip(
+                    revenue_per_time_step, revenue_over_time_steps, strict=False
+                )
+            ]
 
         return revenue_over_time_steps
 
@@ -469,17 +494,16 @@ class AirlineRevenueModel(Model):
                     each response (None if not available).
         """
         #! Extract model parameters
-        capacity = self.factors['capacity']
-        booking_limits = list(self.factors['booking limits'])
+        capacity = self.factors["capacity"]
+        booking_limits = list(self.factors["booking limits"])
         odf = len(booking_limits)  # number of origin-destination fare classes
-        time_steps = self.factors['time steps']
+        time_steps = self.factors["time steps"]
         total_revenue = 0
 
-        seats_remaining_from_booking_limit = np.array(booking_limits)  # Remaining booking limits for
+        np.array(booking_limits)  # Remaining booking limits for
 
-
-        if self.factors['deterministic flag']:
-            self.factors['capacity'] = (100, 120)
+        if self.factors["deterministic flag"]:
+            self.factors["capacity"] = (100, 120)
 
         remaining_capacity = list(capacity)  # Remaining capacity for each leg
 
@@ -487,27 +511,38 @@ class AirlineRevenueModel(Model):
         arrival_rng = self.arrival_rng
         selling_rng = self.selling_rng
         """
-            For each time step, we compute the number of arrivals for each odf class and then compute how many
-            seats can be sold on the networrk based on the booking limits and remaining capacity.
+            For each time step, we compute the number of arrivals for each odf class and
+            then compute how many
+            seats can be sold on the networrk based on the booking limits and remaining
+            capacity.
             We then update the remaining capacity and booking limits accordingly.
         """
         seats_sold_all_time_steps = []
 
-
         for time_step in range(time_steps):
             seats_sold = [0] * odf
-            if self.factors['deterministic flag']:
-
+            if self.factors["deterministic flag"]:
                 arrivals = (30, 60, 20, 80, 30, 40)
-                self.factors['prices'] = (150, 100, 120, 80, 250, 170)
-                self.factors['ODF_leg_matrix'] = [[1, 0], [1, 0], [0, 1], [0, 1], [1, 1], [1, 1]]
-                seats_sold, remaining_capacity = self.sell_seats(selling_rng, arrivals, seats_sold, remaining_capacity)
+                self.factors["prices"] = (150, 100, 120, 80, 250, 170)
+                self.factors["ODF_leg_matrix"] = [
+                    [1, 0],
+                    [1, 0],
+                    [0, 1],
+                    [0, 1],
+                    [1, 1],
+                    [1, 1],
+                ]
+                seats_sold, remaining_capacity = self.sell_seats(
+                    selling_rng, arrivals, seats_sold, remaining_capacity
+                )
                 seats_sold_all_time_steps.append(seats_sold)
 
             else:
                 arrivals = self.compute_arrivals(arrival_rng, time_step)
 
-                seats_sold, remaining_capacity = self.sell_seats(selling_rng, arrivals, seats_sold, remaining_capacity)
+                seats_sold, remaining_capacity = self.sell_seats(
+                    selling_rng, arrivals, seats_sold, remaining_capacity
+                )
 
                 seats_sold_all_time_steps.append(seats_sold)
 
@@ -515,12 +550,12 @@ class AirlineRevenueModel(Model):
 
         list_revenues_each_odf = self.compute_revenue(seats_sold_all_time_steps)
 
-        #get the total revenues
+        # get the total revenues
         total_revenue = sum([np.sum(a) for a in list_revenues_each_odf])
 
         responses = {
-            'revenue': total_revenue,
-            'revenue per odf': list_revenues_each_odf
+            "revenue": total_revenue,
+            "revenue per odf": list_revenues_each_odf,
         }
 
         return responses, {}
@@ -577,7 +612,7 @@ class AirlineRevenueBookingLimitProblem(Problem):
     def upper_bounds(self) -> tuple:  # noqa: D102
         odf_matrix = np.array(self.model.factors["ODF_leg_matrix"])
         capacity = list(self.model.factors["capacity"])
-        odfs, legs = odf_matrix.shape
+        odfs, _legs = odf_matrix.shape
         x = []
         for odf in range(odfs):
             # Find the legs the odf flies on
@@ -598,7 +633,7 @@ class AirlineRevenueBookingLimitProblem(Problem):
     def factor_dict_to_vector(self, factor_dict: dict) -> tuple:  # noqa: D102
         return tuple(factor_dict["booking limits"])
 
-    def replicate(self, x: tuple) -> RepResult:  # noqa: D102
+    def replicate(self, _x: tuple) -> RepResult:  # noqa: D102
         responses, _ = self.model.replicate()
         objectives = [Objective(stochastic=responses["revenue"])]
         return RepResult(objectives=objectives)
@@ -675,7 +710,7 @@ class AirlineRevenueBidPriceProblem(Problem):
     def factor_dict_to_vector(self, factor_dict: dict) -> tuple:  # noqa: D102
         return tuple(factor_dict["prices"])
 
-    def replicate(self, x: tuple) -> RepResult:  # noqa: D102
+    def replicate(self, _x: tuple) -> RepResult:  # noqa: D102
         responses, _ = self.model.replicate()
         objectives = [Objective(stochastic=responses["revenue"])]
         return RepResult(objectives=objectives)

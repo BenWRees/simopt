@@ -1,4 +1,4 @@
-# ---
+# ---  # noqa: D100
 # jupyter:
 #   jupytext:
 #     formats: ipynb,py:percent
@@ -16,7 +16,7 @@
 # %% [markdown]
 # # Demo for Loading Solver Design Points.
 #
-# This script is intended to help with loading a design of solver factors to run on one or more problems.
+# This script is intended to help with loading a design of solver factors to run on one or more problems.  # noqa: E501
 #
 # If more than one problem are used a cross-design of problems will be run.
 #
@@ -30,7 +30,7 @@
 # %% [markdown]
 # ## Append SimOpt Path
 #
-# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.
+# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.  # noqa: E501
 
 # %%
 import sys
@@ -90,16 +90,14 @@ n_postreps_init_opt = 200
 
 # %%
 # turn design file into df & retrive dp information
-import pandas as pd
+import pandas as pd  # noqa: E402
 
 design_table = pd.read_csv(design_filename)
 
 design_factor_names = design_table.columns.tolist()
 
 # remove GUI columns from list if present
-gui_columns = [
-    "design_num", "name", "design_type", "num_stacks"
-]
+gui_columns = ["design_num", "name", "design_type", "num_stacks"]
 for gui_col in gui_columns:
     if gui_col in design_factor_names:
         design_factor_names.remove(gui_col)
@@ -123,7 +121,7 @@ for _ in range(n_dp):
     solver_names.append(solver_name)
 
 # %%
-from simopt.experiment_base import ProblemsSolvers
+from simopt.experiment_base import ProblemsSolvers  # noqa: E402
 
 experiment = ProblemsSolvers(
     solver_factors=dp_list,

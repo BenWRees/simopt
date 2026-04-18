@@ -1,4 +1,4 @@
-# ---
+# ---  # noqa: D100
 # jupyter:
 #   jupytext:
 #     formats: ipynb,py:percent
@@ -18,12 +18,12 @@
 #
 # This script is intended to help with debugging a model.
 #
-# It imports a model, initializes a model object with given factors, sets up pseudorandom number generators, and runs one or more replications.
+# It imports a model, initializes a model object with given factors, sets up pseudorandom number generators, and runs one or more replications.  # noqa: E501
 
 # %% [markdown]
 # ## Append SimOpt Path
 #
-# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.
+# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.  # noqa: E501
 
 # %%
 import sys
@@ -54,7 +54,7 @@ mymodel = MM1Queue(fixed_factors=fixed_factors)
 # Create a list of RNG objects for the simulation model to use when
 # running replications.
 
-from mrg32k3a.mrg32k3a import MRG32k3a
+from mrg32k3a.mrg32k3a import MRG32k3a  # noqa: E402
 
 rng_list = [MRG32k3a(s_ss_sss_index=[0, ss, 0]) for ss in range(mymodel.n_rngs)]
 

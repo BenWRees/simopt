@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Literal
 
 import matplotlib.pyplot as plt
@@ -226,10 +227,8 @@ def plot_terminal_feasibility(
                     loc=legend_loc,
                 )
                 if leg is not None:
-                    try:
+                    with contextlib.suppress(Exception):
                         leg.get_frame().set_alpha(0.4)
-                    except Exception:
-                        pass
                 if plot_zero:
                     plt.axhline(y=0, color="red", linestyle="--", linewidth=0.75)
                 if plot_optimal:

@@ -1,4 +1,4 @@
-# ---
+# ---  # noqa: D100
 # jupyter:
 #   jupytext:
 #     formats: ipynb,py:percent
@@ -18,12 +18,12 @@
 #
 # This script is intended to help with debugging problems and solvers.
 #
-# It create problem-solver groups (using the directory) and runs multiple macroreplications of each problem-solver pair.
+# It create problem-solver groups (using the directory) and runs multiple macroreplications of each problem-solver pair.  # noqa: E501
 
 # %% [markdown]
 # ## Append SimOpt Path
 #
-# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.
+# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.  # noqa: E501
 
 # %%
 import sys
@@ -50,7 +50,7 @@ num_postreps_init_opt = 50
 
 # %%
 # Initialize an instance of the experiment class.
-from simopt.experiment_base import ProblemsSolvers
+from simopt.experiment_base import ProblemsSolvers  # noqa: E402
 
 mymetaexperiment = ProblemsSolvers(
     solver_names=solver_abbr_names, problem_names=problem_abbr_names
@@ -77,7 +77,7 @@ mymetaexperiment.post_normalize(n_postreps_init_opt=num_postreps_init_opt)
 # %%
 # Produce basic plots.
 
-from simopt.experiment_base import PlotType, plot_solvability_profiles
+from simopt.experiment_base import PlotType, plot_solvability_profiles  # noqa: E402
 
 print("Plotting results...")
 

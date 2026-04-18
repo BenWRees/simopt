@@ -1,4 +1,4 @@
-# """
+# """  # noqa: D100, N999
 # Summary
 # -------
 # The ASTROMoRF (Adaptive Sampling for Trust-Region Optimisation by Moving Ridge Functions) progressively builds local models using

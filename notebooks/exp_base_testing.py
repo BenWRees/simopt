@@ -1,4 +1,4 @@
-# ---
+# ---  # noqa: D100
 # jupyter:
 #   jupytext:
 #     formats: ipynb,py:percent
@@ -18,14 +18,14 @@
 #
 # This script is intended to help with running a data-farming experiment on a solver.
 #
-# It creates a design of solver factors and runs multiple macroreplications at each version of the solver.
+# It creates a design of solver factors and runs multiple macroreplications at each version of the solver.  # noqa: E501
 #
 # Outputs are printed to a file.
 
 # %% [markdown]
 # ## Append SimOpt Path
 #
-# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.
+# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.  # noqa: E501
 
 # %%
 import sys
@@ -64,7 +64,7 @@ num_postreps_init_opt = 10
 
 # %%
 # Create ProblemsSolvers experiment with solver and model design
-from simopt.experiment_base import ProblemsSolvers
+from simopt.experiment_base import ProblemsSolvers  # noqa: E402
 
 experiment = ProblemsSolvers(
     solver_factors=solver_factors,

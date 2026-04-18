@@ -160,7 +160,7 @@ class DesignPoint:
 class DataFarmingExperiment:
     """Base class for data-farming experiments with a model and factor design."""
 
-    def __init__(
+    def __init__(  # noqa: D417
         self,
         model_name: str,
         factor_headers: list[str],
@@ -178,7 +178,8 @@ class DataFarmingExperiment:
             model_name (str): Name of the model to run.
             factor_headers (list[str]): Ordered list of factor names in the
                 settings/design file.
-            factor_settings (list[tuple[float, float, int]] | Path | str | None, optional):
+            factor_settings (list[tuple[float, float, int]] | Path | str | None,
+            optional):
                 Either a list of tuples (min, max, decimals) specifying factor ranges
                 and precision digits, or a Path/str to a .txt file containing
                 this information.
@@ -193,7 +194,7 @@ class DataFarmingExperiment:
         Raises:
             ValueError: If `model_name` is invalid or `design_type` is unsupported.
             FileNotFoundError: If any specified file path does not exist.
-        """  # noqa: E501
+        """
         if model_fixed_factors is None:
             model_fixed_factors = {}
 
@@ -218,7 +219,7 @@ class DataFarmingExperiment:
 
         # If factor_settings is provided, create design from it.
         if factor_settings is not None:
-            if isinstance(factor_settings, (str, Path)):
+            if isinstance(factor_settings, str | Path):
                 # Check the filepath resolves
                 factor_settings = resolve_file_path(factor_settings, DATA_FARMING_DIR)
                 if not factor_settings.exists():

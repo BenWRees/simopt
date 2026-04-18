@@ -14,7 +14,7 @@ from pydantic import Field
 from simopt.base import (
     ConstraintType,
     ObjectiveType,
-    Problem,
+    ProblemLike,
     Solver,
     SolverConfig,
     VariableType,
@@ -78,10 +78,10 @@ class ADAM(Solver):
     variable_type: ClassVar[VariableType] = VariableType.CONTINUOUS
     gradient_needed: ClassVar[bool] = False
 
-    def solve(self, problem: Problem) -> None:  # noqa: D102
+    def solve(self, problem: ProblemLike) -> None:  # noqa: D102
         # Default values.
-        self.iteration_count = 1
-        self.record_count = 1
+        self.iteration_count = 0
+        self.record_count = 0
         r: int = self.factors["r"]
         beta_1: float = self.factors["beta_1"]
         beta_2: float = self.factors["beta_2"]
@@ -105,8 +105,7 @@ class ADAM(Solver):
         self.budget_history.append(self.budget.used)
         self.fn_estimates.append(new_solution.objectives_mean.item())
         self.iterations.append(self.iteration_count)
-
-
+        self.record_count += 1
 
         best_solution = new_solution
 
@@ -115,7 +114,7 @@ class ADAM(Solver):
         m = np.zeros(problem.dim)
         v = np.zeros(problem.dim)
         t = 0
-        try :
+        try:
             while True:
                 # Update timestep.
                 t += 1
@@ -128,7 +127,7 @@ class ADAM(Solver):
                 ).astype(int)
                 # 1 stands for forward, -1 stands for backward, 0 means central diff.
                 bounds_check = np.subtract(forward, backward)
-                
+
                 # Use finite difference to estimate gradient if IPA gradient is
                 # not available.
                 finite_diff_budget = (
@@ -175,16 +174,18 @@ class ADAM(Solver):
                     best_solution = new_solution
                     self.recommended_solns.append(new_solution)
                     self.intermediate_budgets.append(self.budget.used)
-                    
+
                 self.iteration_count += 1
                 self.budget_history.append(self.budget.used)
                 self.fn_estimates.append(new_solution.objectives_mean.item())
                 self.iterations.append(self.iteration_count)
-                self.record_count += 1 
+                self.record_count += 1
         except BudgetExhaustedError:
-            if self.record_count < self.iteration_count :
-                self.fn_estimates.append(
-                    best_solution.objectives_mean.item()
-                )
+            if self.iterations[-1] != self.iteration_count:
+                self.fn_estimates.append(best_solution.objectives_mean.item())
                 self.budget_history.append(self.budget.used)
-                self.iterations.append(self.iteration_count)
+                self.iterations.append(
+                    self.iteration_count
+                    if self.record_count > 0
+                    else self.iteration_count + 1
+                )

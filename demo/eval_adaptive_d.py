@@ -6,44 +6,47 @@ of projected residual (plus noise), and compares the adaptive rule's
 chosen `d` to the oracle (d with minimum validation error).
 """
 
-import math
 import random
-from pathlib import Path
 import sys
+from pathlib import Path
+
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-import numpy as np
 from collections import Counter
 
+import numpy as np
 
-class DummyProblem:
-    def __init__(self, dim: int, budget: float = 1000.0):
+
+class DummyProblem:  # noqa: D101
+    def __init__(self, dim: int, budget: float = 1000.0) -> None:  # noqa: D107
         self.dim = int(dim)
         # budget in problem.factors used to scale cost penalty
         self.factors = {"budget": float(budget)}
 
 
-def make_prev_info(recs):
+def make_prev_info(recs):  # noqa: ANN001, ANN201, D103
     info = []
     for eigvals, drec, succ in recs:
-        info.append({
-            "eigenvalue_spectrum": list(np.asarray(eigvals, dtype=float)),
-            "recommended_dimension": int(drec),
-            "model_success": bool(succ),
-            "validation_by_d": {1: 0.5, 2: 0.2} if succ else {1: 0.6, 2: 0.4},
-        })
+        info.append(
+            {
+                "eigenvalue_spectrum": list(np.asarray(eigvals, dtype=float)),
+                "recommended_dimension": int(drec),
+                "model_success": bool(succ),
+                "validation_by_d": {1: 0.5, 2: 0.2} if succ else {1: 0.6, 2: 0.4},
+            }
+        )
     return info
 
 
-class LocalSolver:
-    def __init__(self, problem: DummyProblem):
+class LocalSolver:  # noqa: D101
+    def __init__(self, problem: DummyProblem) -> None:  # noqa: D107
         self.problem = problem
         self.max_d = max(1, problem.dim - 1)
         self.previous_model_information = []
         self.gradient_eigenvalues = []
         self.last_validation_by_d = None
 
-    def evaluate_and_score_candidate_dimensions(self):
+    def evaluate_and_score_candidate_dimensions(self):  # noqa: ANN201, D102
         # copy of function used earlier in demo/test_adaptive_d.py
         results = {}
         max_test_d = min(self.max_d, self.problem.dim - 1)
@@ -79,9 +82,12 @@ class LocalSolver:
             ]
             if spectra:
                 maxlen = max(s.shape[0] for s in spectra)
-                padded = np.vstack([
-                    np.pad(s, (0, maxlen - s.shape[0]), constant_values=0.0) for s in spectra
-                ])
+                padded = np.vstack(
+                    [
+                        np.pad(s, (0, maxlen - s.shape[0]), constant_values=0.0)
+                        for s in spectra
+                    ]
+                )
                 eig_source = np.mean(padded, axis=0)
 
         if eig_source is None or eig_source.size == 0:
@@ -137,14 +143,17 @@ class LocalSolver:
                 if max_val is None or max_val - min_val < 1e-12:
                     s_val = 0.8
                 else:
-                    s_val = 1.0 - (metrics["val_err"] - min_val) / max(1e-12, (max_val - min_val))
+                    s_val = 1.0 - (metrics["val_err"] - min_val) / max(
+                        1e-12, (max_val - min_val)
+                    )
 
             s_proj = 1.0 - metrics["proj_resid"]
             s_succ = metrics["success_rate"]
 
             cost = float(d) / max(1.0, max_test_d)
 
-            # cost_penalty will be injected from the outer scope when running experiments
+            # cost_penalty will be injected from the outer scope when running
+            # experiments
             cp = getattr(self, "cost_penalty", 0.1)
             # budget-aware multiplier: lower budget -> larger effective penalty
             baseline_budget = 1000.0
@@ -155,7 +164,9 @@ class LocalSolver:
                 budget = baseline_budget
             mult = baseline_budget / max(1.0, budget)
             cp_eff = float(cp) * float(mult)
-            raw_score = w_val * s_val + w_proj * s_proj + w_succ * s_succ - cp_eff * cost
+            raw_score = (
+                w_val * s_val + w_proj * s_proj + w_succ * s_succ - cp_eff * cost
+            )
             score = max(0.0, min(1.0, raw_score))
             metrics["score"] = float(score)
             metrics["s_val"] = float(s_val)
@@ -166,7 +177,7 @@ class LocalSolver:
         return results
 
 
-def make_spectrum(dim, kind="dominant", k=2, decay=0.6):
+def make_spectrum(dim, kind="dominant", k=2, decay=0.6):  # noqa: ANN001, ANN201, D103
     if kind == "dominant":
         vals = np.concatenate([np.linspace(5.0, 1.0, k), np.ones(dim - k) * 0.1])
     elif kind == "exp":
@@ -176,7 +187,7 @@ def make_spectrum(dim, kind="dominant", k=2, decay=0.6):
     return np.asarray(vals, dtype=float)
 
 
-def make_validation_from_spectrum(eig, noise=0.01, base=0.05, alpha=1.0):
+def make_validation_from_spectrum(eig, noise=0.01, base=0.05, alpha=1.0):  # noqa: ANN001, ANN201, D103
     # Build validation error per d proportional to projection residual plus noise
     total = max(1e-12, float(np.sum(eig)))
     vals = {}
@@ -189,7 +200,7 @@ def make_validation_from_spectrum(eig, noise=0.01, base=0.05, alpha=1.0):
     return vals
 
 
-def run_experiments(n_trials=200, dim=10):
+def run_experiments(n_trials=200, dim=10) -> None:  # noqa: ANN001, D103
     random.seed(1)
     np.random.seed(1)
     solver = LocalSolver(DummyProblem(dim=dim))
@@ -200,7 +211,7 @@ def run_experiments(n_trials=200, dim=10):
     chosen_hist = Counter()
     oracle_hist = Counter()
 
-    for t in range(n_trials):
+    for _t in range(n_trials):
         kind = random.choice(["dominant", "exp", "flat"])
         if kind == "dominant":
             k = random.randint(1, min(4, dim - 1))
@@ -237,8 +248,8 @@ def run_experiments(n_trials=200, dim=10):
 
     n = n_trials
     print(f"Trials: {n}")
-    print(f"Exact match rate: {exact}/{n} = {exact/n:.3f}")
-    print(f"Within-1 rate: {within1}/{n} = {within1/n:.3f}")
+    print(f"Exact match rate: {exact}/{n} = {exact / n:.3f}")
+    print(f"Within-1 rate: {within1}/{n} = {within1 / n:.3f}")
     print(f"Mean regret (val_err chosen - val_err oracle): {np.mean(regrets):.5f}")
     print(f"Median regret: {np.median(regrets):.5f}")
     print("Top chosen d counts:")
@@ -246,5 +257,5 @@ def run_experiments(n_trials=200, dim=10):
         print(f"  d={d}: {c}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_experiments(n_trials=200, dim=10)

@@ -1,0 +1,2702 @@
+[
+  {
+    "solver": "ADAM",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "r",
+    "default": 30,
+    "tested": [
+      12,
+      24,
+      48
+    ],
+    "tested_scores": [
+      129.00309372964512,
+      139.44731386576206,
+      145.9114108888652
+    ],
+    "best": 12,
+    "best_score": 129.00309372964512,
+    "baseline_score": 146.03974338239797
+  },
+  {
+    "solver": "ADAM",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "beta_1",
+    "default": 0.9,
+    "tested": [
+      0.5,
+      0.54,
+      0.9
+    ],
+    "tested_scores": [
+      146.03974338239797,
+      146.03974338239797,
+      146.03974338239797
+    ],
+    "best": 0.5,
+    "best_score": 146.03974338239797,
+    "baseline_score": 146.03974338239797
+  },
+  {
+    "solver": "ADAM",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "beta_2",
+    "default": 0.999,
+    "tested": [
+      0.4995,
+      0.999,
+      0.9999
+    ],
+    "tested_scores": [
+      146.03974338239797,
+      146.03974338239797,
+      146.03974338239797
+    ],
+    "best": 0.4995,
+    "best_score": 146.03974338239797,
+    "baseline_score": 146.03974338239797
+  },
+  {
+    "solver": "ADAM",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "alpha",
+    "default": 0.5,
+    "tested": [
+      0.1,
+      0.3,
+      0.7
+    ],
+    "tested_scores": [
+      152.23039229839128,
+      149.0691352132473,
+      143.07321575073746
+    ],
+    "best": 0.7,
+    "best_score": 143.07321575073746,
+    "baseline_score": 146.03974338239797
+  },
+  {
+    "solver": "ADAM",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "r",
+    "default": 30,
+    "tested": [
+      12,
+      24,
+      48
+    ],
+    "tested_scores": [
+      1174.1283218043454,
+      1162.918222246486,
+      1270.2416905736159
+    ],
+    "best": 24,
+    "best_score": 1162.918222246486,
+    "baseline_score": 1221.7567207995723
+  },
+  {
+    "solver": "ADAM",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "beta_1",
+    "default": 0.9,
+    "tested": [
+      0.5,
+      0.54,
+      0.9
+    ],
+    "tested_scores": [
+      1221.7567207995723,
+      1221.7567207995723,
+      1221.7567207995723
+    ],
+    "best": 0.5,
+    "best_score": 1221.7567207995723,
+    "baseline_score": 1221.7567207995723
+  },
+  {
+    "solver": "ADAM",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "beta_2",
+    "default": 0.999,
+    "tested": [
+      0.4995,
+      0.999,
+      0.9999
+    ],
+    "tested_scores": [
+      1221.7567207995723,
+      1221.7567207995723,
+      1221.7567207995723
+    ],
+    "best": 0.4995,
+    "best_score": 1221.7567207995723,
+    "baseline_score": 1221.7567207995723
+  },
+  {
+    "solver": "ADAM",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "alpha",
+    "default": 0.5,
+    "tested": [
+      0.1,
+      0.3,
+      0.7
+    ],
+    "tested_scores": [
+      1221.7567207995723,
+      1221.7567207995723,
+      1221.7567207995723
+    ],
+    "best": 0.1,
+    "best_score": 1221.7567207995723,
+    "baseline_score": 1221.7567207995723
+  },
+  {
+    "solver": "ADAM",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "r",
+    "default": 30,
+    "tested": [
+      12,
+      24,
+      48
+    ],
+    "tested_scores": [
+      228.37733355399965,
+      228.37733355399965,
+      5544.042813855738
+    ],
+    "best": 12,
+    "best_score": 228.37733355399965,
+    "baseline_score": 5544.042813855738
+  },
+  {
+    "solver": "ADAM",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "beta_1",
+    "default": 0.9,
+    "tested": [
+      0.5,
+      0.54,
+      0.9
+    ],
+    "tested_scores": [
+      5544.042813855738,
+      5544.042813855738,
+      5544.042813855738
+    ],
+    "best": 0.5,
+    "best_score": 5544.042813855738,
+    "baseline_score": 5544.042813855738
+  },
+  {
+    "solver": "ADAM",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "beta_2",
+    "default": 0.999,
+    "tested": [
+      0.4995,
+      0.999,
+      0.9999
+    ],
+    "tested_scores": [
+      5544.042813855738,
+      5544.042813855738,
+      5544.042813855738
+    ],
+    "best": 0.4995,
+    "best_score": 5544.042813855738,
+    "baseline_score": 5544.042813855738
+  },
+  {
+    "solver": "ADAM",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "alpha",
+    "default": 0.5,
+    "tested": [
+      0.1,
+      0.3,
+      0.7
+    ],
+    "tested_scores": [
+      28964.9228138312,
+      13961.642813885566,
+      1602.042813800006
+    ],
+    "best": 0.7,
+    "best_score": 1602.042813800006,
+    "baseline_score": 5544.042813855738
+  },
+  {
+    "solver": "ADAM",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "r",
+    "default": 30,
+    "tested": [
+      12,
+      24,
+      48
+    ],
+    "tested_scores": [
+      -3.867503135278155,
+      -3.8482287192116136,
+      -3.778988332973284
+    ],
+    "best": 12,
+    "best_score": -3.867503135278155,
+    "baseline_score": -3.822266818051432
+  },
+  {
+    "solver": "ADAM",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "beta_1",
+    "default": 0.9,
+    "tested": [
+      0.5,
+      0.54,
+      0.9
+    ],
+    "tested_scores": [
+      -3.8346934153418277,
+      -3.8342608528115645,
+      -3.822266818051432
+    ],
+    "best": 0.5,
+    "best_score": -3.8346934153418277,
+    "baseline_score": -3.822266818051432
+  },
+  {
+    "solver": "ADAM",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "beta_2",
+    "default": 0.999,
+    "tested": [
+      0.4995,
+      0.999,
+      0.9999
+    ],
+    "tested_scores": [
+      -3.78371470839871,
+      -3.822266818051432,
+      -3.8250109784574966
+    ],
+    "best": 0.9999,
+    "best_score": -3.8250109784574966,
+    "baseline_score": -3.822266818051432
+  },
+  {
+    "solver": "ADAM",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "alpha",
+    "default": 0.5,
+    "tested": [
+      0.1,
+      0.3,
+      0.7
+    ],
+    "tested_scores": [
+      -3.779455881649366,
+      -3.8219565094012866,
+      -3.8233305065886984
+    ],
+    "best": 0.7,
+    "best_score": -3.8233305065886984,
+    "baseline_score": -3.822266818051432
+  },
+  {
+    "solver": "ADAM",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "r",
+    "default": 30,
+    "tested": [
+      12,
+      24,
+      48
+    ],
+    "tested_scores": [
+      -22.384837962958365,
+      -173.40000114367731,
+      -248.60000061969487
+    ],
+    "best": 48,
+    "best_score": -248.60000061969487,
+    "baseline_score": -248.60000061986995
+  },
+  {
+    "solver": "ADAM",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "beta_1",
+    "default": 0.9,
+    "tested": [
+      0.5,
+      0.54,
+      0.9
+    ],
+    "tested_scores": [
+      -248.60000061986995,
+      -248.60000061986995,
+      -248.60000061986995
+    ],
+    "best": 0.5,
+    "best_score": -248.60000061986995,
+    "baseline_score": -248.60000061986995
+  },
+  {
+    "solver": "ADAM",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "beta_2",
+    "default": 0.999,
+    "tested": [
+      0.4995,
+      0.999,
+      0.9999
+    ],
+    "tested_scores": [
+      -248.60000061986995,
+      -248.60000061986995,
+      -248.60000061986995
+    ],
+    "best": 0.4995,
+    "best_score": -248.60000061986995,
+    "baseline_score": -248.60000061986995
+  },
+  {
+    "solver": "ADAM",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "alpha",
+    "default": 0.5,
+    "tested": [
+      0.1,
+      0.3,
+      0.7
+    ],
+    "tested_scores": [
+      -306.50000009408865,
+      -277.6000003140937,
+      -217.60000074116465
+    ],
+    "best": 0.1,
+    "best_score": -306.50000009408865,
+    "baseline_score": -248.60000061986995
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "eta_1",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.05,
+      0.08
+    ],
+    "tested_scores": [
+      150.95966238249818,
+      150.95966238249818,
+      150.95966238249818
+    ],
+    "best": 0.01,
+    "best_score": 150.95966238249818,
+    "baseline_score": 150.95966238249818
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "eta_2",
+    "default": 0.8,
+    "tested": [
+      0.2,
+      0.5,
+      0.8
+    ],
+    "tested_scores": [
+      150.95966238249818,
+      150.95966238249818,
+      150.95966238249818
+    ],
+    "best": 0.2,
+    "best_score": 150.95966238249818,
+    "baseline_score": 150.95966238249818
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "gamma_1",
+    "default": 2.5,
+    "tested": [
+      1.0,
+      2.0,
+      3.5
+    ],
+    "tested_scores": [
+      Infinity,
+      150.95966238249818,
+      150.95966238249818
+    ],
+    "best": 2.0,
+    "best_score": 150.95966238249818,
+    "baseline_score": 150.95966238249818
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "gamma_2",
+    "default": 0.5,
+    "tested": [
+      0.2,
+      0.3,
+      0.7
+    ],
+    "tested_scores": [
+      150.95966238249818,
+      150.95966238249818,
+      150.95966238249818
+    ],
+    "best": 0.2,
+    "best_score": 150.95966238249818,
+    "baseline_score": 150.95966238249818
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "lambda_min",
+    "default": 5,
+    "tested": [
+      4,
+      6,
+      8
+    ],
+    "tested_scores": [
+      150.95966238249818,
+      150.95966238249818,
+      150.95966238249818
+    ],
+    "best": 4,
+    "best_score": 150.95966238249818,
+    "baseline_score": 150.95966238249818
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "ps_sufficient_reduction",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.05,
+      0.1
+    ],
+    "tested_scores": [
+      150.95966238249818,
+      150.95966238249818,
+      150.95966238249818
+    ],
+    "best": 0.01,
+    "best_score": 150.95966238249818,
+    "baseline_score": 150.95966238249818
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "eta_1",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.05,
+      0.08
+    ],
+    "tested_scores": [
+      3294.206685486346,
+      3294.206685486346,
+      3294.206685486346
+    ],
+    "best": 0.01,
+    "best_score": 3294.206685486346,
+    "baseline_score": 3294.206685486346
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "eta_2",
+    "default": 0.8,
+    "tested": [
+      0.2,
+      0.5,
+      0.8
+    ],
+    "tested_scores": [
+      3294.206685486346,
+      3294.206685486346,
+      3294.206685486346
+    ],
+    "best": 0.2,
+    "best_score": 3294.206685486346,
+    "baseline_score": 3294.206685486346
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "gamma_1",
+    "default": 2.5,
+    "tested": [
+      1.0,
+      2.0,
+      3.5
+    ],
+    "tested_scores": [
+      Infinity,
+      3294.206685486346,
+      3294.206685486346
+    ],
+    "best": 2.0,
+    "best_score": 3294.206685486346,
+    "baseline_score": 3294.206685486346
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "gamma_2",
+    "default": 0.5,
+    "tested": [
+      0.2,
+      0.3,
+      0.7
+    ],
+    "tested_scores": [
+      3294.206685486346,
+      3294.206685486346,
+      3294.206685486346
+    ],
+    "best": 0.2,
+    "best_score": 3294.206685486346,
+    "baseline_score": 3294.206685486346
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "lambda_min",
+    "default": 5,
+    "tested": [
+      4,
+      6,
+      8
+    ],
+    "tested_scores": [
+      3294.206685486346,
+      3294.206685486346,
+      3294.206685486346
+    ],
+    "best": 4,
+    "best_score": 3294.206685486346,
+    "baseline_score": 3294.206685486346
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "ps_sufficient_reduction",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.05,
+      0.1
+    ],
+    "tested_scores": [
+      3294.206685486346,
+      3294.206685486346,
+      3294.206685486346
+    ],
+    "best": 0.01,
+    "best_score": 3294.206685486346,
+    "baseline_score": 3294.206685486346
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "eta_1",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.05,
+      0.08
+    ],
+    "tested_scores": [
+      28716.676652254788,
+      28716.676652254788,
+      28716.676652254788
+    ],
+    "best": 0.01,
+    "best_score": 28716.676652254788,
+    "baseline_score": 28716.676652254788
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "eta_2",
+    "default": 0.8,
+    "tested": [
+      0.2,
+      0.5,
+      0.8
+    ],
+    "tested_scores": [
+      28716.676652254788,
+      28716.676652254788,
+      28716.676652254788
+    ],
+    "best": 0.2,
+    "best_score": 28716.676652254788,
+    "baseline_score": 28716.676652254788
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "gamma_1",
+    "default": 2.5,
+    "tested": [
+      1.0,
+      2.0,
+      3.5
+    ],
+    "tested_scores": [
+      Infinity,
+      28716.676652254788,
+      28716.676652254788
+    ],
+    "best": 2.0,
+    "best_score": 28716.676652254788,
+    "baseline_score": 28716.676652254788
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "gamma_2",
+    "default": 0.5,
+    "tested": [
+      0.2,
+      0.3,
+      0.7
+    ],
+    "tested_scores": [
+      28716.676652254788,
+      28716.676652254788,
+      28716.676652254788
+    ],
+    "best": 0.2,
+    "best_score": 28716.676652254788,
+    "baseline_score": 28716.676652254788
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "lambda_min",
+    "default": 5,
+    "tested": [
+      4,
+      6,
+      8
+    ],
+    "tested_scores": [
+      28716.676652254788,
+      28716.676652254788,
+      28716.676652254788
+    ],
+    "best": 4,
+    "best_score": 28716.676652254788,
+    "baseline_score": 28716.676652254788
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "ps_sufficient_reduction",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.05,
+      0.1
+    ],
+    "tested_scores": [
+      28716.676652254788,
+      28716.676652254788,
+      28716.676652254788
+    ],
+    "best": 0.01,
+    "best_score": 28716.676652254788,
+    "baseline_score": 28716.676652254788
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "eta_1",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.05,
+      0.08
+    ],
+    "tested_scores": [
+      -3.8163685485741285,
+      -3.82862281328034,
+      -3.8341949990501245
+    ],
+    "best": 0.08,
+    "best_score": -3.8341949990501245,
+    "baseline_score": -3.8483488137535353
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "eta_2",
+    "default": 0.8,
+    "tested": [
+      0.2,
+      0.5,
+      0.8
+    ],
+    "tested_scores": [
+      -3.8437827413303958,
+      -3.801176243615568,
+      -3.8483488137535353
+    ],
+    "best": 0.8,
+    "best_score": -3.8483488137535353,
+    "baseline_score": -3.8483488137535353
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "gamma_1",
+    "default": 2.5,
+    "tested": [
+      1.0,
+      2.0,
+      3.5
+    ],
+    "tested_scores": [
+      Infinity,
+      -3.7769487252287464,
+      -3.802971628417543
+    ],
+    "best": 3.5,
+    "best_score": -3.802971628417543,
+    "baseline_score": -3.8483488137535353
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "gamma_2",
+    "default": 0.5,
+    "tested": [
+      0.2,
+      0.3,
+      0.7
+    ],
+    "tested_scores": [
+      -3.869575942034704,
+      -3.8313653228431805,
+      -3.8145400026595264
+    ],
+    "best": 0.2,
+    "best_score": -3.869575942034704,
+    "baseline_score": -3.8483488137535353
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "lambda_min",
+    "default": 5,
+    "tested": [
+      4,
+      6,
+      8
+    ],
+    "tested_scores": [
+      -3.8229464755423797,
+      -3.790960504133571,
+      -3.8464119095281997
+    ],
+    "best": 8,
+    "best_score": -3.8464119095281997,
+    "baseline_score": -3.8483488137535353
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "ps_sufficient_reduction",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.05,
+      0.1
+    ],
+    "tested_scores": [
+      -3.845300780062675,
+      -3.845164548255377,
+      -3.8483488137535353
+    ],
+    "best": 0.1,
+    "best_score": -3.8483488137535353,
+    "baseline_score": -3.8483488137535353
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "eta_1",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.05,
+      0.08
+    ],
+    "tested_scores": [
+      -305.8771282218682,
+      -305.8771282218682,
+      -305.8771282218682
+    ],
+    "best": 0.01,
+    "best_score": -305.8771282218682,
+    "baseline_score": -305.8771282218682
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "eta_2",
+    "default": 0.8,
+    "tested": [
+      0.2,
+      0.5,
+      0.8
+    ],
+    "tested_scores": [
+      -305.8771282218682,
+      -305.8771282218682,
+      -305.8771282218682
+    ],
+    "best": 0.2,
+    "best_score": -305.8771282218682,
+    "baseline_score": -305.8771282218682
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "gamma_1",
+    "default": 2.5,
+    "tested": [
+      1.0,
+      2.0,
+      3.5
+    ],
+    "tested_scores": [
+      Infinity,
+      -305.8771282218682,
+      -305.8771282218682
+    ],
+    "best": 2.0,
+    "best_score": -305.8771282218682,
+    "baseline_score": -305.8771282218682
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "gamma_2",
+    "default": 0.5,
+    "tested": [
+      0.2,
+      0.3,
+      0.7
+    ],
+    "tested_scores": [
+      -305.8771282218682,
+      -305.8771282218682,
+      -305.8771282218682
+    ],
+    "best": 0.2,
+    "best_score": -305.8771282218682,
+    "baseline_score": -305.8771282218682
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "lambda_min",
+    "default": 5,
+    "tested": [
+      4,
+      6,
+      8
+    ],
+    "tested_scores": [
+      -305.8771282218682,
+      -305.8771282218682,
+      -305.8771282218682
+    ],
+    "best": 4,
+    "best_score": -305.8771282218682,
+    "baseline_score": -305.8771282218682
+  },
+  {
+    "solver": "ASTRODF",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "ps_sufficient_reduction",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.05,
+      0.1
+    ],
+    "tested_scores": [
+      -305.8771282218682,
+      -305.8771282218682,
+      -305.8771282218682
+    ],
+    "best": 0.01,
+    "best_score": -305.8771282218682,
+    "baseline_score": -305.8771282218682
+  },
+  {
+    "solver": "NELDMD",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "r",
+    "default": 30,
+    "tested": [
+      12,
+      24,
+      48
+    ],
+    "tested_scores": [
+      83.9768369692374,
+      87.09146990941375,
+      100.66188010864333
+    ],
+    "best": 12,
+    "best_score": 83.9768369692374,
+    "baseline_score": 100.66188010864333
+  },
+  {
+    "solver": "NELDMD",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "r",
+    "default": 30,
+    "tested": [
+      12,
+      24,
+      48
+    ],
+    "tested_scores": [
+      2810.2365854618565,
+      3294.206685486346,
+      3294.206685486346
+    ],
+    "best": 12,
+    "best_score": 2810.2365854618565,
+    "baseline_score": 3294.206685486346
+  },
+  {
+    "solver": "NELDMD",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "r",
+    "default": 30,
+    "tested": [
+      12,
+      24,
+      48
+    ],
+    "tested_scores": [
+      39699.54281375205,
+      39699.54281375205,
+      39699.54281375205
+    ],
+    "best": 12,
+    "best_score": 39699.54281375205,
+    "baseline_score": 39699.54281375205
+  },
+  {
+    "solver": "NELDMD",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "r",
+    "default": 30,
+    "tested": [
+      12,
+      24,
+      48
+    ],
+    "tested_scores": [
+      -3.871944872279867,
+      -3.840778392730699,
+      -3.7876601806460197
+    ],
+    "best": 12,
+    "best_score": -3.871944872279867,
+    "baseline_score": -3.8274635401706303
+  },
+  {
+    "solver": "NELDMD",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "r",
+    "default": 30,
+    "tested": [
+      12,
+      24,
+      48
+    ],
+    "tested_scores": [
+      -246.1426021702063,
+      -321.3443511178346,
+      -324.0
+    ],
+    "best": 48,
+    "best_score": -324.0,
+    "baseline_score": -324.0
+  },
+  {
+    "solver": "RNDSRCH",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "sample_size",
+    "default": 10,
+    "tested": [
+      4,
+      8,
+      16
+    ],
+    "tested_scores": [
+      156.12048275990924,
+      153.82075409650128,
+      153.82075409650128
+    ],
+    "best": 8,
+    "best_score": 153.82075409650128,
+    "baseline_score": 153.82075409650128
+  },
+  {
+    "solver": "RNDSRCH",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "sample_size",
+    "default": 10,
+    "tested": [
+      4,
+      8,
+      16
+    ],
+    "tested_scores": [
+      2286.9804952519744,
+      2271.0279806478397,
+      2339.350813183683
+    ],
+    "best": 8,
+    "best_score": 2271.0279806478397,
+    "baseline_score": 2363.972828247244
+  },
+  {
+    "solver": "RNDSRCH",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "sample_size",
+    "default": 10,
+    "tested": [
+      4,
+      8,
+      16
+    ],
+    "tested_scores": [
+      13457.557635604244,
+      15633.203750374401,
+      16620.753073751952
+    ],
+    "best": 4,
+    "best_score": 13457.557635604244,
+    "baseline_score": 16538.535264248305
+  },
+  {
+    "solver": "RNDSRCH",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "sample_size",
+    "default": 10,
+    "tested": [
+      4,
+      8,
+      16
+    ],
+    "tested_scores": [
+      -3.9740354981173556,
+      -3.8796535831252026,
+      -3.9306718361415593
+    ],
+    "best": 4,
+    "best_score": -3.9740354981173556,
+    "baseline_score": -3.9449022176035555
+  },
+  {
+    "solver": "RNDSRCH",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "sample_size",
+    "default": 10,
+    "tested": [
+      4,
+      8,
+      16
+    ],
+    "tested_scores": [
+      -324.0,
+      -324.0,
+      -324.0
+    ],
+    "best": 4,
+    "best_score": -324.0,
+    "baseline_score": -324.0
+  },
+  {
+    "solver": "STRONG",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "n0",
+    "default": 10,
+    "tested": [
+      4,
+      6,
+      8
+    ],
+    "tested_scores": [
+      138.36873650524458,
+      138.36873650524458,
+      134.77778577195946
+    ],
+    "best": 8,
+    "best_score": 134.77778577195946,
+    "baseline_score": 134.77778577195946
+  },
+  {
+    "solver": "STRONG",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "n_r",
+    "default": 10,
+    "tested": [
+      4,
+      6,
+      8
+    ],
+    "tested_scores": [
+      123.38943762994712,
+      130.38138333389696,
+      134.36281035669703
+    ],
+    "best": 4,
+    "best_score": 123.38943762994712,
+    "baseline_score": 134.77778577195946
+  },
+  {
+    "solver": "STRONG",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "eta_0",
+    "default": 0.01,
+    "tested": [
+      0.001,
+      0.005,
+      0.01
+    ],
+    "tested_scores": [
+      134.77778577195946,
+      134.77778577195946,
+      134.77778577195946
+    ],
+    "best": 0.001,
+    "best_score": 134.77778577195946,
+    "baseline_score": 134.77778577195946
+  },
+  {
+    "solver": "STRONG",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "eta_1",
+    "default": 0.3,
+    "tested": [
+      0.05,
+      0.15,
+      0.3
+    ],
+    "tested_scores": [
+      134.77778577195946,
+      134.77778577195946,
+      134.77778577195946
+    ],
+    "best": 0.05,
+    "best_score": 134.77778577195946,
+    "baseline_score": 134.77778577195946
+  },
+  {
+    "solver": "STRONG",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "gamma_1",
+    "default": 0.9,
+    "tested": [
+      0.3,
+      0.45,
+      0.6
+    ],
+    "tested_scores": [
+      135.78366464650207,
+      135.78366464650207,
+      134.77778577195946
+    ],
+    "best": 0.6,
+    "best_score": 134.77778577195946,
+    "baseline_score": 134.77778577195946
+  },
+  {
+    "solver": "STRONG",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "gamma_2",
+    "default": 1.11,
+    "tested": [
+      1.1,
+      1.33,
+      1.5
+    ],
+    "tested_scores": [
+      134.77778577195946,
+      134.77778577195946,
+      134.77778577195946
+    ],
+    "best": 1.1,
+    "best_score": 134.77778577195946,
+    "baseline_score": 134.77778577195946
+  },
+  {
+    "solver": "STRONG",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "lambda_2",
+    "default": 1.01,
+    "tested": [
+      1.0,
+      1.414,
+      2.0
+    ],
+    "tested_scores": [
+      Infinity,
+      141.65064472088883,
+      145.67433879133074
+    ],
+    "best": 1.414,
+    "best_score": 141.65064472088883,
+    "baseline_score": 134.77778577195946
+  },
+  {
+    "solver": "STRONG",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "n0",
+    "default": 10,
+    "tested": [
+      4,
+      6,
+      8
+    ],
+    "tested_scores": [
+      2362.030469964967,
+      2362.030469964967,
+      2362.030469964967
+    ],
+    "best": 4,
+    "best_score": 2362.030469964967,
+    "baseline_score": 2362.030469964967
+  },
+  {
+    "solver": "STRONG",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "n_r",
+    "default": 10,
+    "tested": [
+      4,
+      6,
+      8
+    ],
+    "tested_scores": [
+      2453.214233414604,
+      2417.88074520625,
+      2341.732674093656
+    ],
+    "best": 8,
+    "best_score": 2341.732674093656,
+    "baseline_score": 2362.030469964967
+  },
+  {
+    "solver": "STRONG",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "eta_0",
+    "default": 0.01,
+    "tested": [
+      0.001,
+      0.005,
+      0.01
+    ],
+    "tested_scores": [
+      2362.030469964967,
+      2362.030469964967,
+      2362.030469964967
+    ],
+    "best": 0.001,
+    "best_score": 2362.030469964967,
+    "baseline_score": 2362.030469964967
+  },
+  {
+    "solver": "STRONG",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "eta_1",
+    "default": 0.3,
+    "tested": [
+      0.05,
+      0.15,
+      0.3
+    ],
+    "tested_scores": [
+      2362.030469964967,
+      2362.030469964967,
+      2362.030469964967
+    ],
+    "best": 0.05,
+    "best_score": 2362.030469964967,
+    "baseline_score": 2362.030469964967
+  },
+  {
+    "solver": "STRONG",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "gamma_1",
+    "default": 0.9,
+    "tested": [
+      0.3,
+      0.45,
+      0.6
+    ],
+    "tested_scores": [
+      2362.030469964967,
+      2362.030469964967,
+      2362.030469964967
+    ],
+    "best": 0.3,
+    "best_score": 2362.030469964967,
+    "baseline_score": 2362.030469964967
+  },
+  {
+    "solver": "STRONG",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "gamma_2",
+    "default": 1.11,
+    "tested": [
+      1.1,
+      1.33,
+      1.5
+    ],
+    "tested_scores": [
+      2362.030469964967,
+      2362.030469964967,
+      2362.030469964967
+    ],
+    "best": 1.1,
+    "best_score": 2362.030469964967,
+    "baseline_score": 2362.030469964967
+  },
+  {
+    "solver": "STRONG",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "lambda_2",
+    "default": 1.01,
+    "tested": [
+      1.0,
+      1.414,
+      2.0
+    ],
+    "tested_scores": [
+      Infinity,
+      2362.030469964967,
+      2362.030469964967
+    ],
+    "best": 1.414,
+    "best_score": 2362.030469964967,
+    "baseline_score": 2362.030469964967
+  },
+  {
+    "solver": "STRONG",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "n0",
+    "default": 10,
+    "tested": [
+      4,
+      6,
+      8
+    ],
+    "tested_scores": [
+      561.133355951421,
+      561.133355951421,
+      561.133355951421
+    ],
+    "best": 4,
+    "best_score": 561.133355951421,
+    "baseline_score": 561.133355951421
+  },
+  {
+    "solver": "STRONG",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "n_r",
+    "default": 10,
+    "tested": [
+      4,
+      6,
+      8
+    ],
+    "tested_scores": [
+      79.92003780745507,
+      79.92003780745507,
+      561.133355951421
+    ],
+    "best": 4,
+    "best_score": 79.92003780745507,
+    "baseline_score": 561.133355951421
+  },
+  {
+    "solver": "STRONG",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "eta_0",
+    "default": 0.01,
+    "tested": [
+      0.001,
+      0.005,
+      0.01
+    ],
+    "tested_scores": [
+      561.133355951421,
+      561.133355951421,
+      561.133355951421
+    ],
+    "best": 0.001,
+    "best_score": 561.133355951421,
+    "baseline_score": 561.133355951421
+  },
+  {
+    "solver": "STRONG",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "eta_1",
+    "default": 0.3,
+    "tested": [
+      0.05,
+      0.15,
+      0.3
+    ],
+    "tested_scores": [
+      561.133355951421,
+      561.133355951421,
+      561.133355951421
+    ],
+    "best": 0.05,
+    "best_score": 561.133355951421,
+    "baseline_score": 561.133355951421
+  },
+  {
+    "solver": "STRONG",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "gamma_1",
+    "default": 0.9,
+    "tested": [
+      0.3,
+      0.45,
+      0.6
+    ],
+    "tested_scores": [
+      561.133355951421,
+      561.133355951421,
+      561.133355951421
+    ],
+    "best": 0.3,
+    "best_score": 561.133355951421,
+    "baseline_score": 561.133355951421
+  },
+  {
+    "solver": "STRONG",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "gamma_2",
+    "default": 1.11,
+    "tested": [
+      1.1,
+      1.33,
+      1.5
+    ],
+    "tested_scores": [
+      561.133355951421,
+      561.133355951421,
+      561.133355951421
+    ],
+    "best": 1.1,
+    "best_score": 561.133355951421,
+    "baseline_score": 561.133355951421
+  },
+  {
+    "solver": "STRONG",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "lambda_2",
+    "default": 1.01,
+    "tested": [
+      1.0,
+      1.414,
+      2.0
+    ],
+    "tested_scores": [
+      Infinity,
+      3020.2609851422235,
+      9005.847048241581
+    ],
+    "best": 1.414,
+    "best_score": 3020.2609851422235,
+    "baseline_score": 561.133355951421
+  },
+  {
+    "solver": "STRONG",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "n0",
+    "default": 10,
+    "tested": [
+      4,
+      6,
+      8
+    ],
+    "tested_scores": [
+      -3.9207653572272942,
+      -3.9207653572272942,
+      -3.915895033955804
+    ],
+    "best": 4,
+    "best_score": -3.9207653572272942,
+    "baseline_score": -3.915895033955804
+  },
+  {
+    "solver": "STRONG",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "n_r",
+    "default": 10,
+    "tested": [
+      4,
+      6,
+      8
+    ],
+    "tested_scores": [
+      -3.9536253705560056,
+      -4.016509404154438,
+      -3.9294550912541055
+    ],
+    "best": 6,
+    "best_score": -4.016509404154438,
+    "baseline_score": -3.915895033955804
+  },
+  {
+    "solver": "STRONG",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "eta_0",
+    "default": 0.01,
+    "tested": [
+      0.001,
+      0.005,
+      0.01
+    ],
+    "tested_scores": [
+      -3.915895033955804,
+      -3.915895033955804,
+      -3.915895033955804
+    ],
+    "best": 0.001,
+    "best_score": -3.915895033955804,
+    "baseline_score": -3.915895033955804
+  },
+  {
+    "solver": "STRONG",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "eta_1",
+    "default": 0.3,
+    "tested": [
+      0.05,
+      0.15,
+      0.3
+    ],
+    "tested_scores": [
+      -3.891558350050273,
+      -3.894612042728327,
+      -3.915895033955804
+    ],
+    "best": 0.3,
+    "best_score": -3.915895033955804,
+    "baseline_score": -3.915895033955804
+  },
+  {
+    "solver": "STRONG",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "gamma_1",
+    "default": 0.9,
+    "tested": [
+      0.3,
+      0.45,
+      0.6
+    ],
+    "tested_scores": [
+      -3.879001138388909,
+      -3.879001138388909,
+      -3.879385603598876
+    ],
+    "best": 0.6,
+    "best_score": -3.879385603598876,
+    "baseline_score": -3.915895033955804
+  },
+  {
+    "solver": "STRONG",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "gamma_2",
+    "default": 1.11,
+    "tested": [
+      1.1,
+      1.33,
+      1.5
+    ],
+    "tested_scores": [
+      -3.915895033955804,
+      -3.886345507222995,
+      -3.894431091476566
+    ],
+    "best": 1.1,
+    "best_score": -3.915895033955804,
+    "baseline_score": -3.915895033955804
+  },
+  {
+    "solver": "STRONG",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "lambda_2",
+    "default": 1.01,
+    "tested": [
+      1.0,
+      1.414,
+      2.0
+    ],
+    "tested_scores": [
+      Infinity,
+      -3.924887263657386,
+      -3.929053268570848
+    ],
+    "best": 2.0,
+    "best_score": -3.929053268570848,
+    "baseline_score": -3.915895033955804
+  },
+  {
+    "solver": "STRONG",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "n0",
+    "default": 10,
+    "tested": [
+      4,
+      6,
+      8
+    ],
+    "tested_scores": [
+      -196.00760399971182,
+      -196.00760399971182,
+      -196.00760399971182
+    ],
+    "best": 4,
+    "best_score": -196.00760399971182,
+    "baseline_score": -196.00760399971182
+  },
+  {
+    "solver": "STRONG",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "n_r",
+    "default": 10,
+    "tested": [
+      4,
+      6,
+      8
+    ],
+    "tested_scores": [
+      -101.18299489161167,
+      -164.15512159328787,
+      -195.9994053443107
+    ],
+    "best": 8,
+    "best_score": -195.9994053443107,
+    "baseline_score": -196.00760399971182
+  },
+  {
+    "solver": "STRONG",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "eta_0",
+    "default": 0.01,
+    "tested": [
+      0.001,
+      0.005,
+      0.01
+    ],
+    "tested_scores": [
+      -196.00760399971182,
+      -196.00760399971182,
+      -196.00760399971182
+    ],
+    "best": 0.001,
+    "best_score": -196.00760399971182,
+    "baseline_score": -196.00760399971182
+  },
+  {
+    "solver": "STRONG",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "eta_1",
+    "default": 0.3,
+    "tested": [
+      0.05,
+      0.15,
+      0.3
+    ],
+    "tested_scores": [
+      -196.00760399971182,
+      -196.00760399971182,
+      -196.00760399971182
+    ],
+    "best": 0.05,
+    "best_score": -196.00760399971182,
+    "baseline_score": -196.00760399971182
+  },
+  {
+    "solver": "STRONG",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "gamma_1",
+    "default": 0.9,
+    "tested": [
+      0.3,
+      0.45,
+      0.6
+    ],
+    "tested_scores": [
+      -196.00760399971182,
+      -196.00760399971182,
+      -196.00760399971182
+    ],
+    "best": 0.3,
+    "best_score": -196.00760399971182,
+    "baseline_score": -196.00760399971182
+  },
+  {
+    "solver": "STRONG",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "gamma_2",
+    "default": 1.11,
+    "tested": [
+      1.1,
+      1.33,
+      1.5
+    ],
+    "tested_scores": [
+      -196.00760399971182,
+      -196.00760399971182,
+      -196.00760399971182
+    ],
+    "best": 1.1,
+    "best_score": -196.00760399971182,
+    "baseline_score": -196.00760399971182
+  },
+  {
+    "solver": "STRONG",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "lambda_2",
+    "default": 1.01,
+    "tested": [
+      1.0,
+      1.414,
+      2.0
+    ],
+    "tested_scores": [
+      Infinity,
+      -228.68205979130718,
+      -260.45313385843633
+    ],
+    "best": 2.0,
+    "best_score": -260.45313385843633,
+    "baseline_score": -196.00760399971182
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "eta_1",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.03,
+      0.05
+    ],
+    "tested_scores": [
+      148.21965594515987,
+      148.21965594515987,
+      148.21965594515987
+    ],
+    "best": 0.01,
+    "best_score": 148.21965594515987,
+    "baseline_score": 148.21965594515987
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "eta_2",
+    "default": 0.8,
+    "tested": [
+      0.2,
+      0.5,
+      0.8
+    ],
+    "tested_scores": [
+      148.21965594515987,
+      148.21965594515987,
+      148.21965594515987
+    ],
+    "best": 0.2,
+    "best_score": 148.21965594515987,
+    "baseline_score": 148.21965594515987
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "gamma_1",
+    "default": 2.5,
+    "tested": [
+      2.0,
+      2.5,
+      3.5
+    ],
+    "tested_scores": [
+      148.21965594515987,
+      148.21965594515987,
+      148.21965594515987
+    ],
+    "best": 2.0,
+    "best_score": 148.21965594515987,
+    "baseline_score": 148.21965594515987
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "gamma_2",
+    "default": 1.2,
+    "tested": [
+      1.2,
+      1.5,
+      2.0
+    ],
+    "tested_scores": [
+      148.21965594515987,
+      151.25512766290737,
+      144.61928130536552
+    ],
+    "best": 2.0,
+    "best_score": 144.61928130536552,
+    "baseline_score": 148.21965594515987
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "gamma_3",
+    "default": 0.5,
+    "tested": [
+      0.3,
+      0.5,
+      0.8
+    ],
+    "tested_scores": [
+      148.61843434613982,
+      148.21965594515987,
+      150.27100350231964
+    ],
+    "best": 0.5,
+    "best_score": 148.21965594515987,
+    "baseline_score": 148.21965594515987
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "lambda_min",
+    "default": 5,
+    "tested": [
+      4,
+      6,
+      10
+    ],
+    "tested_scores": [
+      150.67865642148413,
+      134.49086732720463,
+      140.736135037854
+    ],
+    "best": 6,
+    "best_score": 134.49086732720463,
+    "baseline_score": 148.21965594515987
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "subproblem_regularisation",
+    "default": 0.15,
+    "tested": [
+      0.075,
+      0.15,
+      0.3
+    ],
+    "tested_scores": [
+      147.71273300267913,
+      148.21965594515987,
+      145.47012883519966
+    ],
+    "best": 0.3,
+    "best_score": 145.47012883519966,
+    "baseline_score": 148.21965594515987
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "SAN-1",
+    "dim": 100,
+    "factor": "ps_sufficient_reduction",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.02,
+      0.05
+    ],
+    "tested_scores": [
+      120.90273352778439,
+      145.10230629232487,
+      147.59401389840815
+    ],
+    "best": 0.01,
+    "best_score": 120.90273352778439,
+    "baseline_score": 148.21965594515987
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "eta_1",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.03,
+      0.05
+    ],
+    "tested_scores": [
+      3086.6458207100745,
+      3086.6458207100745,
+      3086.6458207100745
+    ],
+    "best": 0.01,
+    "best_score": 3086.6458207100745,
+    "baseline_score": 3086.6458207100745
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "eta_2",
+    "default": 0.8,
+    "tested": [
+      0.2,
+      0.5,
+      0.8
+    ],
+    "tested_scores": [
+      3086.6458207100745,
+      3086.6458207100745,
+      3086.6458207100745
+    ],
+    "best": 0.2,
+    "best_score": 3086.6458207100745,
+    "baseline_score": 3086.6458207100745
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "gamma_1",
+    "default": 2.5,
+    "tested": [
+      2.0,
+      2.5,
+      3.5
+    ],
+    "tested_scores": [
+      3086.6458207100745,
+      3086.6458207100745,
+      3086.6458207100745
+    ],
+    "best": 2.0,
+    "best_score": 3086.6458207100745,
+    "baseline_score": 3086.6458207100745
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "gamma_2",
+    "default": 1.2,
+    "tested": [
+      1.2,
+      1.5,
+      2.0
+    ],
+    "tested_scores": [
+      3086.6458207100745,
+      3087.211085933629,
+      3090.7495982686887
+    ],
+    "best": 1.2,
+    "best_score": 3086.6458207100745,
+    "baseline_score": 3086.6458207100745
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "gamma_3",
+    "default": 0.5,
+    "tested": [
+      0.3,
+      0.5,
+      0.8
+    ],
+    "tested_scores": [
+      3005.3044904470603,
+      3086.6458207100745,
+      2927.6386731503917
+    ],
+    "best": 0.8,
+    "best_score": 2927.6386731503917,
+    "baseline_score": 3086.6458207100745
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "lambda_min",
+    "default": 5,
+    "tested": [
+      4,
+      6,
+      10
+    ],
+    "tested_scores": [
+      2999.76688600429,
+      2982.053198733912,
+      2940.665492870047
+    ],
+    "best": 10,
+    "best_score": 2940.665492870047,
+    "baseline_score": 3086.6458207100745
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "subproblem_regularisation",
+    "default": 0.15,
+    "tested": [
+      0.075,
+      0.15,
+      0.3
+    ],
+    "tested_scores": [
+      2914.837187071605,
+      3086.6458207100745,
+      3063.4741361137617
+    ],
+    "best": 0.075,
+    "best_score": 2914.837187071605,
+    "baseline_score": 3086.6458207100745
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "NETWORK-1",
+    "dim": 100,
+    "factor": "ps_sufficient_reduction",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.02,
+      0.05
+    ],
+    "tested_scores": [
+      3086.6458207100745,
+      3086.6458207100745,
+      3086.6458207100745
+    ],
+    "best": 0.01,
+    "best_score": 3086.6458207100745,
+    "baseline_score": 3086.6458207100745
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "eta_1",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.03,
+      0.05
+    ],
+    "tested_scores": [
+      20.79023966285363,
+      20.79023966285363,
+      20.79023966285363
+    ],
+    "best": 0.01,
+    "best_score": 20.79023966285363,
+    "baseline_score": 20.79023966285363
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "eta_2",
+    "default": 0.8,
+    "tested": [
+      0.2,
+      0.5,
+      0.8
+    ],
+    "tested_scores": [
+      26.79215811580972,
+      20.79023966285363,
+      20.79023966285363
+    ],
+    "best": 0.5,
+    "best_score": 20.79023966285363,
+    "baseline_score": 20.79023966285363
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "gamma_1",
+    "default": 2.5,
+    "tested": [
+      2.0,
+      2.5,
+      3.5
+    ],
+    "tested_scores": [
+      43.539912275542335,
+      20.79023966285363,
+      30.117374483450188
+    ],
+    "best": 2.5,
+    "best_score": 20.79023966285363,
+    "baseline_score": 20.79023966285363
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "gamma_2",
+    "default": 1.2,
+    "tested": [
+      1.2,
+      1.5,
+      2.0
+    ],
+    "tested_scores": [
+      20.79023966285363,
+      19.16932014755635,
+      45.324481950341344
+    ],
+    "best": 1.5,
+    "best_score": 19.16932014755635,
+    "baseline_score": 20.79023966285363
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "gamma_3",
+    "default": 0.5,
+    "tested": [
+      0.3,
+      0.5,
+      0.8
+    ],
+    "tested_scores": [
+      47.48300300956447,
+      20.79023966285363,
+      36.098527436394306
+    ],
+    "best": 0.5,
+    "best_score": 20.79023966285363,
+    "baseline_score": 20.79023966285363
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "lambda_min",
+    "default": 5,
+    "tested": [
+      4,
+      6,
+      10
+    ],
+    "tested_scores": [
+      30.233424953670752,
+      4.493001014107285,
+      17.479901148529976
+    ],
+    "best": 6,
+    "best_score": 4.493001014107285,
+    "baseline_score": 20.79023966285363
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "subproblem_regularisation",
+    "default": 0.15,
+    "tested": [
+      0.075,
+      0.15,
+      0.3
+    ],
+    "tested_scores": [
+      20.754837052310165,
+      20.79023966285363,
+      33.743320898216425
+    ],
+    "best": 0.075,
+    "best_score": 20.754837052310165,
+    "baseline_score": 20.79023966285363
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "ROSENBROCK-1",
+    "dim": 100,
+    "factor": "ps_sufficient_reduction",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.02,
+      0.05
+    ],
+    "tested_scores": [
+      20.79023966285363,
+      20.79023966285363,
+      20.79023966285363
+    ],
+    "best": 0.01,
+    "best_score": 20.79023966285363,
+    "baseline_score": 20.79023966285363
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "eta_1",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.03,
+      0.05
+    ],
+    "tested_scores": [
+      -6.962248726111159,
+      -6.962248726111159,
+      -6.962248726111159
+    ],
+    "best": 0.01,
+    "best_score": -6.962248726111159,
+    "baseline_score": -6.962248726111159
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "eta_2",
+    "default": 0.8,
+    "tested": [
+      0.2,
+      0.5,
+      0.8
+    ],
+    "tested_scores": [
+      -6.962248726111159,
+      -6.962248726111159,
+      -6.962248726111159
+    ],
+    "best": 0.2,
+    "best_score": -6.962248726111159,
+    "baseline_score": -6.962248726111159
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "gamma_1",
+    "default": 2.5,
+    "tested": [
+      2.0,
+      2.5,
+      3.5
+    ],
+    "tested_scores": [
+      -6.962248726111159,
+      -6.962248726111159,
+      -6.962248726111159
+    ],
+    "best": 2.0,
+    "best_score": -6.962248726111159,
+    "baseline_score": -6.962248726111159
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "gamma_2",
+    "default": 1.2,
+    "tested": [
+      1.2,
+      1.5,
+      2.0
+    ],
+    "tested_scores": [
+      -6.962248726111159,
+      -6.962248726111159,
+      -6.962248726111159
+    ],
+    "best": 1.2,
+    "best_score": -6.962248726111159,
+    "baseline_score": -6.962248726111159
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "gamma_3",
+    "default": 0.5,
+    "tested": [
+      0.3,
+      0.5,
+      0.8
+    ],
+    "tested_scores": [
+      -6.962248726111159,
+      -6.962248726111159,
+      -6.962248726111159
+    ],
+    "best": 0.3,
+    "best_score": -6.962248726111159,
+    "baseline_score": -6.962248726111159
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "lambda_min",
+    "default": 5,
+    "tested": [
+      4,
+      6,
+      10
+    ],
+    "tested_scores": [
+      -6.962248726111159,
+      -6.962248726111159,
+      -6.962248726111159
+    ],
+    "best": 4,
+    "best_score": -6.962248726111159,
+    "baseline_score": -6.962248726111159
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "subproblem_regularisation",
+    "default": 0.15,
+    "tested": [
+      0.075,
+      0.15,
+      0.3
+    ],
+    "tested_scores": [
+      -6.962248726111159,
+      -6.962248726111159,
+      -6.962248726111159
+    ],
+    "best": 0.075,
+    "best_score": -6.962248726111159,
+    "baseline_score": -6.962248726111159
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "PARAMESTI-1",
+    "dim": 100,
+    "factor": "ps_sufficient_reduction",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.02,
+      0.05
+    ],
+    "tested_scores": [
+      -6.962248726111159,
+      -6.962248726111159,
+      -6.962248726111159
+    ],
+    "best": 0.01,
+    "best_score": -6.962248726111159,
+    "baseline_score": -6.962248726111159
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "eta_1",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.03,
+      0.05
+    ],
+    "tested_scores": [
+      133.34500293696163,
+      133.3528249992717,
+      133.3528249992717
+    ],
+    "best": 0.01,
+    "best_score": 133.34500293696163,
+    "baseline_score": 133.31622723631986
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "eta_2",
+    "default": 0.8,
+    "tested": [
+      0.2,
+      0.5,
+      0.8
+    ],
+    "tested_scores": [
+      132.91782022981698,
+      133.3406646771452,
+      133.31622723631986
+    ],
+    "best": 0.2,
+    "best_score": 132.91782022981698,
+    "baseline_score": 133.31622723631986
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "gamma_1",
+    "default": 2.5,
+    "tested": [
+      2.0,
+      2.5,
+      3.5
+    ],
+    "tested_scores": [
+      133.2829673668951,
+      133.31622723631986,
+      133.26278500668082
+    ],
+    "best": 3.5,
+    "best_score": 133.26278500668082,
+    "baseline_score": 133.31622723631986
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "gamma_2",
+    "default": 1.2,
+    "tested": [
+      1.2,
+      1.5,
+      2.0
+    ],
+    "tested_scores": [
+      133.31622723631986,
+      133.4043897677643,
+      133.2755088162089
+    ],
+    "best": 2.0,
+    "best_score": 133.2755088162089,
+    "baseline_score": 133.31622723631986
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "gamma_3",
+    "default": 0.5,
+    "tested": [
+      0.3,
+      0.5,
+      0.8
+    ],
+    "tested_scores": [
+      133.43171360411992,
+      133.31622723631986,
+      133.39711019075668
+    ],
+    "best": 0.5,
+    "best_score": 133.31622723631986,
+    "baseline_score": 133.31622723631986
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "lambda_min",
+    "default": 5,
+    "tested": [
+      4,
+      6,
+      10
+    ],
+    "tested_scores": [
+      133.4548208000794,
+      133.35151133913365,
+      133.2457833877004
+    ],
+    "best": 10,
+    "best_score": 133.2457833877004,
+    "baseline_score": 133.31622723631986
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "subproblem_regularisation",
+    "default": 0.15,
+    "tested": [
+      0.075,
+      0.15,
+      0.3
+    ],
+    "tested_scores": [
+      133.35873805154722,
+      133.31622723631986,
+      133.30784776282692
+    ],
+    "best": 0.3,
+    "best_score": 133.30784776282692,
+    "baseline_score": 133.31622723631986
+  },
+  {
+    "solver": "ASTROMORF",
+    "problem": "DYNAMNEWS-1",
+    "dim": 100,
+    "factor": "ps_sufficient_reduction",
+    "default": 0.1,
+    "tested": [
+      0.01,
+      0.02,
+      0.05
+    ],
+    "tested_scores": [
+      133.22950969391437,
+      133.32504825789258,
+      133.32438059082938
+    ],
+    "best": 0.01,
+    "best_score": 133.22950969391437,
+    "baseline_score": 133.31622723631986
+  }
+]

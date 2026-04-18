@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # noqa: D100, N999
 
 import warnings
 
@@ -9,14 +9,14 @@ warnings.filterwarnings("ignore")
 # from simopt.solvers.active_subspaces.polyridge import *
 # from simopt.solvers.active_subspaces.subspace import *
 # from simopt.solvers.active_subspaces.index_set import IndexSet
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING  # noqa: E402
 
-import numpy as np
-from numpy.linalg import norm, qr
-from scipy.optimize import linprog, minimize
-from scipy.special import factorial
+import numpy as np  # noqa: E402
+from numpy.linalg import norm, qr  # noqa: E402
+from scipy.optimize import linprog, minimize  # noqa: E402
+from scipy.special import factorial  # noqa: E402
 
-from simopt.base import Problem
+from simopt.base import Problem  # noqa: E402
 
 if TYPE_CHECKING:
     from simopt.solvers.TrustRegion.TrustRegion import TrustRegionBase
@@ -24,24 +24,28 @@ if TYPE_CHECKING:
 __all__ = ["AstroDFGeometry", "OMoRFGeometry", "TrustRegionGeometry"]
 
 
-class TrustRegionGeometry:
-    def __init__(self, problem: Problem):
+class TrustRegionGeometry:  # noqa: D101
+    def __init__(self, problem: Problem) -> None:  # noqa: D107
         self.problem = problem
 
     def standard_basis(self, index: int) -> list[float]:
-        """Creates a standard basis vector e_i in the space of dimension equal to the problem dimension. Where i is at the index of the index parameter
+        """Creates a standard basis vector e_i in the space of dimension equal to the.
+
+        problem dimension. Where i is at the index of the index parameter.
+
         Args:
-                index (int): the location of the value 1 in the standard basis vector
+                index (int): the location of the value 1 in the standard basis vector.
 
         Returns:
-                np.array: a standard basis vector of the form (0,0,...,0,1,0,...,0), where the 1 is in the location of index
+                np.array: a standard basis vector of the form (0,0,...,0,1,0,...,0),
+                where the 1 is in the location of index
         """
         arr = np.zeros(self.problem.dim)
         arr[index] = 1.0
         return arr
 
-    def interpolation_points(self, x_k: np.ndarray, delta: float) -> list[np.ndarray]:
-        """Constructs an interpolation set of
+    def interpolation_points(self, x_k: np.ndarray, delta: float) -> list[np.ndarray]:  # noqa: D417
+        """Constructs an interpolation set of.
 
         Args:
                 delta (TYPE): Description
@@ -51,7 +55,7 @@ class TrustRegionGeometry:
         """
         d = self.problem.dim
 
-        Y = [x_k]
+        Y = [x_k]  # noqa: N806
         epsilon = 0.01
         for i in range(0, d):
             plus = Y[0] + delta * self.standard_basis(i)
@@ -69,12 +73,12 @@ class TrustRegionGeometry:
         return Y
 
 
-class AstroDFGeometry(TrustRegionGeometry):
-    def __init__(self, problem: Problem) -> None:
+class AstroDFGeometry(TrustRegionGeometry):  # noqa: D101
+    def __init__(self, problem: Problem) -> None:  # noqa: D107
         super().__init__(problem)
 
-    # generate the basis (rotated coordinate) (the first vector comes from the visited design points (origin basis)
-    def get_rotated_basis(
+    # generate the basis (rotated coordinate) (the first vector comes from the visited design points (origin basis)  # noqa: E501
+    def get_rotated_basis(  # noqa: D102
         self, first_basis: np.ndarray, rotate_index: np.ndarray
     ) -> np.ndarray:
         rotate_matrix = np.array(first_basis)
@@ -94,21 +98,18 @@ class AstroDFGeometry(TrustRegionGeometry):
             rotate_matrix = np.vstack((rotate_matrix, rotated_basis))
         return rotate_matrix
 
-    # compute the interpolation points (2d+1) using the rotated coordinate basis (reuse one design point)
-    def get_rotated_basis_interpolation_points(
+    # compute the interpolation points (2d+1) using the rotated coordinate basis (reuse one design point)  # noqa: E501
+    def get_rotated_basis_interpolation_points(  # noqa: D102
         self,
         x_k: np.ndarray,
         delta: float,
         rotate_matrix: np.ndarray,
         reused_x: np.ndarray,
     ) -> list[np.ndarray]:
-        Y = [x_k]
+        Y = [x_k]  # noqa: N806
         epsilon = 0.01
         for i in range(self.problem.dim):
-            if i == 0:
-                plus = np.array(reused_x)
-            else:
-                plus = Y[0] + delta * rotate_matrix[i]
+            plus = np.array(reused_x) if i == 0 else Y[0] + delta * rotate_matrix[i]
             minus = Y[0] - delta * rotate_matrix[i]
 
             if sum(x_k) != 0:
@@ -129,12 +130,19 @@ class AstroDFGeometry(TrustRegionGeometry):
 
 
 """
-	Class that represents the geometry of the solution space. It is able to construct an interpolation set and handle geometric behaviours of the space
+	Class that represents the geometry of the solution space. It is able to construct an
+	interpolation set and handle geometric behaviours of the space
 """
 
 
-class OMoRFGeometry(TrustRegionGeometry):
-    def __init__(self, problem: Problem, tr: TrustRegionBase, index_set, **kwargs):
+class OMoRFGeometry(TrustRegionGeometry):  # noqa: D101
+    def __init__(  # noqa: D107
+        self,
+        problem: Problem,
+        tr: TrustRegionBase,
+        index_set,  # noqa: ANN001
+        **kwargs,  # noqa: ANN001, ANN003, RUF100
+    ) -> None:
         # print(kwargs)
         self.problem = problem
         self.tr = tr
@@ -152,8 +160,10 @@ class OMoRFGeometry(TrustRegionGeometry):
 
         super().__init__(problem)
 
-    def generate_set(self, num, s_old, delta_k):
-        """Generates an initial set of samples using either coordinate directions or orthogonal, random directions
+    def generate_set(self, num, s_old, delta_k):  # noqa: ANN001, ANN201
+        """Generates an initial set of samples using either coordinate directions or.
+
+        orthogonal, random directions.
         """
         bounds_l = np.maximum(
             np.array(self.problem.lower_bounds).reshape(s_old.shape), s_old - delta_k
@@ -170,7 +180,7 @@ class OMoRFGeometry(TrustRegionGeometry):
             direcs = self.coordinate_directions(
                 num, bounds_l - s_old, bounds_u - s_old, delta_k
             )
-        S = np.zeros((num, self.n))
+        S = np.zeros((num, self.n))  # noqa: N806
         S[0, :] = s_old
         for i in range(1, num):
             S[i, :] = s_old + np.minimum(
@@ -178,9 +188,8 @@ class OMoRFGeometry(TrustRegionGeometry):
             )
         return S
 
-    def coordinate_directions(self, num_pnts, lower, upper, delta_k):
-        """Generates coordinate directions
-        """
+    def coordinate_directions(self, num_pnts, lower, upper, delta_k):  # noqa: ANN001, ANN201
+        """Generates coordinate directions."""
         at_lower_boundary = lower > -1.0e-8 * delta_k
         at_upper_boundary = upper < 1.0e-8 * delta_k
         direcs = np.zeros((num_pnts, self.n))
@@ -207,9 +216,8 @@ class OMoRFGeometry(TrustRegionGeometry):
                 direcs[i, q - 1] = direcs[q, q - 1]
         return direcs
 
-    def get_scale(self, dirn, delta, lower, upper):
-        """Sets the max distance for each direction in the current trust region
-        """
+    def get_scale(self, dirn, delta, lower, upper):  # noqa: ANN001, ANN201
+        """Sets the max distance for each direction in the current trust region."""
         scale = delta
         for j in range(len(dirn)):
             if dirn[j] < 0.0:
@@ -218,9 +226,8 @@ class OMoRFGeometry(TrustRegionGeometry):
                 scale = min(scale, upper[j] / dirn[j])
         return scale
 
-    def random_directions(self, num_pnts, lower, upper, delta_k):
-        """Generates orthogonal, random directions
-        """
+    def random_directions(self, num_pnts, lower, upper, delta_k):  # noqa: ANN001, ANN201
+        """Generates orthogonal, random directions."""
         direcs = np.zeros((self.n, max(2 * self.n + 1, num_pnts)))
         idx_l = lower == 0
         idx_u = upper == 0
@@ -229,9 +236,9 @@ class OMoRFGeometry(TrustRegionGeometry):
         nactive = np.sum(active)
         ninactive = self.n - nactive
         if ninactive > 0:
-            A = np.random.normal(size=(ninactive, ninactive))
-            Qred = qr(A)[0]
-            Q = np.zeros((self.n, ninactive))
+            A = np.random.normal(size=(ninactive, ninactive))  # noqa: N806
+            Qred = qr(A)[0]  # noqa: N806
+            Q = np.zeros((self.n, ninactive))  # noqa: N806
             Q[inactive, :] = Qred
             for i in range(ninactive):
                 scale = self.get_scale(Q[:, i], delta_k, lower, upper)
@@ -268,42 +275,42 @@ class OMoRFGeometry(TrustRegionGeometry):
             scale = self.get_scale(dirn, delta_k, lower, upper)
             direcs[:, 2 * self.n + i] = dirn * scale
         # Ensure first row is zero direction to match generate_set expectations
-        R = np.zeros((num_pnts, self.n))
+        R = np.zeros((num_pnts, self.n))  # noqa: N806
         cols = min(max(num_pnts - 1, 0), direcs.shape[1])
         if cols > 0:
             R[1 : 1 + cols, :] = direcs[:, :cols].T
         return R
 
-    def update_geometry_omorf(
+    def update_geometry_omorf(  # noqa: ANN201, D102
         self,
-        s_old,
-        f_old,
-        delta_k,
-        rho_k,
-        U,
-        S_full,
-        f_full,
-        S_red,
-        f_red,
-        unsuccessful_iteration_counter,
-        ratio,
+        s_old,  # noqa: ANN001
+        f_old,  # noqa: ANN001
+        delta_k,  # noqa: ANN001
+        rho_k,  # noqa: ANN001
+        U,  # noqa: ANN001, N803
+        S_full,  # noqa: ANN001, N803
+        f_full,  # noqa: ANN001
+        S_red,  # noqa: ANN001, N803
+        f_red,  # noqa: ANN001
+        unsuccessful_iteration_counter,  # noqa: ANN001
+        ratio,  # noqa: ANN001
     ):
         dist = max(self.epsilon_1 * delta_k, self.epsilon_2 * rho_k)
 
         as_matrix = U
 
         if max(norm(S_full - s_old, axis=1, ord=np.inf)) > dist:
-            S_full, f_full = self.sample_set(
+            S_full, f_full = self.sample_set(  # noqa: N806
                 "improve", s_old, delta_k, rho_k, f_old, U, S=S_full, f=f_full
             )  # f_full is not needed to be evaluated
             try:
                 self.tr.calculate_subspace(S_full, f_full, delta_k)
                 as_matrix = self.tr.U
-            except:
+            except Exception:
                 pass
 
         elif max(norm(S_red - s_old, axis=1, ord=np.inf)) > dist:
-            S_red, f_red = self.sample_set(
+            S_red, f_red = self.sample_set(  # noqa: N806
                 "improve",
                 s_old,
                 delta_k,
@@ -331,38 +338,38 @@ class OMoRFGeometry(TrustRegionGeometry):
 
         return S_full, f_full, S_red, f_red, delta_k, rho_k, as_matrix
 
-    def sample_set(
+    def sample_set(  # noqa: ANN201, D102
         self,
-        method,
-        s_old,
-        delta_k,
-        rho_k,
-        f_old,
-        U,
-        S=None,
-        f=None,
-        s_new=None,
-        f_new=None,
-        full_space=True,
+        method,  # noqa: ANN001
+        s_old,  # noqa: ANN001
+        delta_k,  # noqa: ANN001
+        rho_k,  # noqa: ANN001
+        f_old,  # noqa: ANN001
+        U,  # noqa: ANN001, N803
+        S=None,  # noqa: ANN001, N803
+        f=None,  # noqa: ANN001
+        s_new=None,  # noqa: ANN001
+        f_new=None,  # noqa: ANN001
+        full_space=True,  # noqa: ANN001
     ):
         q = self.p if full_space else self.q
 
         dist = max(self.epsilon_1 * delta_k, self.epsilon_2 * rho_k)
 
         if method == "replace":
-            S_hat = np.vstack((S, s_new))
+            S_hat = np.vstack((S, s_new))  # noqa: N806
             f_hat = np.vstack((f, f_new))
             if S_hat.shape != np.unique(S_hat, axis=0).shape:
-                S_hat, indices = np.unique(S_hat, axis=0, return_index=True)
+                S_hat, indices = np.unique(S_hat, axis=0, return_index=True)  # noqa: N806
                 f_hat = f_hat[indices]
             elif f_hat.size > q and max(norm(S_hat - s_old, axis=1, ord=np.inf)) > dist:
-                S_hat, f_hat = self.remove_furthest_point(S_hat, f_hat, s_old)
-            S_hat, f_hat = self.remove_point_from_set(S_hat, f_hat, s_old)
-            S = np.zeros((q, self.n))
+                S_hat, f_hat = self.remove_furthest_point(S_hat, f_hat, s_old)  # noqa: N806
+            S_hat, f_hat = self.remove_point_from_set(S_hat, f_hat, s_old)  # noqa: N806
+            S = np.zeros((q, self.n))  # noqa: N806
             f = np.zeros((q, 1))
             S[0, :] = s_old
             f[0, :] = f_old
-            S, f = self.LU_pivoting(
+            S, f = self.LU_pivoting(  # noqa: N806
                 S,
                 f,
                 s_old,
@@ -375,16 +382,16 @@ class OMoRFGeometry(TrustRegionGeometry):
             )
 
         elif method == "improve":
-            S_hat = np.copy(S)
+            S_hat = np.copy(S)  # noqa: N806
             f_hat = np.copy(f)
             if max(norm(S_hat - s_old, axis=1, ord=np.inf)) > dist:
-                S_hat, f_hat = self.remove_furthest_point(S_hat, f_hat, s_old)
-            S_hat, f_hat = self.remove_point_from_set(S_hat, f_hat, s_old)
-            S = np.zeros((q, self.n))
+                S_hat, f_hat = self.remove_furthest_point(S_hat, f_hat, s_old)  # noqa: N806
+            S_hat, f_hat = self.remove_point_from_set(S_hat, f_hat, s_old)  # noqa: N806
+            S = np.zeros((q, self.n))  # noqa: N806
             f = np.zeros((q, 1))
             S[0, :] = s_old
             f[0, :] = f_old
-            S, f = self.LU_pivoting(
+            S, f = self.LU_pivoting(  # noqa: N806
                 S,
                 f,
                 s_old,
@@ -398,12 +405,12 @@ class OMoRFGeometry(TrustRegionGeometry):
             )
 
         elif method == "new":
-            S_hat = f_hat = np.array([])
-            S = np.zeros((q, self.n))
+            S_hat = f_hat = np.array([])  # noqa: N806
+            S = np.zeros((q, self.n))  # noqa: N806
             f = np.zeros((q, 1))
             S[0, :] = s_old
             f[0, :] = f_old
-            S, f = self.LU_pivoting(
+            S, f = self.LU_pivoting(  # noqa: N806
                 S,
                 f,
                 s_old,
@@ -418,18 +425,18 @@ class OMoRFGeometry(TrustRegionGeometry):
 
         return S, f
 
-    def LU_pivoting(
+    def LU_pivoting(  # noqa: ANN201, D102, N802
         self,
-        S,
-        f,
-        s_old,
-        delta_k,
-        S_hat,
-        f_hat,
-        full_space,
-        active_subspace,
-        evaluate_f_flag=True,
-        method=None,
+        S,  # noqa: ANN001, N803
+        f,  # noqa: ANN001
+        s_old,  # noqa: ANN001
+        delta_k,  # noqa: ANN001
+        S_hat,  # noqa: ANN001, N803
+        f_hat,  # noqa: ANN001
+        full_space,  # noqa: ANN001
+        active_subspace,  # noqa: ANN001
+        evaluate_f_flag=True,  # noqa: ANN001, ARG002
+        method=None,  # noqa: ANN001
     ):
         psi_1 = 1.0e-4
         psi_2 = 1.0 if full_space else 0.25
@@ -442,7 +449,7 @@ class OMoRFGeometry(TrustRegionGeometry):
         # use class helper to compute |phi(X) @ v| in chunks
 
         # Initialise U matrix of LU factorisation of M matrix (see Conn et al.)
-        U = np.zeros((q, q))
+        U = np.zeros((q, q))  # noqa: N806
         U[0, :] = phi_function(s_old)
 
         # Perform the LU factorisation algorithm for the rest of the points
@@ -456,10 +463,10 @@ class OMoRFGeometry(TrustRegionGeometry):
                 v[j] = -U[j, k] / den
             v[k] = 1.0
 
-            # If there are still points to choose from, find if points meet criterion. If so, use the index to choose
+            # If there are still points to choose from, find if points meet criterion. If so, use the index to choose  # noqa: E501
             # point with given index to be next point in regression/interpolation set
             if f_hat.size > 0:
-                M = self._abs_phi_dot_v(phi_function, S_hat, v)
+                M = self._abs_phi_dot_v(phi_function, S_hat, v)  # noqa: N806
                 index = np.argmax(M)
                 if (
                     M[index] < psi_1
@@ -470,15 +477,15 @@ class OMoRFGeometry(TrustRegionGeometry):
             else:
                 flag = False
 
-            # If index exists, choose the point with that index and delete it from possible choices
+            # If index exists, choose the point with that index and delete it from possible choices  # noqa: E501
             if flag:
                 s = S_hat[index, :]
                 S[k, :] = s
                 f[k, :] = f_hat[index]
-                S_hat = np.delete(S_hat, index, 0)
+                S_hat = np.delete(S_hat, index, 0)  # noqa: N806
                 f_hat = np.delete(f_hat, index, 0)
 
-            # If index doesn't exist, solve an optimisation problem to find the point in the range which best satisfies criterion
+            # If index doesn't exist, solve an optimisation problem to find the point in the range which best satisfies criterion  # noqa: E501
             else:
                 try:
                     s = self.find_new_point(
@@ -488,7 +495,7 @@ class OMoRFGeometry(TrustRegionGeometry):
                         s = self.find_new_point_alternative(
                             v, phi_function, S[:k, :], s_old, delta_k
                         )
-                except:
+                except Exception:
                     s = self.find_new_point_alternative(
                         v, phi_function, S[:k, :], s_old, delta_k
                     )
@@ -496,7 +503,7 @@ class OMoRFGeometry(TrustRegionGeometry):
                     s = S_hat[index, :]
                     S[k, :] = s
                     f[k, :] = f_hat[index]
-                    S_hat = np.delete(S_hat, index, 0)
+                    S_hat = np.delete(S_hat, index, 0)  # noqa: N806
                     f_hat = np.delete(f_hat, index, 0)
                 else:
                     S[k, :] = s
@@ -514,21 +521,26 @@ class OMoRFGeometry(TrustRegionGeometry):
                     U[k, i] -= (phi[j] * U[j, i]) / den2
         return S, f
 
-    def get_phi_function_and_derivative(
-        self, S_hat, s_old, delta_k, full_space, active_subspace
+    def get_phi_function_and_derivative(  # noqa: ANN201, D102
+        self,
+        S_hat,  # noqa: ANN001, N803
+        s_old,  # noqa: ANN001
+        delta_k,  # noqa: ANN001
+        full_space,  # noqa: ANN001
+        active_subspace,  # noqa: ANN001
     ):
-        Del_S = delta_k
+        Del_S = delta_k  # noqa: N806
 
         if full_space:
             if S_hat.size > 0:
                 norms = norm(S_hat - s_old, axis=1, ord=np.inf)
-                Del_S = max(np.max(norms), 1e-12)
+                Del_S = max(np.max(norms), 1e-12)  # noqa: N806
 
-            def phi_function(s):
+            def phi_function(s):  # noqa: ANN001, ANN202
                 s_tilde = np.divide((s - s_old), Del_S)
                 try:
-                    m, n = s_tilde.shape
-                except:
+                    m, _n = s_tilde.shape
+                except Exception:
                     m = 1
                     s_tilde = s_tilde.reshape(1, -1)
                 phi = np.zeros((m, self.p))
@@ -542,17 +554,17 @@ class OMoRFGeometry(TrustRegionGeometry):
 
         else:
             if S_hat.size > 0:
-                # active_subspace expected as shape (n, d): map full-space differences to reduced coords
+                # active_subspace expected as shape (n, d): map full-space differences to reduced coords  # noqa: E501
                 norms = norm(np.dot(S_hat - s_old, active_subspace), axis=1)
-                Del_S = max(np.max(norms), 1e-12)
+                Del_S = max(np.max(norms), 1e-12)  # noqa: N806
 
-            def phi_function(s):
+            def phi_function(s):  # noqa: ANN001, ANN202
                 # compute reduced coordinates u = (s - s_old) @ active_subspace
                 u = np.divide(np.dot((s - s_old), active_subspace), Del_S)
                 # print(f'shape of u: {u.shape}')
                 try:
-                    m, n = u.shape
-                except:
+                    m, _n = u.shape
+                except Exception:
                     m = 1
                     u = u.reshape(1, -1)
                 phi = np.zeros((m, self.q))
@@ -568,7 +580,7 @@ class OMoRFGeometry(TrustRegionGeometry):
                     return phi.flatten()
                 return phi
 
-            def phi_function_deriv(s):
+            def phi_function_deriv(s):  # noqa: ANN001, ANN202
                 u = np.divide(np.dot((s - s_old), active_subspace), Del_S)
                 phi_deriv = np.zeros((self.d, self.q))
                 for i in range(self.d):
@@ -588,7 +600,7 @@ class OMoRFGeometry(TrustRegionGeometry):
 
         return phi_function, phi_function_deriv
 
-    def _abs_phi_dot_v(self, phi_function, X, v, chunk_size=64):
+    def _abs_phi_dot_v(self, phi_function, X, v, chunk_size=64):  # noqa: ANN001, ANN202, N803
         """Compute |phi(X) @ v| in chunks to limit peak memory usage.
 
         - `phi_function` should accept an (m,n) array and return (m,q) phi values.
@@ -597,14 +609,14 @@ class OMoRFGeometry(TrustRegionGeometry):
         """
         if X is None or X.size == 0:
             return np.array([])
-        X = np.asarray(X)
+        X = np.asarray(X)  # noqa: N806
         if X.ndim == 1:
-            X = X.reshape(1, -1)
+            X = X.reshape(1, -1)  # noqa: N806
         m = X.shape[0]
         res = np.empty(m)
         for start in range(0, m, chunk_size):
             end = min(m, start + chunk_size)
-            X_chunk = X[start:end, :]
+            X_chunk = X[start:end, :]  # noqa: N806
             try:
                 phi_chunk = phi_function(X_chunk)
                 # phi_chunk may be flattened for single row; ensure 2D
@@ -617,8 +629,14 @@ class OMoRFGeometry(TrustRegionGeometry):
             res[start:end] = vals
         return res
 
-    def find_new_point(
-        self, v, phi_function, phi_function_deriv, s_old, delta_k, full_space=False
+    def find_new_point(  # noqa: ANN201, D102
+        self,
+        v,  # noqa: ANN001
+        phi_function,  # noqa: ANN001
+        phi_function_deriv,  # noqa: ANN001
+        s_old,  # noqa: ANN001
+        delta_k,  # noqa: ANN001
+        full_space=False,  # noqa: ANN001
     ):
         # change bounds to be defined using the problem and delta_k
         bounds_l = np.maximum(
@@ -655,10 +673,19 @@ class OMoRFGeometry(TrustRegionGeometry):
             else:
                 s = s_old
         else:
-            obj1 = lambda s: np.dot(v, phi_function(s))
-            jac1 = lambda s: np.dot(phi_function_deriv(s), v)
-            obj2 = lambda s: -np.dot(v, phi_function(s))
-            jac2 = lambda s: -np.dot(phi_function_deriv(s), v)
+
+            def obj1(s):  # noqa: ANN001, ANN202
+                return np.dot(v, phi_function(s))
+
+            def jac1(s):  # noqa: ANN001, ANN202
+                return np.dot(phi_function_deriv(s), v)
+
+            def obj2(s):  # noqa: ANN001, ANN202
+                return -np.dot(v, phi_function(s))
+
+            def jac2(s):  # noqa: ANN001, ANN202
+                return -np.dot(phi_function_deriv(s), v)
+
             res1 = minimize(
                 obj1,
                 s_old,
@@ -676,20 +703,17 @@ class OMoRFGeometry(TrustRegionGeometry):
                 options={"disp": False},
             )
             # FIX: Don't want to rely on this (possibly)
-            if abs(res1["fun"]) > abs(res2["fun"]):
-                s = res1["x"]
-            else:
-                s = res2["x"]
+            s = res1["x"] if abs(res1["fun"]) > abs(res2["fun"]) else res2["x"]
         return s
 
-    def find_new_point_alternative(self, v, phi_function, S, s_old, delta_k):
-        S_tmp = self.generate_set(
+    def find_new_point_alternative(self, v, phi_function, S, s_old, delta_k):  # noqa: ANN001, ANN201, D102, N803
+        S_tmp = self.generate_set(  # noqa: N806
             int(0.5 * (self.n + 1) * (self.n + 2)), s_old, delta_k
         )
         # Compute |phi(S_tmp) @ v| in chunks to limit peak memory
         if S_tmp.size == 0:
             return s_old
-        M = self._abs_phi_dot_v(phi_function, S_tmp, v)
+        M = self._abs_phi_dot_v(phi_function, S_tmp, v)  # noqa: N806
         indices = np.argsort(M)[::-1][: M.size]
         for index in indices:
             s = S_tmp[index, :]
@@ -698,24 +722,24 @@ class OMoRFGeometry(TrustRegionGeometry):
         return S_tmp[indices[0], :]
 
     @staticmethod
-    def remove_point_from_set(S, f, s):
+    def remove_point_from_set(S, f, s):  # noqa: ANN001, ANN205, D102, N803
         ind_current = np.where(norm(S - s, axis=1, ord=np.inf) == 0.0)[0]
-        S = np.delete(S, ind_current, 0)
+        S = np.delete(S, ind_current, 0)  # noqa: N806
         f = np.delete(f, ind_current, 0)
         return S, f
 
     @staticmethod
-    def remove_furthest_point(S, f, s):
+    def remove_furthest_point(S, f, s):  # noqa: ANN001, ANN205, D102, N803
         ind_distant = np.argmax(norm(S - s, axis=1, ord=np.inf))
-        S = np.delete(S, ind_distant, 0)
+        S = np.delete(S, ind_distant, 0)  # noqa: N806
         f = np.delete(f, ind_distant, 0)
         return S, f
 
-    def remove_points_outside_limits(self, S, f, s_old, delta_k, rho_k):
+    def remove_points_outside_limits(self, S, f, s_old, delta_k, rho_k):  # noqa: ANN001, ANN201, D102, N803
         ind_inside = np.where(
             norm(S - s_old, axis=1, ord=np.inf)
             <= max(self.epsilon_1 * delta_k, self.epsilon_2 * rho_k)
         )[0]
-        S = S[ind_inside, :]
+        S = S[ind_inside, :]  # noqa: N806
         f = f[ind_inside]
         return S, f

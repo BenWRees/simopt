@@ -1,4 +1,4 @@
-# type: ignore
+# type: ignore  # noqa: D100
 # 2018 (c) Jeffrey M. Hokanson and Caleb Magruder
 
 import numpy as np
@@ -11,26 +11,26 @@ __all__ = [
 ]
 
 
-class BadStep(Exception):
+class BadStep(Exception):  # noqa: N818
     pass
 
 
-def trajectory_linear(x0, p, t):
+def trajectory_linear(x0, p, t):  # noqa: ANN001, ANN201, D103
     return x0 + t * p
 
 
-def linesearch_armijo(
-    f,
-    g,
-    p,
-    x0,
-    bt_factor=0.5,
-    ftol=1e-4,
-    maxiter=40,
-    trajectory=trajectory_linear,
-    fx0=None,
+def linesearch_armijo(  # noqa: ANN201
+    f,  # noqa: ANN001
+    g,  # noqa: ANN001
+    p,  # noqa: ANN001
+    x0,  # noqa: ANN001
+    bt_factor=0.5,  # noqa: ANN001
+    ftol=1e-4,  # noqa: ANN001
+    maxiter=40,  # noqa: ANN001
+    trajectory=trajectory_linear,  # noqa: ANN001
+    fx0=None,  # noqa: ANN001
 ):
-    """Back-Tracking Line Search to satify Armijo Condition
+    """Back-Tracking Line Search to satify Armijo Condition.
 
             f(x0 + alpha*p) < f(x0) + alpha * ftol * <g,p>
 
@@ -60,7 +60,7 @@ def linesearch_armijo(
     """
     dg = np.inner(g, p)
     assert dg <= 0, (
-        "Descent direction p is not a descent direction: p^T g = %g >= 0" % (dg,)
+        f"Descent direction p is not a descent direction: p^T g = {dg:g} >= 0"
     )
     iterations = 0
 
@@ -73,7 +73,7 @@ def linesearch_armijo(
     x = np.copy(x0)
     fx = np.inf
     success = False
-    for it in range(maxiter):
+    for _it in range(maxiter):
         try:
             iterations += 1
             x = trajectory(x0, p, alpha)
@@ -95,17 +95,17 @@ def linesearch_armijo(
     return x, alpha, fx, iterations
 
 
-def gauss_newton(
-    f,
-    F,
-    x0,
-    tol=1e-10,
-    tol_normdx=1e-12,
-    maxiter=100,
-    linesearch=None,
-    verbose=0,
-    trajectory=None,
-    gnsolver=None,
+def gauss_newton(  # noqa: ANN201
+    f,  # noqa: ANN001
+    F,  # noqa: ANN001, N803
+    x0,  # noqa: ANN001
+    tol=1e-10,  # noqa: ANN001
+    tol_normdx=1e-12,  # noqa: ANN001
+    maxiter=100,  # noqa: ANN001
+    linesearch=None,  # noqa: ANN001
+    verbose=0,  # noqa: ANN001
+    trajectory=None,  # noqa: ANN001
+    gnsolver=None,  # noqa: ANN001
 ):
     r"""A Gauss-Newton solver for unconstrained nonlinear least squares problems.
 
@@ -124,7 +124,8 @@ def gauss_newton(
 
             \mathbf{p}_k \leftarrow \mathbf{F}(\mathbf{x}_k)^+ \mathbf{f}(\mathbf{x}_k)
 
-    and then computes a new step by solving a line search problem for a step length :math:`\alpha`
+    and then computes a new step by solving a line search problem for a step length
+    :math:`\alpha`
     satisfying the Armijo conditions:
 
     .. math::
@@ -140,14 +141,16 @@ def gauss_newton(
 
             \mathbf{x}_{k+1} \leftarrow T(\mathbf{x}_k, \mathbf{p}_k, \alpha).
 
-    Second, the user can specify a custom solver for computing the search direction :math:`\mathbf{p}_k`.
+    Second, the user can specify a custom solver for computing the search direction
+    :math:`\mathbf{p}_k`.
 
     Parameters
     ----------
     f : callable
             residual, :math:`\mathbf{f}: \mathbb{R}^m \to \mathbb{R}^M`
     F : callable
-            Jacobian of residual :math:`\mathbf{f}`; :math:`\mathbf{F}: \mathbb{R}^m \to \mathbb{R}^{M \times m}`
+            Jacobian of residual :math:`\mathbf{f}`; :math:`\mathbf{F}: \mathbb{R}^m \to
+            \mathbb{R}^{M \times m}`
     tol: float [optional] default = 1e-8
             gradient norm stopping criterion
     tol_normdx: float [optional] default = 1e-12
@@ -179,7 +182,7 @@ def gauss_newton(
             info = 1: norm of gradient did not converge, but ||dx|| below tolerance
             info = 2: did not converge, max iterations exceeded
     """
-    n = len(x0)
+    len(x0)
     if maxiter <= 0:
         return x0, 4
     iterations = 0
@@ -192,7 +195,9 @@ def gauss_newton(
             "---------|--------------|------------|------------|------------|------------"
         )
     if trajectory is None:
-        trajectory = lambda x0, p, t: x0 + t * p
+
+        def trajectory(x0, p, t):  # noqa: ANN001, ANN202
+            return x0 + t * p
 
     if linesearch is None:
         linesearch = linesearch_armijo
@@ -200,13 +205,13 @@ def gauss_newton(
     if gnsolver is None:
         # Scipy seems to properly check for proper allocation of working space, reporting an error with gelsd
         # so we specify using gelss (an SVD based solver)
-        def gnsolver(F_eval, f_eval):
+        def gnsolver(F_eval, f_eval):  # noqa: ANN001, ANN202, N803
             dx, _, _, s = sp.linalg.lstsq(F_eval, -f_eval, lapack_driver="gelsd")
             return dx, s
 
     x = np.copy(x0)
     f_eval = f(x)
-    F_eval = F(x)
+    F_eval = F(x)  # noqa: N806
     grad = F_eval.T @ f_eval
 
     normgrad = np.linalg.norm(grad)
@@ -244,36 +249,32 @@ def gauss_newton(
             x = x_new
 
             normdx = np.linalg.norm(dx)
-            F_eval = F(x)
+            F_eval = F(x)  # noqa: N806
             grad = F_eval.T @ f_eval_new
         #########################################################################
         # Printing section
-        if s[-1] == 0:
-            cond = np.inf
-        else:
-            cond = s[0] / s[-1]
+        cond = np.inf if s[-1] == 0 else s[0] / s[-1]
 
         if verbose >= 1:
             normgrad = np.linalg.norm(grad)
             print(
-                "    %3d  |  %1.4e  |  %8.2e  |  %8.2e  |  %8.2e  |  %8.2e"
+                "    %3d  |  %1.4e  |  %8.2e  |  %8.2e  |  %8.2e  |  %8.2e"  # noqa: UP031
                 % (it, normf, normdx, cond, alpha, normgrad)
             )
 
         # Termination conditions
         if normgrad < tol:
             if verbose:
-                print("norm gradient %1.3e less than tolerance %1.3e" % (normgrad, tol))
+                print(f"norm gradient {normgrad:1.3e} less than tolerance {tol:1.3e}")
             break
         if normdx < tol_normdx:
             if verbose:
-                print("norm dx %1.3e less than tolerance %1.3e" % (normdx, tol_normdx))
+                print(f"norm dx {normdx:1.3e} less than tolerance {tol_normdx:1.3e}")
             break
         if residual_increased:
             if verbose:
                 print(
-                    "residual increased during line search from %1.5e to %1.5e"
-                    % (np.linalg.norm(f_eval), np.linalg.norm(f_eval_new))
+                    f"residual increased during line search from {np.linalg.norm(f_eval):1.5e} to {np.linalg.norm(f_eval_new):1.5e}"
                 )
             break
 

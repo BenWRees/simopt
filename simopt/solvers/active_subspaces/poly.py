@@ -1,6 +1,7 @@
 # type: ignore
-"""Polynomial functions
-This has been rewritten to work inside the simopt library
+"""Polynomial functions.
+
+This has been rewritten to work inside the simopt library.
 
 """
 # (c) 2019 Jeffrey M. Hokanson (jeffrey@hokanson.us)
@@ -14,7 +15,7 @@ import cvxpy as cp
 import numpy as np
 import scipy.linalg
 
-from .basis import *
+from .basis import *  # noqa: F403
 
 __all__ = ["BaseFunction", "Function", "PolynomialApproximation", "PolynomialFunction"]
 
@@ -25,22 +26,22 @@ __all__ = ["BaseFunction", "Function", "PolynomialApproximation", "PolynomialFun
 """
 
 
-def merge(x, y):
+def merge(x, y):  # noqa: ANN001, ANN202
     z = x.copy()
     z.update(y)
     return z
 
 
-def check_sample_inputs(X, fX, grads):
+def check_sample_inputs(X, fX, grads):  # noqa: ANN001, ANN202, N803
     if X is not None and fX is not None:
-        X = np.array(X)
-        fX = np.array(fX).flatten()
+        X = np.array(X)  # noqa: N806
+        fX = np.array(fX).flatten()  # noqa: N806
         assert len(X) == len(fX), (
             "Number of samples doesn't match number of evaluations"
         )
     else:
-        X = None
-        fX = None
+        X = None  # noqa: N806
+        fX = None  # noqa: N806
 
     if grads is not None:
         grads = np.array(grads)
@@ -50,8 +51,8 @@ def check_sample_inputs(X, fX, grads):
             )
 
     if X is None:
-        X = np.zeros((0, grads.shape[1]))
-        fX = np.zeros((0,))
+        X = np.zeros((0, grads.shape[1]))  # noqa: N806
+        fX = np.zeros((0,))  # noqa: N806
     if grads is None:
         grads = np.zeros((0, X.shape[1]))
     return X, fX, grads
@@ -63,30 +64,30 @@ def check_sample_inputs(X, fX, grads):
 
 
 class BaseFunction:
-    r"""Abstract base class for functions"""
+    r"""Abstract base class for functions."""
 
-    def eval(self, X, **kwargs):
+    def eval(self, X, **kwargs):  # noqa: ANN001, ANN003, ANN201, ARG002, D102, N803
         return self.__call__(X, return_grad=False)
 
-    def grad(self, X):
+    def grad(self, X):  # noqa: ANN001, ANN201, D102, N803
         return self.__call__(X, return_grad=True)[1]
 
-    def hessian(self, X):
+    def hessian(self, X):  # noqa: ANN001, ANN201, D102, N803
         raise NotImplementedError
 
-    def __call__(self, X, return_grad=False, **kwargs):
+    def __call__(self, X, return_grad=False, **kwargs):  # noqa: ANN001, ANN003, ANN204, D102, N803
         if return_grad:
             return self.eval(X, **kwargs), self.grad(X)
         return self.eval(X, **kwargs)
 
-    def predict(self, X):
-        r"""Alias of __call__ to match scikit learn API"""
+    def predict(self, X):  # noqa: ANN001, ANN201, N803
+        r"""Alias of __call__ to match scikit learn API."""
         return self.__call__(X)
 
 
 # TODO: This function needs changing as it is undergone in the simopt library
 class Function(BaseFunction):
-    r"""Wrapper around function specifying the domain
+    r"""Wrapper around function specifying the domain.
 
     Provided a function :math:`f: \mathcal{D} \subset \mathbb{R}^m \to \mathbb{R}^d`,
     and a domain :math:`\mathcal{D}`, this class acts as a wrapper for both.
@@ -112,17 +113,19 @@ class Function(BaseFunction):
             Client to use for multiprocessing
     """
 
-    def __init__(
+    def __init__(  # noqa: D107
         self,
-        funs,
-        domain,
-        grads=None,
-        fd_grad=None,
-        vectorized=False,
-        kwargs={},
-        dask_client=None,
-        return_grad=False,
-    ):
+        funs,  # noqa: ANN001
+        domain,  # noqa: ANN001
+        grads=None,  # noqa: ANN001
+        fd_grad=None,  # noqa: ANN001
+        vectorized=False,  # noqa: ANN001
+        kwargs=None,  # noqa: ANN001
+        dask_client=None,  # noqa: ANN001
+        return_grad=False,  # noqa: ANN001
+    ) -> None:
+        if kwargs is None:
+            kwargs = {}
         self.dask_client = dask_client
         self.vectorized = vectorized
         self.kwargs = kwargs
@@ -183,9 +186,9 @@ class Function(BaseFunction):
         self.domain = self.domain_norm
         self.fd_grad = fd_grad
 
-    def eval(self, X_norm, **kwargs):
-        X_norm = np.atleast_1d(X_norm)
-        X = self.domain_app.unnormalize(X_norm)
+    def eval(self, X_norm, **kwargs):  # noqa: ANN001, ANN003, ANN201, D102, N803
+        X_norm = np.atleast_1d(X_norm)  # noqa: N806
+        X = self.domain_app.unnormalize(X_norm)  # noqa: N806
 
         kwargs = merge(self.kwargs, kwargs)
 
@@ -195,36 +198,37 @@ class Function(BaseFunction):
 
         if len(X.shape) == 2:
             if self.vectorized:
-                fX = [fun(X, **kwargs) for fun in self._funs]
-                for fXi in fX:
+                fX = [fun(X, **kwargs) for fun in self._funs]  # noqa: N806
+                for fXi in fX:  # noqa: N806
                     assert len(fXi) == X.shape[0], (
-                        "Must provide an array with %d entires; got %d"
+                        "Must provide an array with %d entires; got %d"  # noqa: UP031
                         % (X.shape[0], len(fXi))
                     )
 
                 # Reshape if necessary so concatention works
-                for i, fXi in enumerate(fX):
-                    fXi = np.array(fXi)
+                for i, fXi in enumerate(fX):  # noqa: N806
+                    fXi = np.array(fXi)  # noqa: N806
                     if len(fXi.shape) == 1:
                         fX[i] = fXi.reshape(len(X), 1)
                 return np.hstack(fX)
             return np.vstack(
                 [np.hstack([fun(x, **kwargs) for fun in self._funs]) for x in X]
             )
+        return None
 
-    def eval_async(self, X_norm, **kwargs):
-        r"""Evaluate the function asyncronously using dask.distributed"""
+    def eval_async(self, X_norm, **kwargs):  # noqa: ANN001, ANN003, ANN201, N803
+        r"""Evaluate the function asyncronously using dask.distributed."""
         assert self.dask_client is not None, (
             "A dask_client must be specified on class initialization"
         )
 
         kwargs = merge(self.kwargs, kwargs)
 
-        X_norm = np.atleast_1d(X_norm)
-        X = self.domain_app.unnormalize(X_norm)
-        X = np.atleast_2d(X)
+        X_norm = np.atleast_1d(X_norm)  # noqa: N806
+        X = self.domain_app.unnormalize(X_norm)  # noqa: N806
+        X = np.atleast_2d(X)  # noqa: N806
 
-        def subcall(funs_pickle, x, **kwargs_):
+        def subcall(funs_pickle, x, **kwargs_):  # noqa: ANN001, ANN003, ANN202
             import cloudpickle
 
             funs = [cloudpickle.loads(fun) for fun in funs_pickle]
@@ -237,8 +241,8 @@ class Function(BaseFunction):
             return results[0]
         return results
 
-    def _shape_grad(self, X, grads):
-        r"""This expects a 3-dimensional array in format [x sample #, fun #, input dim #]"""
+    def _shape_grad(self, X, grads):  # noqa: ANN001, ANN202, N803
+        r"""This expects a 3-dimensional array in format [x sample #, fun #, input dim #]."""
         grads = np.array(grads)
         if len(X.shape) == 1 and grads.shape[1] == 1:
             return grads.reshape(len(self.domain))
@@ -248,10 +252,10 @@ class Function(BaseFunction):
             return grads.reshape(len(X), len(self.domain))
         return grads
 
-    def grad(self, X_norm, **kwargs):
+    def grad(self, X_norm, **kwargs):  # noqa: ANN001, ANN003, ANN201, D102, N803
         kwargs = merge(self.kwargs, kwargs)
 
-        X_norm = np.atleast_1d(X_norm)
+        X_norm = np.atleast_1d(X_norm)  # noqa: N806
 
         # If we've asked to use a finite difference gradient
         if self.fd_grad:
@@ -269,12 +273,12 @@ class Function(BaseFunction):
 
             return self._shape_grad(X_norm, grads)
 
-        X = self.domain_app.unnormalize(X_norm)
-        D = self.domain_app._unnormalize_der()
+        X = self.domain_app.unnormalize(X_norm)  # noqa: N806
+        D = self.domain_app._unnormalize_der()  # noqa: N806
 
         # Return gradient if specified
         if self._grads is not None:
-            X = np.atleast_2d(X)
+            X = np.atleast_2d(X)  # noqa: N806
 
             if self.vectorized:
                 # TODO: I don't think this will get dimensions quite right
@@ -291,12 +295,12 @@ class Function(BaseFunction):
 
         # Try return_grad the function definition
         if self.return_grad:
-            X = np.atleast_2d(X)
+            X = np.atleast_2d(X)  # noqa: N806
 
             if self.vectorized:
                 grads = []
                 for fun in self._funs:
-                    fXi, gradsi = fun(X, return_grad=True, **kwargs)
+                    _fXi, gradsi = fun(X, return_grad=True, **kwargs)  # noqa: N806
                     grads.append(gradsi)
                 grads = np.array([np.atleast_2d(grad) for grad in grads])
             else:
@@ -304,7 +308,7 @@ class Function(BaseFunction):
                 for x in X:
                     grad = []
                     for fun in self._funs:
-                        fxi, gradi = fun(x, return_grad=True, **kwargs)
+                        _fxi, gradi = fun(x, return_grad=True, **kwargs)
                         grad.append(gradi)
                     grads.append(np.vstack(grad))
                 grads = np.array(grads)
@@ -314,25 +318,25 @@ class Function(BaseFunction):
             "Gradient not defined and finite-difference approximation not enabled"
         )
 
-    def __call__(self, X_norm, return_grad=False, **kwargs):
+    def __call__(self, X_norm, return_grad=False, **kwargs):  # noqa: ANN001, ANN003, ANN204, D102, N803
         kwargs = merge(self.kwargs, kwargs)
         if not return_grad:
             return self.eval(X_norm, **kwargs)
 
         if self.return_grad:
             # If the function can return both the value and gradient simultaneously
-            X = self.domain_app.unnormalize(X_norm)
-            X = np.atleast_2d(X)
-            D = self.domain_app._unnormalize_der()
+            X = self.domain_app.unnormalize(X_norm)  # noqa: N806
+            X = np.atleast_2d(X)  # noqa: N806
+            D = self.domain_app._unnormalize_der()  # noqa: N806
             if self.vectorized:
                 ret = [fun(X, return_grad=True, **kwargs) for fun in self._funs]
-                fX = np.hstack([r[0] for r in ret])
+                fX = np.hstack([r[0] for r in ret])  # noqa: N806
                 grads = np.concatenate(
                     [r[1].reshape(X.shape[0], -1, len(self.domain)) for r in ret],
                     axis=1,
                 )
             else:
-                fX = []
+                fX = []  # noqa: N806
                 grads = []
                 for x in X:
                     fx = []
@@ -344,22 +348,24 @@ class Function(BaseFunction):
                     fX.append(np.hstack(fx))
                     grads.append(np.vstack(g))
 
-                fX = np.vstack(fX)
+                fX = np.vstack(fX)  # noqa: N806
                 grads = np.array(grads)
 
             grads = grads.dot(D.T)
 
             if len(X_norm.shape) == 1:
-                fX = fX.flatten()
+                fX = fX.flatten()  # noqa: N806
             grads = self._shape_grad(X_norm, grads)
             return fX, grads
         return self.eval(X_norm, **kwargs), self.grad(X_norm, **kwargs)
 
-    def call_async(self, X_norm, return_grad=False, **kwargs):
-        r"""Calls the function in an async. manner
+    def call_async(self, X_norm, return_grad=False, **kwargs):  # noqa: ANN001, ANN003, ANN201, N803
+        r"""Calls the function in an async. manner.
 
-        This mainly exists to cleanly separate eval_async which *only* returns function values
-        and this function, call_async, which can optionally return gradients, like __call__.
+        This mainly exists to cleanly separate eval_async which *only* returns function
+        values
+        and this function, call_async, which can optionally return gradients, like
+        __call__.
         """
         kwargs = merge(self.kwargs, kwargs)
         return self.eval_async(X_norm, return_grad=return_grad, **kwargs)
@@ -370,12 +376,12 @@ class Function(BaseFunction):
 # raise NotImplemented
 
 
-def linear_fit(A, b, norm=2, bound=None):
-    r"""Solve the linear optimization problem subject to constraints"""
+def linear_fit(A, b, norm=2, bound=None):  # noqa: ANN001, ANN202, N803
+    r"""Solve the linear optimization problem subject to constraints."""
     assert norm in [1, 2, np.inf], "Invalid norm specified"
     assert bound in [None, "lower", "upper"], "invalid bound specified"
 
-    if norm == 2 and bound == None:
+    if norm == 2 and bound is None:
         return scipy.linalg.lstsq(A, b)[0]
     x = cp.Variable(A.shape[1])
     residual = x.__rmatmul__(A) - b
@@ -400,7 +406,7 @@ def linear_fit(A, b, norm=2, bound=None):
 
 
 class PolynomialFunction(BaseFunction):
-    r"""A polynomial function in a Legendre basis
+    r"""A polynomial function in a Legendre basis.
 
     Parameters
     ----------
@@ -412,53 +418,53 @@ class PolynomialFunction(BaseFunction):
             Coefficients of polynomial
     """
 
-    def __init__(self, basis, coef):
+    def __init__(self, basis, coef) -> None:  # noqa: ANN001, D107
         self.basis = basis
         self.coef = np.array(coef)
 
-    def roots(self):
+    def roots(self):  # noqa: ANN201, D102
         return self.basis.roots(self.coef)
 
-    def V(self, X, dim):
+    def V(self, X, dim):  # noqa: ANN001, ANN201, D102, N802, N803
         return self.basis.V(X, dim)
 
-    def DV(self, X, dim):
+    def DV(self, X, dim):  # noqa: ANN001, ANN201, D102, N802, N803
         return self.basis.DV(X, dim)
 
-    def DDV(self, X, dim):
+    def DDV(self, X, dim):  # noqa: ANN001, ANN201, ARG002, D102, N802, N803
         return self.basis.DDV(X)
 
-    def eval(self, X, dim):
+    def eval(self, X, dim):  # noqa: ANN001, ANN201, D102, N803
         if len(X.shape) == 1:
             return self.V(X.reshape(1, -1), dim).dot(self.coef).reshape(1)
         return self.V(X, dim).dot(self.coef)
 
-    def grad(self, X, dim, coef=None):
+    def grad(self, X, dim, coef=None):  # noqa: ANN001, ANN201, D102, N803
         if coef is None:
             coef = self.coef
         if len(X.shape) == 1:
             one_d = True
-            X = X.reshape(1, -1)
+            X = X.reshape(1, -1)  # noqa: N806
         else:
             one_d = False
 
-        DV = self.DV(X, dim)
+        DV = self.DV(X, dim)  # noqa: N806
         # Compute gradient on projected space
-        Df = np.tensordot(DV, coef, axes=(1, 0))
+        Df = np.tensordot(DV, coef, axes=(1, 0))  # noqa: N806
         # Inflate back to whole space
         if one_d:
             return Df.reshape(X.shape[1])
         return Df
 
-    def hessian(self, X, dim):
+    def hessian(self, X, dim):  # noqa: ANN001, ANN201, D102, N803
         if len(X.shape) == 1:
             one_d = True
-            X = X.reshape(1, -1)
+            X = X.reshape(1, -1)  # noqa: N806
         else:
             one_d = False
 
-        DDV = self.DDV(X, dim)
-        DDf = np.tensordot(DDV, self.coef, axes=(1, 0))
+        DDV = self.DDV(X, dim)  # noqa: N806
+        DDf = np.tensordot(DDV, self.coef, axes=(1, 0))  # noqa: N806
         if one_d:
             return DDf.reshape(X.shape[1], X.shape[1])
         return DDf
@@ -466,7 +472,7 @@ class PolynomialFunction(BaseFunction):
 
 # TODO: Change this to work with all the basis names
 class PolynomialApproximation(PolynomialFunction):
-    r"""Construct a polynomial approximation
+    r"""Construct a polynomial approximation.
 
     Parameters
     ----------
@@ -482,7 +488,7 @@ class PolynomialApproximation(PolynomialFunction):
             the approximation is below or above the measured samples
     """
 
-    def __init__(self, degree, basis="legendre", norm=2, bound=None):
+    def __init__(self, degree, basis="legendre", norm=2, bound=None) -> None:  # noqa: ANN001, D107
         degree = int(degree)
         assert degree >= 0, "Degree must be positive"
         self.degree = degree
@@ -505,24 +511,24 @@ class PolynomialApproximation(PolynomialFunction):
         assert norm in [1, 2, np.inf]
         self.norm = norm
 
-    def fit(self, X, fX):
-        M, m = X.shape
+    def fit(self, X, fX) -> None:  # noqa: ANN001, D102, N803
+        _M, _m = X.shape  # noqa: N806
 
         # Since we don't know the input dimension until we get the data, we initialize the basis here
         if self.basis_name == "arnoldi":
-            self.basis = ArnoldiPolynomialBasis(self.degree, X=X)
+            self.basis = ArnoldiPolynomialBasis(self.degree, X=X)  # noqa: F405
         elif self.basis_name == "legendre":
-            self.basis = LegendreTensorBasis(self.degree, X=X)
+            self.basis = LegendreTensorBasis(self.degree, X=X)  # noqa: F405
         elif self.basis_name == "monomial":
-            self.basis = MonomialTensorBasis(self.degree, X=X)
+            self.basis = MonomialTensorBasis(self.degree, X=X)  # noqa: F405
         elif self.basis_name == "chebyshev":
-            self.basis = ChebyshevTensorBasis(self.degree, X=X)
+            self.basis = ChebyshevTensorBasis(self.degree, X=X)  # noqa: F405
         elif self.basis_name == "laguerre":
-            self.basis = LaguerreTensorBasis(self.degree, X=X)
+            self.basis = LaguerreTensorBasis(self.degree, X=X)  # noqa: F405
         elif self.basis_name == "hermite":
-            self.basis = HermiteTensorBasis(self.degree, X=X)
+            self.basis = HermiteTensorBasis(self.degree, X=X)  # noqa: F405
 
         # Construct Vandermonde matrix
-        V = self.basis.V(X)
+        V = self.basis.V(X)  # noqa: N806
 
         self.coef = linear_fit(V, fX, norm=self.norm, bound=self.bound)

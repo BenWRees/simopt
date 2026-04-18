@@ -123,7 +123,7 @@ class SGD(Solver):
         """Set the incumbent solution."""
         self._incumbent_solution = value
 
-    def solve(self, problem: Problem) -> None:
+    def solve(self, problem: Problem) -> None:  # ty: ignore[invalid-method-override]
         """Run a single macroreplication of the solver on a problem.
 
         Args:
@@ -153,7 +153,7 @@ class SGD(Solver):
         )
 
         self.problem.simulate(self.incumbent_solution, r)
-        self.current_fn_estimate = (self.incumbent_solution.objectives_mean.item())
+        self.current_fn_estimate = self.incumbent_solution.objectives_mean.item()
 
         self.recommended_solns.append(self.incumbent_solution)
         self.intermediate_budgets.append(self.budget.used)
@@ -168,11 +168,11 @@ class SGD(Solver):
         # self.iterations = []
 
         while self.budget.remaining > 0:
-
             # Check proximity to bounds for finite difference direction
             forward = np.isclose(self.incumbent_x, lower_bound, atol=1e-7).astype(int)
             backward = np.isclose(self.incumbent_x, upper_bound, atol=1e-7).astype(int)
-            # BdsCheck: 1 stands for forward, -1 stands for backward, 0 means central diff
+            # BdsCheck: 1 stands for forward, -1 stands for backward, 0 means central
+            # diff
             bounds_check = np.subtract(forward, backward)
 
             # Compute gradient approximation
@@ -181,7 +181,9 @@ class SGD(Solver):
                 self.budget.request(2 * r)
             else:
                 # grad = self.finite_diff(self.incumbent_solution, bounds_check)
-                grad = finite_diff(self, self.incumbent_solution, bounds_check, problem, 1e-8, r)
+                grad = finite_diff(
+                    self, self.incumbent_solution, bounds_check, problem, 1e-8, r
+                )
                 self.budget.request(2 * self.problem.dim * r)
 
             # Apply gradient clipping if enabled
@@ -206,7 +208,7 @@ class SGD(Solver):
                 self.incumbent_x, self.problem
             )
             self.problem.simulate(self.incumbent_solution, r)
-            self.current_fn_estimate = (self.incumbent_solution.objectives_mean.item())
+            self.current_fn_estimate = self.incumbent_solution.objectives_mean.item()
 
             self.iteration_count += 1
 
@@ -226,7 +228,7 @@ class SGD(Solver):
 
     #     Args:
     #             new_solution: The current iteration's solution.
-    #             bounds_check: Array indicating boundary check for finite difference type.
+    # bounds_check: Array indicating boundary check for finite difference type.
     #                     1 for forward, -1 for backward, 0 for central difference.
 
     #     Returns:
@@ -245,13 +247,16 @@ class SGD(Solver):
     #     return np.mean(grads, axis=1)
 
     def finite_diff_spsa(
-        self, new_solution: Solution, bounds_check: np.ndarray
+        self,
+        new_solution: Solution,
+        bounds_check: np.ndarray,  # noqa: ARG002
     ) -> np.ndarray:
         """Compute SPSA-like finite difference approximation of the gradient.
 
         Args:
                 new_solution: The current iteration's solution.
-                bounds_check: Array indicating boundary check for finite difference type.
+                bounds_check: Array indicating boundary check for finite difference
+                type.
 
         Returns:
                 The averaged gradient approximation from SPSA-style estimates.

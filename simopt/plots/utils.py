@@ -269,7 +269,9 @@ def setup_plot(
         plt.ylabel("Function Estimate", size=14)
         plt.tick_params(axis="both", which="major", labelsize=12)
         if plot_type == PlotType.FN_ESTIMATES_ALL:
-            title = f"{solver_name} on {problem_name}\nFunction Estimates (All Macroreps)"
+            title = (
+                f"{solver_name} on {problem_name}\nFunction Estimates (All Macroreps)"
+            )
         else:
             title = f"{solver_name} on {problem_name}\nMean Function Estimates"
     else:
@@ -438,9 +440,11 @@ def check_common_problem_and_reference(
     """
     # problem_list = [experiment.problem for experiment in experiments]
     problem_list_name = [experiment.problem.name for experiment in experiments]
-    #A weaker condition is to check if the experiments all have the same problem name
-    if not all(prob_name == problem_list_name[0] for prob_name in problem_list_name[1:]):
-    # if not all(prob == problem_list[0] for prob in problem_list[1:]):
+    # A weaker condition is to check if the experiments all have the same problem name
+    if not all(
+        prob_name == problem_list_name[0] for prob_name in problem_list_name[1:]
+    ):
+        # if not all(prob == problem_list[0] for prob in problem_list[1:]):
         error_msg = "All experiments must have the same problem."
         raise ValueError(error_msg)
 

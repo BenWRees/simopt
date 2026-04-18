@@ -62,17 +62,17 @@ class ERMExampleProblemConfig(BaseModel):
     ]
 
 
-class FileInputModel(InputModel):
-    def __init__(self, filename):
+class FileInputModel(InputModel):  # noqa: D101
+    def __init__(self, filename) -> None:  # noqa: ANN001, D107
         self.data = np.load(filename)
 
-    def set_rng(self, rng: random.Random) -> None:
+    def set_rng(self, rng: random.Random) -> None:  # noqa: D102
         self.rng = rng
 
-    def unset_rng(self) -> None:
+    def unset_rng(self) -> None:  # noqa: D102
         self.rng = None
 
-    def random(self) -> float:
+    def random(self) -> float:  # noqa: D102
         n_rows = np.shape(self.data)[0]
         resample_idx = np.random.choice(n_rows, size=1, replace=True)
         resample_x = self.data[resample_idx, 0].item()
@@ -149,10 +149,12 @@ class ERMExampleProblem(Problem):
         x = all_data[:, 0]
         y = all_data[:, 1]
         optbeta1, optbeta0 = np.polyfit(x, y, 1)
-        opttrainingmse = np.mean(
-            [(yy - optbeta0 - optbeta1 * xx) ** 2 for (xx, yy) in zip(x, y)]
+        return np.mean(
+            [
+                (yy - optbeta0 - optbeta1 * xx) ** 2
+                for (xx, yy) in zip(x, y, strict=False)
+            ]
         )
-        return opttrainingmse
 
     @property
     def optimal_solution(self) -> tuple | None:  # noqa: D102
@@ -201,11 +203,10 @@ class ERMExampleProblem(Problem):
 
     def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:  # noqa: D102
         # beta = tuple([rand_sol_rng.uniform(-2, 2) for _ in range(self.dim)])
-        beta = tuple(
+        return tuple(
             rand_sol_rng.mvnormalvariate(
                 mean_vec=[1.0] * self.dim,
                 cov=np.eye(self.dim).tolist(),
                 factorized=False,
             )
         )
-        return beta

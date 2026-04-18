@@ -49,3 +49,20 @@ class VariableType(Enum):
             VariableType.MIXED: "M",
         }
         return symbol_mapping.get(self, "?")
+
+
+class SolverProblemType(Enum):
+    """Enum class for the problem classes a solver supports."""
+
+    PROBLEM = 1
+    MULTISTAGE = 2
+    BOTH = 3
+
+    def display_name(self) -> str:
+        """Return a readable label for error messages and UI text."""
+        name_mapping = {
+            SolverProblemType.PROBLEM: "Problem",
+            SolverProblemType.MULTISTAGE: "MultistageProblem",
+            SolverProblemType.BOTH: "Problem and MultistageProblem",
+        }
+        return name_mapping.get(self, "Unknown")

@@ -15,7 +15,7 @@ class Exponential(Distribution):
     Rate parameter of the Exponential distribution.
     """
 
-    def __init__(self, rate=None):
+    def __init__(self, rate=None) -> None:  # noqa: ANN001, D107
         if rate is None:
             self.rate = 1.0
         else:
@@ -35,7 +35,7 @@ class Exponential(Distribution):
                 "Invalid parameters in exponential distribution. Rate should be positive."
             )
 
-    def get_description(self):
+    def get_description(self):  # noqa: ANN201
         """A description of the Exponential distribution.
 
         :param Exponential self:
@@ -43,14 +43,13 @@ class Exponential(Distribution):
         :return:
             A string describing the Exponential distribution.
         """
-        text = (
+        return (
             "is an exponential distribution with a rate parameter of"
             + str(self.rate)
             + "."
         )
-        return text
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """An exponential probability density function.
 
         :param Exponential self:
@@ -60,13 +59,14 @@ class Exponential(Distribution):
         :return:
             An array of N values over the support of the distribution.
         :return:
-            Probability density values along the support of the exponential distribution.
+            Probability density values along the support of the exponential
+            distribution.
         """
         if points is not None:
             return self.parent.pdf(points)
         raise ValueError("Please digit an input for getPDF method")
 
-    def get_icdf(self, xx):
+    def get_icdf(self, xx):  # noqa: ANN001, ANN201
         """An inverse exponential cumulative density function.
 
         :param Exponential self:
@@ -78,7 +78,7 @@ class Exponential(Distribution):
         """
         return self.parent.ppf(xx)
 
-    def get_cdf(self, points=None):
+    def get_cdf(self, points=None):  # noqa: ANN001, ANN201
         """An exponential cumulative density function.
 
         :param Exponential self:
@@ -94,18 +94,16 @@ class Exponential(Distribution):
             return self.parent.cdf(points)
         raise ValueError("Please digit an input for getCDF method")
 
-    def get_samples(self, m=None):
+    def get_samples(self, m=None):  # noqa: ANN001, ANN201
         """Generates samples from the Exponential distribution.
 
         :param Expon self:
             An instance of the Exponential class.
         :param integer m:
-             Number of random samples. If no value is provided, a default of 5e05 is assumed
+             Number of random samples. If no value is provided, a default of 5e05 is
+             assumed
         :return:
             A N-by-1 vector that contains the samples.
         """
-        if m is not None:
-            number = m
-        else:
-            number = 500000
+        number = m if m is not None else 500000
         return self.parent.rvs(size=number)

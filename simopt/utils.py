@@ -196,7 +196,7 @@ def print_table(name: str, headers: list[str], data: list[tuple] | dict) -> None
     for row in data:
         row_str = f" {pipe} ".join(
             f"{item!s:>{width}}"
-            if isinstance(item, (int, float))
+            if isinstance(item, int | float)
             else f"{item!s:<{width}}"
             for item, width in zip(row, max_widths, strict=False)
         )

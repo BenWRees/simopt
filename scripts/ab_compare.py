@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-A/B comparison driver for ASTROMoRF adaptive-dimension safety rules.
+"""A/B comparison driver for ASTROMoRF adaptive-dimension safety rules.
 
 Creates two temporary module copies:
  - relaxed: uses the current `simopt/solvers/astromorf.py` (already in workspace)
@@ -19,11 +18,10 @@ script will not install dependencies.
 
 import argparse
 import os
-import shutil
+import statistics
 import subprocess
 import sys
 import tempfile
-import statistics
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,9 +32,11 @@ RESULT_DIR.mkdir(exist_ok=True)
 
 RELAXED_SNIPPET = r"""
         # Prevent extreme oscillations: require a small cooldown before applying changes
-        # (Relaxed rules: cooldown is short and step-cap is proportional to problem dimension)
+        # (Relaxed rules: cooldown is short and step-cap is proportional to problem
+        dimension)
         if not self.in_dimension_reset:
-            time_since_change = self.iteration_count - getattr(self, "last_d_change_iteration", 0)
+            time_since_change = self.iteration_count - getattr(self,
+            "last_d_change_iteration", 0)
             if time_since_change < min_iters_between_d_changes:
                 # Avoid changing d too frequently within the tiny cooldown window
                 return self.d
@@ -56,7 +56,8 @@ RELAXED_SNIPPET = r"""
 CONSERVATIVE_SNIPPET = r"""
         # Prevent extreme oscillations: require a small cooldown before applying changes
         if not self.in_dimension_reset:
-            time_since_change = self.iteration_count - getattr(self, "last_d_change_iteration", 0)
+            time_since_change = self.iteration_count - getattr(self,
+            "last_d_change_iteration", 0)
             if time_since_change < min_iters_between_d_changes:
                 # Avoid changing d too frequently
                 return self.d
@@ -64,7 +65,8 @@ CONSERVATIVE_SNIPPET = r"""
             # Conservative step cap to avoid large jumps
             max_step = 2
 
-            # If multiple consecutive unsuccessful iterations, be slightly more willing to increase d
+            # If multiple consecutive unsuccessful iterations, be slightly more willing
+            to increase d
             if getattr(self, "consecutive_unsuccessful", 0) >= 3:
                 max_step = max(max_step, 3)
 
@@ -90,21 +92,24 @@ def make_patched_module(temp_root: Path, conservative: bool) -> None:
         if RELAXED_SNIPPET in text:
             text = text.replace(RELAXED_SNIPPET, CONSERVATIVE_SNIPPET)
         else:
-            # Try a coarse replacement of the relaxed comment header to the conservative block
-            text = text.replace("# (Relaxed rules: cooldown is short and step-cap is proportional to problem dimension)", "")
-            # Best-effort: insert conservative_snippet after the `if not self.in_dimension_reset:` anchor
+            # Try a coarse replacement of the relaxed comment header to the conservative block  # noqa: E501
+            text = text.replace(
+                "# (Relaxed rules: cooldown is short and step-cap is proportional to problem dimension)",  # noqa: E501
+                "",
+            )
+            # Best-effort: insert conservative_snippet after the `if not self.in_dimension_reset:` anchor  # noqa: E501
             anchor = "if not self.in_dimension_reset:"
             if anchor in text:
                 parts = text.split(anchor, 1)
-                # Find end of that if-block by searching next blank line after anchor occurrence
+                # Find end of that if-block by searching next blank line after anchor occurrence  # noqa: E501
                 text = parts[0] + anchor + "\n" + CONSERVATIVE_SNIPPET + parts[1]
     # else: use existing current file content
     (tgt / "astromorf.py").write_text(text)
 
 
-def run_one(temp_path: Path, problem: str, budget: int) -> float:
+def run_one(temp_path: Path, problem: str, budget: int) -> float:  # noqa: ARG001, D103
     env = os.environ.copy()
-    # Ensure our temp_path is searched before workspace so our patched module is imported
+    # Ensure our temp_path is searched before workspace so our patched module is imported  # noqa: E501
     env["PYTHONPATH"] = str(temp_path) + os.pathsep + str(ROOT)
     # Run the run_solver_test.py script and capture stdout
     proc = subprocess.run(
@@ -117,7 +122,7 @@ def run_one(temp_path: Path, problem: str, budget: int) -> float:
         cwd=str(ROOT),
     )
     out = proc.stdout
-    # parse final fn_estimate from the printed Iteration DataFrame table: find last numeric row
+    # parse final fn_estimate from the printed Iteration DataFrame table: find last numeric row  # noqa: E501
     # fallback: search for 'fn_estimate' header and then parse subsequent lines
     if "Iteration DataFrame:" in out:
         after = out.split("Iteration DataFrame:", 1)[1]
@@ -129,7 +134,7 @@ def run_one(temp_path: Path, problem: str, budget: int) -> float:
             # expect columns: iteration budget_history fn_estimate mrep
             if len(cols) >= 3:
                 try:
-                    val = float(cols[-2]) if cols[-1].isdigit() else float(cols[-2])
+                    val = float(cols[-2]) if cols[-1].isdigit() else float(cols[-2])  # noqa: RUF034
                     last_val = val
                     break
                 except Exception:
@@ -154,7 +159,7 @@ def run_one(temp_path: Path, problem: str, budget: int) -> float:
     return floats[-1] if floats else float("nan")
 
 
-def run_arm(arm_name: str, conservative: bool, repeats: int, problem: str, budget: int):
+def run_arm(arm_name: str, conservative: bool, repeats: int, problem: str, budget: int):  # noqa: ANN201
     """Run `repeats` trials for the arm and return list of final objectives."""
     vals = []
     csv_lines = []
@@ -163,18 +168,18 @@ def run_arm(arm_name: str, conservative: bool, repeats: int, problem: str, budge
             tdpath = Path(td)
             # copy minimal package structure and patched module
             make_patched_module(tdpath, conservative=conservative)
-            # copy other package files that may be required by imports? We rely on PYTHONPATH ordering
+            # copy other package files that may be required by imports? We rely on PYTHONPATH ordering  # noqa: E501
             val = run_one(tdpath, problem, budget)
-            print(f"{arm_name} run {i+1}/{repeats}: final_obj={val}")
+            print(f"{arm_name} run {i + 1}/{repeats}: final_obj={val}")
             vals.append(val)
-            csv_lines.append(f"{i+1},{val}")
+            csv_lines.append(f"{i + 1},{val}")
     # save per-arm CSV
     out_file = RESULT_DIR / f"{arm_name}_results.csv"
     out_file.write_text("run,final_obj\n" + "\n".join(csv_lines))
     return vals
 
 
-def main():
+def main() -> None:  # noqa: D103
     parser = argparse.ArgumentParser()
     parser.add_argument("--repeats", type=int, default=10)
     parser.add_argument("--budget", type=int, default=1000)
@@ -189,15 +194,27 @@ def main():
     print(f"  repeats={repeats}, budget={budget}, problem={problem}")
 
     # Arm A: relaxed (current file)
-    relaxed_vals = run_arm("relaxed", conservative=False, repeats=repeats, problem=problem, budget=budget)
+    relaxed_vals = run_arm(
+        "relaxed", conservative=False, repeats=repeats, problem=problem, budget=budget
+    )
     # Arm B: conservative (patched)
-    conservative_vals = run_arm("conservative", conservative=True, repeats=repeats, problem=problem, budget=budget)
+    conservative_vals = run_arm(
+        "conservative",
+        conservative=True,
+        repeats=repeats,
+        problem=problem,
+        budget=budget,
+    )
 
     print("\nSummary:")
-    print(f" relaxed: median={statistics.median(relaxed_vals):.6g}, mean={statistics.mean(relaxed_vals):.6g}")
-    print(f" conservative: median={statistics.median(conservative_vals):.6g}, mean={statistics.mean(conservative_vals):.6g}")
+    print(
+        f" relaxed: median={statistics.median(relaxed_vals):.6g}, mean={statistics.mean(relaxed_vals):.6g}"  # noqa: E501
+    )
+    print(
+        f" conservative: median={statistics.median(conservative_vals):.6g}, mean={statistics.mean(conservative_vals):.6g}"  # noqa: E501
+    )
     print(f"Detailed CSVs in: {RESULT_DIR}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

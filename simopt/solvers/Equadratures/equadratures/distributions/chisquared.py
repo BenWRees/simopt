@@ -15,7 +15,7 @@ class Chisquared(Distribution):
     Degrees of freedom for the chi-squared distribution.
     """
 
-    def __init__(self, dofs):
+    def __init__(self, dofs) -> None:  # noqa: ANN001, D107
         if dofs is None:
             self.dofs = 1
         else:
@@ -39,7 +39,7 @@ class Chisquared(Distribution):
             0.0, 10.0 * self.mean, RECURRENCE_PDF_SAMPLES
         )
 
-    def get_description(self):
+    def get_description(self):  # noqa: ANN201
         """A description of the Chi-squared distribution.
 
         :param Chisquared self:
@@ -47,14 +47,13 @@ class Chisquared(Distribution):
         :return:
             A string describing the Chi-squared distribution.
         """
-        text = (
+        return (
             "is a chi-squared distribution; characterised by its degrees of freedom, which here is"
             + str(self.dofs)
             + "."
         )
-        return text
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """A Chi-squared  probability density function.
 
         :param Chisquared self:
@@ -62,15 +61,17 @@ class Chisquared(Distribution):
         :param points:
             Matrix of points for defining the probability density function.
         :return:
-            An array of N equidistant values over the support of the Chi-squared distribution.
+            An array of N equidistant values over the support of the Chi-squared
+            distribution.
         :return:
-            Probability density values along the support of the Chi-squared distribution.
+            Probability density values along the support of the Chi-squared
+            distribution.
         """
         if points is not None:
             return self.parent.pdf(points)
         raise ValueError("Please digit an input for getPDF method")
 
-    def get_cdf(self, points=None):
+    def get_cdf(self, points=None):  # noqa: ANN001, ANN201
         """A Chi-squared cumulative density function.
 
         :param Chisquared self:
@@ -78,7 +79,8 @@ class Chisquared(Distribution):
         :param matrix points:
             Matrix of points for defining the cumulative density function.
         :return:
-            An array of N equidistant values over the support of the Chi-squared distribution.
+            An array of N equidistant values over the support of the Chi-squared
+            distribution.
         :return:
             Cumulative density values along the support of the Chi-squared distribution.
         """
@@ -86,30 +88,29 @@ class Chisquared(Distribution):
             return self.parent.cdf(points)
         raise ValueError("Please digit an input for getCDF method")
 
-    def get_icdf(self, xx):
+    def get_icdf(self, xx):  # noqa: ANN001, ANN201
         """A Chi-squared inverse cumulative density function.
 
         :param Chisquared self:
             An instance of Chi-squared class
         :param matrix xx:
-            A matrix of points at which the inverse cumulative density function need to be evaluated.
+            A matrix of points at which the inverse cumulative density function need to
+            be evaluated.
         :return:
             Inverse cumulative density function values of the Chi-squared distribution.
         """
         return self.parent.ppf(xx)
 
-    def get_samples(self, m=None):
+    def get_samples(self, m=None):  # noqa: ANN001, ANN201
         """Generates samples from the Chi-squared distribution.
 
         :param Chisquared self:
             An instance of Chi-squared class
         :param integer m:
-            Number of random samples. If no value is provided, a default of 5e05 is assumed.
+            Number of random samples. If no value is provided, a default of 5e05 is
+            assumed.
         :return:
             A N-by-1 vector that contains the samples.
         """
-        if m is not None:
-            number = m
-        else:
-            number = 500000
+        number = m if m is not None else 500000
         return self.parent.rvs(size=number)

@@ -4,7 +4,7 @@ import numpy as np
 from scipy.special import gamma
 
 
-def laguerre_recurrence_coefficients(a, order):
+def laguerre_recurrence_coefficients(a, order):  # noqa: ANN001, ANN201
     """Returns the Laguerre recurrence coefficients.
 
     :param double a:
@@ -31,7 +31,7 @@ def laguerre_recurrence_coefficients(a, order):
     return ab
 
 
-def jacobi_recurrence_coefficients(a, b, lower, upper, order):
+def jacobi_recurrence_coefficients(a, b, lower, upper, order):  # noqa: ANN001, ANN201
     """Returns the Jacobi recurrence coefficients.
 
     :param double a:
@@ -78,7 +78,7 @@ def jacobi_recurrence_coefficients(a, b, lower, upper, order):
     return ab
 
 
-def hermite_recurrence_coefficients(param_A, param_B, order):
+def hermite_recurrence_coefficients(param_A, param_B, order):  # noqa: ANN001, ANN201, N803
     """Returns the Hermite recurrence coefficients.
 
     :param double param_A:
@@ -99,7 +99,7 @@ def hermite_recurrence_coefficients(param_A, param_B, order):
         return ab
 
     # Adapted from Walter Gatuschi
-    N = order - 1
+    N = order - 1  # noqa: N806
     n = range(1, N + 1)
     nh = [k / 2.0 for k in n]
     for i in range(0, N, 2):
@@ -116,7 +116,7 @@ def hermite_recurrence_coefficients(param_A, param_B, order):
     return ab
 
 
-def custom_recurrence_coefficients(x, w, order):
+def custom_recurrence_coefficients(x, w, order):  # noqa: ANN001, ANN201
     """Returns the custom recurrence coefficients.
 
     :param array x:

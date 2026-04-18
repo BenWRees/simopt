@@ -1,5 +1,6 @@
 """Solvability profile plot."""
 
+import contextlib
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -180,15 +181,15 @@ def plot_solvability_profiles(
                         experiments=[experiments[solver_idx]],
                         n_bootstraps=n_bootstraps,
                         conf_level=conf_level,
-                        plot_type=plot_type,  # type: ignore
+                        plot_type=plot_type,
                         solve_tol=solve_tol,
                         beta=beta,
                         estimator=solver_curve,
                         normalize=True,
                     )
                     if plot_conf_ints:
-                        if isinstance(bs_conf_int_lb_curve, (int, float)) or isinstance(
-                            bs_conf_int_ub_curve, (int, float)
+                        if isinstance(bs_conf_int_lb_curve, int | float) or isinstance(
+                            bs_conf_int_ub_curve, int | float
                         ):
                             error_msg = (
                                 "Bootstrap confidence intervals are not available "
@@ -209,10 +210,8 @@ def plot_solvability_profiles(
                 loc=legend_loc,
             )
             if leg is not None:
-                try:
+                with contextlib.suppress(Exception):
                     leg.get_frame().set_alpha(0.4)
-                except Exception:
-                    pass
             if print_max_hw:
                 report_max_halfwidth(
                     curve_pairs=curve_pairs,
@@ -238,10 +237,8 @@ def plot_solvability_profiles(
                 loc=legend_loc,
             )
             if leg is not None:
-                try:
+                with contextlib.suppress(Exception):
                     leg.get_frame().set_alpha(0.4)
-                except Exception:
-                    pass
             if print_max_hw:
                 report_max_halfwidth(
                     curve_pairs=curve_pairs,
@@ -290,7 +287,7 @@ def plot_solvability_profiles(
                                 ],
                                 n_bootstraps=n_bootstraps,
                                 conf_level=conf_level,
-                                plot_type=plot_type,  # type: ignore
+                                plot_type=plot_type,
                                 solve_tol=solve_tol,
                                 beta=beta,
                                 estimator=diff_solver_curve,
@@ -299,8 +296,8 @@ def plot_solvability_profiles(
                         )
                         if plot_conf_ints:
                             if isinstance(
-                                bs_conf_int_lb_curve, (int, float)
-                            ) or isinstance(bs_conf_int_ub_curve, (int, float)):
+                                bs_conf_int_lb_curve, int | float
+                            ) or isinstance(bs_conf_int_ub_curve, int | float):
                                 error_msg = (
                                     "Bootstrap confidence intervals are not available "
                                     "for scalar estimators."
@@ -324,10 +321,8 @@ def plot_solvability_profiles(
                 loc=legend_loc,
             )
             if leg is not None:
-                try:
+                with contextlib.suppress(Exception):
                     leg.get_frame().set_alpha(0.4)
-                except Exception:
-                    pass
             if print_max_hw:
                 report_max_halfwidth(
                     curve_pairs=curve_pairs,
@@ -435,8 +430,8 @@ def plot_solvability_profiles(
                         normalize=True,
                     )
                     if plot_conf_ints:
-                        if isinstance(bs_conf_int_lb_curve, (int, float)) or isinstance(
-                            bs_conf_int_ub_curve, (int, float)
+                        if isinstance(bs_conf_int_lb_curve, int | float) or isinstance(
+                            bs_conf_int_ub_curve, int | float
                         ):
                             error_msg = (
                                 "Bootstrap confidence intervals are not available "
@@ -447,8 +442,8 @@ def plot_solvability_profiles(
                             bs_conf_int_lb_curve, bs_conf_int_ub_curve
                         )
                     if print_max_hw:
-                        if isinstance(bs_conf_int_lb_curve, (int, float)) or isinstance(
-                            bs_conf_int_ub_curve, (int, float)
+                        if isinstance(bs_conf_int_lb_curve, int | float) or isinstance(
+                            bs_conf_int_ub_curve, int | float
                         ):
                             error_msg = (
                                 "Max halfwidth is not available for scalar estimators."
@@ -539,8 +534,8 @@ def plot_solvability_profiles(
                         )
                         if plot_conf_ints:
                             if isinstance(
-                                bs_conf_int_lb_curve, (int, float)
-                            ) or isinstance(bs_conf_int_ub_curve, (int, float)):
+                                bs_conf_int_lb_curve, int | float
+                            ) or isinstance(bs_conf_int_ub_curve, int | float):
                                 error_msg = (
                                     "Bootstrap confidence intervals are not available "
                                     "for scalar estimators."
@@ -551,8 +546,8 @@ def plot_solvability_profiles(
                             )
                         if print_max_hw:
                             if isinstance(
-                                bs_conf_int_lb_curve, (int, float)
-                            ) or isinstance(bs_conf_int_ub_curve, (int, float)):
+                                bs_conf_int_lb_curve, int | float
+                            ) or isinstance(bs_conf_int_ub_curve, int | float):
                                 error_msg = (
                                     "Max halfwidth is not available for "
                                     "scalar estimators."

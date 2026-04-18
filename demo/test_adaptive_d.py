@@ -1,43 +1,47 @@
 #!/usr/bin/env python3
-"""Clean standalone test for adaptive subspace scoring (fixed copy).
-"""
+"""Clean standalone test for adaptive subspace scoring (fixed copy)."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
+
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import numpy as np
 
 
-class DummyProblem:
-    def __init__(self, dim: int):
+class DummyProblem:  # noqa: D101
+    def __init__(self, dim: int) -> None:  # noqa: D107
         self.dim = int(dim)
         self.lower_bounds = tuple([-5.0] * self.dim)
         self.upper_bounds = tuple([5.0] * self.dim)
         self.factors = {"budget": 1000}
 
 
-def make_prev_info(recs):
+def make_prev_info(recs):  # noqa: ANN001, ANN201, D103
     info = []
     for eigvals, drec, succ in recs:
-        info.append({
-            "eigenvalue_spectrum": list(np.asarray(eigvals, dtype=float)),
-            "recommended_dimension": int(drec),
-            "model_success": bool(succ),
-            "validation_by_d": {1: 0.5, 2: 0.2, 3: 0.15, 4: 0.12} if succ else {1: 0.6, 2: 0.4},
-        })
+        info.append(
+            {
+                "eigenvalue_spectrum": list(np.asarray(eigvals, dtype=float)),
+                "recommended_dimension": int(drec),
+                "model_success": bool(succ),
+                "validation_by_d": {1: 0.5, 2: 0.2, 3: 0.15, 4: 0.12}
+                if succ
+                else {1: 0.6, 2: 0.4},
+            }
+        )
     return info
 
 
-class LocalSolver:
-    def __init__(self, problem: DummyProblem):
+class LocalSolver:  # noqa: D101
+    def __init__(self, problem: DummyProblem) -> None:  # noqa: D107
         self.problem = problem
         self.max_d = max(1, problem.dim - 1)
         self.previous_model_information = []
         self.gradient_eigenvalues = []
         self.last_validation_by_d = None
 
-    def evaluate_and_score_candidate_dimensions(self):
+    def evaluate_and_score_candidate_dimensions(self):  # noqa: ANN201, D102
         results = {}
         max_test_d = min(self.max_d, self.problem.dim - 1)
         if max_test_d < 1:
@@ -72,9 +76,12 @@ class LocalSolver:
             ]
             if spectra:
                 maxlen = max(s.shape[0] for s in spectra)
-                padded = np.vstack([
-                    np.pad(s, (0, maxlen - s.shape[0]), constant_values=0.0) for s in spectra
-                ])
+                padded = np.vstack(
+                    [
+                        np.pad(s, (0, maxlen - s.shape[0]), constant_values=0.0)
+                        for s in spectra
+                    ]
+                )
                 eig_source = np.mean(padded, axis=0)
 
         if eig_source is None or eig_source.size == 0:
@@ -130,7 +137,9 @@ class LocalSolver:
                 if max_val is None or max_val - min_val < 1e-12:
                     s_val = 0.8
                 else:
-                    s_val = 1.0 - (metrics["val_err"] - min_val) / max(1e-12, (max_val - min_val))
+                    s_val = 1.0 - (metrics["val_err"] - min_val) / max(
+                        1e-12, (max_val - min_val)
+                    )
 
             s_proj = 1.0 - metrics["proj_resid"]
             s_succ = metrics["success_rate"]
@@ -148,7 +157,7 @@ class LocalSolver:
         return results
 
 
-def run_tests_with_solver(solver, problem):
+def run_tests_with_solver(solver, problem) -> None:  # noqa: ANN001, D103
     solver.problem = problem
     solver.max_d = problem.dim - 1
     solver.previous_model_information = []
@@ -156,10 +165,12 @@ def run_tests_with_solver(solver, problem):
     eig = np.array([5.0, 4.0] + [0.1] * (problem.dim - 2))
     solver.gradient_eigenvalues = [eig]
     solver.last_validation_by_d = {1: 0.4, 2: 0.08, 3: 0.07, 4: 0.06}
-    solver.previous_model_information = make_prev_info([
-        (eig, 2, True),
-        (eig * 0.9, 2, True),
-    ])
+    solver.previous_model_information = make_prev_info(
+        [
+            (eig, 2, True),
+            (eig * 0.9, 2, True),
+        ]
+    )
 
     scores = solver.evaluate_and_score_candidate_dimensions()
     print("Scores (case1) (d -> score):")
@@ -171,23 +182,25 @@ def run_tests_with_solver(solver, problem):
     eig2 = np.ones(problem.dim)
     solver.gradient_eigenvalues = [eig2]
     solver.last_validation_by_d = {1: 0.12, 2: 0.11, 3: 0.10, 4: 0.09, 5: 0.09}
-    solver.previous_model_information = make_prev_info([
-        (eig2, 3, False),
-        (eig2, 4, False),
-    ])
+    solver.previous_model_information = make_prev_info(
+        [
+            (eig2, 3, False),
+            (eig2, 4, False),
+        ]
+    )
     scores2 = solver.evaluate_and_score_candidate_dimensions()
-    print('\nScores (case2) (d -> score):')
+    print("\nScores (case2) (d -> score):")
     for d in sorted(scores2.keys()):
         print(d, scores2[d]["score"], scores2[d])
     best2 = max(scores2.items(), key=lambda kv: kv[1]["score"])
     print("Best d (case2):", best2)
 
 
-def main():
+def main() -> None:  # noqa: D103
     problem = DummyProblem(dim=10)
     solver = LocalSolver(problem)
     run_tests_with_solver(solver, problem)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

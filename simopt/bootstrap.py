@@ -189,9 +189,9 @@ def bootstrap_procedure(
         float_1 = computed_bootstrap[0]
         float_2 = computed_bootstrap[1]
         # Keep indexing into them until they are floats.
-        while not isinstance(float_1, (int, float)):
+        while not isinstance(float_1, int | float):
             float_1 = float_1[0]
-        while not isinstance(float_2, (int, float)):
+        while not isinstance(float_2, int | float):
             float_2 = float_2[0]
         return float_1, float_2
     # Functional returns a curve.
@@ -212,7 +212,7 @@ def bootstrap_procedure(
                 "Estimator must be provided for functional that returns a curve."
             )
             raise ValueError(error_msg)
-        if isinstance(estimator, (int, float)):
+        if isinstance(estimator, int | float):
             error_msg = (
                 "Estimator must be a Curve object for functional that returns a curve."
             )

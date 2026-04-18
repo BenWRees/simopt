@@ -188,15 +188,20 @@ class ASTROMORFHyperparameterModel(Model):
                 sorted_gammas = sorted(gammas, reverse=True)
                 if sorted_gammas != gammas:
                     logging.warning(
-                        f"Reordering gamma values to satisfy gamma_1 >= gamma_2 >= gamma_3: {gammas} -> {sorted_gammas}"
+                        f"Reordering gamma values to satisfy gamma_1 >= gamma_2 >= gamma_3: {gammas} -> {sorted_gammas}"  # noqa: E501
                     )
                     gamma_1, gamma_2, gamma_3 = sorted_gammas
         except Exception:
-            # If conversion fails or gammas missing, leave as-is and let downstream checks raise
+            # If conversion fails or gammas missing, leave as-is and let downstream checks raise  # noqa: E501
             pass
 
         # Create solver with these hyperparameters
-        if gamma_1 is None and gamma_2 is None and gamma_3 is None and subproblem_regularisation is None:
+        if (
+            gamma_1 is None
+            and gamma_2 is None
+            and gamma_3 is None
+            and subproblem_regularisation is None
+        ):
             solver_factors = {
                 "initial subspace dimension": dimension,
                 "polynomial degree": degree,
@@ -205,10 +210,10 @@ class ASTROMORFHyperparameterModel(Model):
             solver_factors = {
                 "initial subspace dimension": dimension,
                 "polynomial degree": degree,
-                "gamma_1": gamma_1, 
+                "gamma_1": gamma_1,
                 "gamma_2": gamma_2,
                 "gamma_3": gamma_3,
-                "subproblem_regularisation": subproblem_regularisation
+                "subproblem_regularisation": subproblem_regularisation,
             }
         solver = instantiate_solver(
             solver_name=self.factors["solver"],
@@ -217,12 +222,12 @@ class ASTROMORFHyperparameterModel(Model):
 
         # Create ProblemSolver instance
         experiment = ProblemSolver(
-            solver=solver,
-            problem=self.factors["target_problem"], create_pickle=False
+            solver=solver, problem=self.factors["target_problem"], create_pickle=False
         )
 
-
-        print(f"Evaluating {experiment.solver.name} on {experiment.problem.name} with dimension={dimension}, degree={degree}, gamma_1={gamma_1}, gamma_2={gamma_2}, gamma_3={gamma_3}, subproblem_regularisation={subproblem_regularisation}.")
+        print(
+            f"Evaluating {experiment.solver.name} on {experiment.problem.name} with dimension={dimension}, degree={degree}, gamma_1={gamma_1}, gamma_2={gamma_2}, gamma_3={gamma_3}, subproblem_regularisation={subproblem_regularisation}."  # noqa: E501
+        )
 
         # Run macroreplications
         experiment.run(n_macroreps=self.factors["n_macroreps"])
@@ -239,39 +244,45 @@ class ASTROMORFHyperparameterModel(Model):
                 final_obj = experiment.all_est_objectives[mrep][-1]
                 if not np.isnan(final_obj) and not np.isinf(final_obj):
                     final_objectives.append(final_obj)
-        
 
         if len(final_objectives) == 0:
             # Failed evaluation - return high penalty
-            print(f"No valid objective values obtained for dimension={dimension}, degree={degree}.")
+            print(
+                f"No valid objective values obtained for dimension={dimension}, degree={degree}."  # noqa: E501
+            )
             responses = {"weighted_score": 1e6}
             return responses, {}
 
         # Calculate statistics
-        mean_obj = -1 * self.factors['target_problem'].minmax[0] * np.mean(final_objectives) # turns maximisation into minimization
+        mean_obj = (
+            -1 * self.factors["target_problem"].minmax[0] * np.mean(final_objectives)
+        )  # turns maximisation into minimization
 
-
-        #Find standard deviation between macroreplicaitons
-        #first group together all estimated objectives across macroreplications
+        # Find standard deviation between macroreplicaitons
+        # first group together all estimated objectives across macroreplications
         grouped_objectives = {}
         for mrep in range(experiment.n_macroreps):
             for idx, est_obj in enumerate(experiment.all_est_objectives[mrep]):
                 if idx not in grouped_objectives:
                     grouped_objectives[idx] = []
                 grouped_objectives[idx].append(est_obj)
-        #Now find the std dev across solutions for each macroreplication
+        # Now find the std dev across solutions for each macroreplication
         std_devs = []
-        for idx, objs in grouped_objectives.items():
+        for idx, objs in grouped_objectives.items():  # noqa: B007
             if len(objs) > 1:
                 std_devs.append(np.std(objs, ddof=1))
             else:
                 std_devs.append(0)  # Penalize if only one rep
         std_obj = np.mean(std_devs)
 
+        print(
+            f"for dimension {dimension}, degree {degree}, gamma_1 {gamma_1}, gamma_2 {gamma_2}, gamma_3 {gamma_3}, subproblem_regularisation {subproblem_regularisation}: mean_obj = {mean_obj}, std_obj = {std_obj}"  # noqa: E501
+        )
 
-        print(f'for dimension {dimension}, degree {degree}, gamma_1 {gamma_1}, gamma_2 {gamma_2}, gamma_3 {gamma_3}, subproblem_regularisation {subproblem_regularisation}: mean_obj = {mean_obj}, std_obj = {std_obj}')
-
-        weighted_score = self.factors["quality_weight"] * mean_obj + self.factors["consistency_weight"] * std_obj
+        weighted_score = (
+            self.factors["quality_weight"] * mean_obj
+            + self.factors["consistency_weight"] * std_obj
+        )
 
         responses = {"weighted_score": weighted_score}
         return responses, {}
@@ -331,10 +342,12 @@ class ASTROMORFHyperparameterProblemTwoDim(Problem):
         x[1]: polynomial degree (integer, 1 to max_degree)
 
     Objective:
-        Minimize weighted_score = quality_weight * normalized_mean + consistency_weight * normalized_std
+        Minimize weighted_score = quality_weight * normalized_mean + consistency_weight
+        * normalized_std
 
     This treats hyperparameter optimization as a proper 2D integer-valued SO problem
-    that can be solved with any SimOpt solver (e.g., ASTRO-DF for Bayesian optimization).
+    that can be solved with any SimOpt solver (e.g., ASTRO-DF for Bayesian
+    optimization).
     """
 
     class_name_abbr: ClassVar[str] = "ASTROMORF-HYPEROPT-1"
@@ -401,7 +414,10 @@ class ASTROMORFHyperparameterProblemTwoDim(Problem):
             raise ValueError("Must specify 'target_problem' in model_fixed_factors")
 
         # Set max_dimension default based on target problem
-        if "max_dimension" not in fixed_factors or fixed_factors["max_dimension"] is None:
+        if (
+            "max_dimension" not in fixed_factors
+            or fixed_factors["max_dimension"] is None
+        ):
             fixed_factors["max_dimension"] = target_problem.dim
 
         # Store target problem for reference
@@ -420,7 +436,7 @@ class ASTROMORFHyperparameterProblemTwoDim(Problem):
     def factor_dict_to_vector(self, factor_dict: dict) -> tuple:  # noqa: D102
         return (int(factor_dict["dimension"]), int(factor_dict["degree"]))
 
-    def replicate(self, x: tuple) -> RepResult:  # noqa: D102
+    def replicate(self, _x: tuple) -> RepResult:  # noqa: D102
         responses, _ = self.model.replicate()
         objectives = [Objective(stochastic=responses["weighted_score"])]
         return RepResult(objectives=objectives)
@@ -445,7 +461,7 @@ class ASTROMORFHyperparameterProblemSixDimConfig(BaseModel):
         tuple[int | float, ...],
         Field(
             default=(3, 2, 2.5, 1.2, 0.5, 0.5),
-            description="initial hyperparameter configuration (dimension, degree, gamma_1, gamma_2, gamma_3, subproblem_regularisation)",
+            description="initial hyperparameter configuration (dimension, degree, gamma_1, gamma_2, gamma_3, subproblem_regularisation)",  # noqa: E501
         ),
     ]
     budget: Annotated[
@@ -492,14 +508,19 @@ class ASTROMORFHyperparameterProblemSixDim(Problem):
         x[5]: subproblem_regularisation (float)
 
     Objective:
-        Minimize weighted_score = quality_weight * normalized_mean + consistency_weight * normalized_std
+        Minimize weighted_score = quality_weight * normalized_mean + consistency_weight
+        * normalized_std
 
-    This treats hyperparameter optimization as a proper 6D mixed-integer-valued SO problem
-    that can be solved with any SimOpt solver (e.g., ASTRO-DF for Bayesian optimization).
+    This treats hyperparameter optimization as a proper 6D mixed-integer-valued SO
+    problem
+    that can be solved with any SimOpt solver (e.g., ASTRO-DF for Bayesian
+    optimization).
     """
 
     class_name_abbr: ClassVar[str] = "ASTROMORF-HYPEROPT-2"
-    class_name: ClassVar[str] = "ASTROMORF Hyperparameter Optimization with Gamma values and regularisation"
+    class_name: ClassVar[str] = (
+        "ASTROMORF Hyperparameter Optimization with Gamma values and regularisation"
+    )
     config_class: ClassVar[type[BaseModel]] = ASTROMORFHyperparameterProblemSixDimConfig
     model_class: ClassVar[type[Model]] = ASTROMORFHyperparameterModel
     n_objectives: ClassVar[int] = 1
@@ -521,7 +542,12 @@ class ASTROMORFHyperparameterProblemSixDim(Problem):
         "subproblem_regularisation": 0.5,
     }
     model_decision_factors: ClassVar[set[str]] = {
-        "dimension", "degree", "gamma_1", "gamma_2", "gamma_3", "subproblem_regularisation"
+        "dimension",
+        "degree",
+        "gamma_1",
+        "gamma_2",
+        "gamma_3",
+        "subproblem_regularisation",
     }
     _dim: int | None = None
 
@@ -573,7 +599,10 @@ class ASTROMORFHyperparameterProblemSixDim(Problem):
             raise ValueError("Must specify 'target_problem' in model_fixed_factors")
 
         # Set max_dimension default based on target problem
-        if "max_dimension" not in fixed_factors or fixed_factors["max_dimension"] is None:
+        if (
+            "max_dimension" not in fixed_factors
+            or fixed_factors["max_dimension"] is None
+        ):
             fixed_factors["max_dimension"] = int(target_problem.dim)
 
         # Store target problem for reference
@@ -606,7 +635,7 @@ class ASTROMORFHyperparameterProblemSixDim(Problem):
             float(factor_dict["subproblem_regularisation"]),
         )
 
-    def replicate(self, x: tuple) -> RepResult:  # noqa: D102
+    def replicate(self, _x: tuple) -> RepResult:  # noqa: D102
         responses, _ = self.model.replicate()
         objectives = [Objective(stochastic=responses["weighted_score"])]
         return RepResult(objectives=objectives)
@@ -617,10 +646,7 @@ class ASTROMORFHyperparameterProblemSixDim(Problem):
 
         # Need gamma_1 >= gamma_2 >= gamma_3
         _, _, gamma_1, gamma_2, gamma_3, _ = x
-        if not (gamma_1 >= gamma_2 and gamma_2 >= gamma_3):
-            return False
-
-        return True
+        return gamma_1 >= gamma_2 and gamma_2 >= gamma_3
 
     def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:  # noqa: D102
         lb = self.lower_bounds

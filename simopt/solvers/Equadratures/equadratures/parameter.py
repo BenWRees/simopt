@@ -1,5 +1,7 @@
 """Definition of a univariate parameter."""
 
+from typing import NoReturn
+
 import numpy as np
 import scipy as sc
 
@@ -37,25 +39,49 @@ class Parameter:
     order : int, optional
         Order of the parameter.
     param_type : str, optional
-        The type of distribution that characterizes the parameter (see [1, 2]). Options include `chebyshev (arcsine) <https://en.wikipedia.org/wiki/Arcsine_distribution>`_, `gaussian <https://en.wikipedia.org/wiki/Normal_distribution>`_,
-        `truncated-gaussian <https://en.wikipedia.org/wiki/Truncated_normal_distribution>`_, `beta <https://en.wikipedia.org/wiki/Beta_distribution>`_,
+        The type of distribution that characterizes the parameter (see [1, 2]). Options
+        include `chebyshev (arcsine)
+        <https://en.wikipedia.org/wiki/Arcsine_distribution>`_, `gaussian
+        <https://en.wikipedia.org/wiki/Normal_distribution>`_,
+        `truncated-gaussian
+        <https://en.wikipedia.org/wiki/Truncated_normal_distribution>`_, `beta
+        <https://en.wikipedia.org/wiki/Beta_distribution>`_,
         `cauchy <https://en.wikipedia.org/wiki/Cauchy_distribution>`_, `exponential <https://en.wikipedia.org/wiki/Exponential_distribution>`_,
-        `uniform <https://en.wikipedia.org/wiki/Uniform_distribution_(continuous)>`_, `triangular <https://en.wikipedia.org/wiki/Triangular_distribution>`_, `gamma <https://en.wikipedia.org/wiki/Gamma_distribution>`_,
+        `uniform <https://en.wikipedia.org/wiki/Uniform_distribution_(continuous)>`_,
+        `triangular <https://en.wikipedia.org/wiki/Triangular_distribution>`_, `gamma
+        <https://en.wikipedia.org/wiki/Gamma_distribution>`_,
         `weibull <https://en.wikipedia.org/wiki/Weibull_distribution>`_, `rayleigh  <https://en.wikipedia.org/wiki/Rayleigh_distribution>`_,
         `pareto <https://en.wikipedia.org/wiki/Pareto_distribution>`_, `lognormal <https://en.wikipedia.org/wiki/Log-normal_distribution>`_,
-        `students-t <https://en.wikipedia.org/wiki/Student%27s_t-distribution>`_, `logistic <https://en.wikipedia.org/wiki/Log-normal_distribution>`_,
-        `gumbel <https://en.wikipedia.org/wiki/Gumbel_distribution>`_, `chi <https://en.wikipedia.org/wiki/Chi_distribution>`_  and `chi-squared <https://en.wikipedia.org/wiki/Chi-squared_distribution>`_.
-        If no string is provided, a ``uniform`` distribution is assumed. Data-driven and custom analytical parameters can also be constructed by setting this option to ``data`` and ``analytical`` and providing a **weight_function** (see examples).
+        `students-t <https://en.wikipedia.org/wiki/Student%27s_t-distribution>`_,
+        `logistic <https://en.wikipedia.org/wiki/Log-normal_distribution>`_,
+        `gumbel <https://en.wikipedia.org/wiki/Gumbel_distribution>`_, `chi
+        <https://en.wikipedia.org/wiki/Chi_distribution>`_  and `chi-squared
+        <https://en.wikipedia.org/wiki/Chi-squared_distribution>`_.
+        If no string is provided, a ``uniform`` distribution is assumed. Data-driven and
+        custom analytical parameters can also be constructed by setting this option to
+        ``data`` and ``analytical`` and providing a **weight_function** (see examples).
     shape_parameter_A : float, optional
-        Most of the aforementioned distributions are characterized by two shape parameters. For instance, in the case of a ``gaussian`` (or ``truncated-gaussian``), this represents the mean. In the case of a beta distribution this represents the alpha value. For a ``uniform`` distribution this input is not required.
+        Most of the aforementioned distributions are characterized by two shape
+        parameters. For instance, in the case of a ``gaussian`` (or ``truncated-
+        gaussian``), this represents the mean. In the case of a beta distribution this
+        represents the alpha value. For a ``uniform`` distribution this input is not
+        required.
     shape_parameter_B : float, optional
-        This is the second shape parameter that characterizes the distribution selected. In the case of a ``gaussian`` or ``truncated-gaussian``, this is the variance.
+        This is the second shape parameter that characterizes the distribution selected.
+        In the case of a ``gaussian`` or ``truncated-gaussian``, this is the variance.
     data : numpy.ndarray, optional
-        A data-set with shape (number_of_data_points, 2), where the first column comprises of parameter values, while the second column corresponds to the data observations. This input should only be used with the ``Analytical`` distribution.
+        A data-set with shape (number_of_data_points, 2), where the first column
+        comprises of parameter values, while the second column corresponds to the data
+        observations. This input should only be used with the ``Analytical``
+        distribution.
     endpoints : str, optional
-        If set to ``both``, then the quadrature points and weights will have end-points, based on Gauss-Lobatto quadrature rules. If set to ``upper`` or ``lower`` a Gauss-Radau rule is used to compute one end-point at either the upper or lower bound.
+        If set to ``both``, then the quadrature points and weights will have end-points,
+        based on Gauss-Lobatto quadrature rules. If set to ``upper`` or ``lower`` a
+        Gauss-Radau rule is used to compute one end-point at either the upper or lower
+        bound.
     weight_function: Weight, optional
-        An instance of Weight, which contains a bespoke analytical or data-driven weight (probability density) function.
+        An instance of Weight, which contains a bespoke analytical or data-driven weight
+        (probability density) function.
 
     Examples:
     --------
@@ -74,22 +100,28 @@ class Parameter:
 
     References:
     ----------
-        1. Xiu, D., Karniadakis, G. E., (2002) The Wiener-Askey Polynomial Chaos for Stochastic Differential Equations. SIAM Journal on Scientific Computing,  24(2), `Paper <https://epubs.siam.org/doi/abs/10.1137/S1064827501387826?journalCode=sjoce3>`__
-        2. Gautschi, W., (1985) Orthogonal Polynomials-Constructive Theory and Applications. Journal of Computational and Applied Mathematics 12 (1985), pp. 61-76. `Paper <https://www.sciencedirect.com/science/article/pii/037704278590007X>`__
+        1. Xiu, D., Karniadakis, G. E., (2002) The Wiener-Askey Polynomial Chaos for
+        Stochastic Differential Equations. SIAM Journal on Scientific Computing,  24(2),
+        `Paper
+        <https://epubs.siam.org/doi/abs/10.1137/S1064827501387826?journalCode=sjoce3>`__
+        2. Gautschi, W., (1985) Orthogonal Polynomials-Constructive Theory and
+        Applications. Journal of Computational and Applied Mathematics 12 (1985), pp.
+        61-76. `Paper
+        <https://www.sciencedirect.com/science/article/pii/037704278590007X>`__
     """
 
-    def __init__(
+    def __init__(  # noqa: D107
         self,
-        order=1,
-        distribution="Uniform",
-        endpoints=None,
-        shape_parameter_A=None,
-        shape_parameter_B=None,
-        variable="parameter",
-        lower=None,
-        upper=None,
-        weight_function=None,
-    ):
+        order=1,  # noqa: ANN001
+        distribution="Uniform",  # noqa: ANN001
+        endpoints=None,  # noqa: ANN001
+        shape_parameter_A=None,  # noqa: ANN001, N803
+        shape_parameter_B=None,  # noqa: ANN001, N803
+        variable="parameter",  # noqa: ANN001
+        lower=None,  # noqa: ANN001
+        upper=None,  # noqa: ANN001
+        weight_function=None,  # noqa: ANN001
+    ) -> None:
         self.name = distribution
         self.variable = variable
         self.order = order
@@ -128,7 +160,7 @@ class Parameter:
                     "Parameter: The upper bound for your distribution is infinity and you have selected the upper bound option in the endpoints. These options are incompatible!",
                 )
 
-    def _set_distribution(self):
+    def _set_distribution(self) -> None:
         """Private function that sets the distribution."""
         if self.name.lower() == "gaussian" or self.name.lower() == "normal":
             self.distribution = Gaussian(self.shape_parameter_A, self.shape_parameter_B)
@@ -183,32 +215,45 @@ class Parameter:
         self.mean = self.distribution.mean
         self.variance = self.distribution.variance
 
-    def plot_orthogonal_polynomials(
-        self, ax=None, order_limit=None, number_of_points=200, show=True
+    def plot_orthogonal_polynomials(  # noqa: ANN201
+        self,
+        ax=None,  # noqa: ANN001
+        order_limit=None,  # noqa: ANN001
+        number_of_points=200,  # noqa: ANN001
+        show=True,  # noqa: ANN001
     ):
-        """Plots the first few orthogonal polynomials. See :meth:`~equadratures.plot.plot_orthogonal_polynomials` for full description."""
+        """Plots the first few orthogonal polynomials. See.
+
+        :meth:`~equadratures.plot.plot_orthogonal_polynomials` for full description.
+        """
         return plot.plot_orthogonal_polynomials(
             self, ax, order_limit, number_of_points, show
         )
 
-    def plot_pdf(self, ax=None, data=None, show=True, lim_range=True):
-        """Plots the probability density function for a Parameter. See :meth:`~equadratures.plot.plot_pdf` for full description."""
+    def plot_pdf(self, ax=None, data=None, show=True, lim_range=True):  # noqa: ANN001, ANN201
+        """Plots the probability density function for a Parameter. See.
+
+        :meth:`~equadratures.plot.plot_pdf` for full description.
+        """
         return plot.plot_pdf(self, ax, data, show, lim_range)
 
-    def plot_cdf(self, ax=None, show=True, lim_range=True):
-        """Plots the cumulative density function for a Parameter. See :meth:`~equadratures.plot.plot_cdf` for full description."""
+    def plot_cdf(self, ax=None, show=True, lim_range=True):  # noqa: ANN001, ANN201
+        """Plots the cumulative density function for a Parameter. See.
+
+        :meth:`~equadratures.plot.plot_cdf` for full description.
+        """
         return plot.plot_cdf(self, ax, show, lim_range)
 
-    def _set_moments(self):
+    def _set_moments(self) -> None:
         """Private function that sets the mean and the variance of the distribution."""
         self.mean = self.distribution.mean
         self.variance = self.distribution.variance
 
-    def _set_bounds(self):
+    def _set_bounds(self) -> None:
         """Private function that sets the bounds of the distribution."""
         self.bounds = self.distribution.bounds
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """Computes the probability density function associated with the Parameter.
 
         Parameters
@@ -219,16 +264,18 @@ class Parameter:
         Returns:
         -------
         numpy.ndarray
-            If ``points!=None``. ndarray containing the probability density function evaluated at the points in ``points``.
+            If ``points!=None``. ndarray containing the probability density function
+            evaluated at the points in ``points``.
         tuple
-            If ``points=None``. A tuple (`x`, `pdf`), where `pdf` is the probability density function evaluated at the points in `x`.
+            If ``points=None``. A tuple (`x`, `pdf`), where `pdf` is the probability
+            density function evaluated at the points in `x`.
         """
         if points is None:
             x = self.distribution.x_range_for_pdf
             return x, self.distribution.get_pdf(x)
         return self.distribution.get_pdf(points)
 
-    def get_cdf(self, points=None):
+    def get_cdf(self, points=None):  # noqa: ANN001, ANN201
         """Computes the cumulative density function associated with the Parameter.
 
         Parameters
@@ -239,22 +286,27 @@ class Parameter:
         Returns:
         -------
         numpy.ndarray
-            If ``points!=None``. ndarray containing the cumulative density function evaluated at the points in ``points``.
+            If ``points!=None``. ndarray containing the cumulative density function
+            evaluated at the points in ``points``.
         tuple
-            If ``points=None``. A tuple (`x`, `cdf`), where `cdf` is the cumulative density function evaluated at the points in `x`.
+            If ``points=None``. A tuple (`x`, `cdf`), where `cdf` is the cumulative
+            density function evaluated at the points in `x`.
         """
         if points is None:
             x = self.distribution.x_range_for_pdf
             return x, self.distribution.get_cdf(x)
         return self.distribution.get_cdf(points)
 
-    def get_icdf(self, cdf_values):
-        """Computes the inverse cumulative density function associated with the Parameter.
+    def get_icdf(self, cdf_values):  # noqa: ANN001, ANN201
+        """Computes the inverse cumulative density function associated with the.
+
+        Parameter.
 
         Parameters
         ----------
         cdf_values : numpy.ndarray
-            Values of the cumulative density function for which its inverse needs to be computed.
+            Values of the cumulative density function for which its inverse needs to be
+            computed.
 
         Returns:
         -------
@@ -263,7 +315,7 @@ class Parameter:
         """
         return self.distribution.get_icdf(cdf_values)
 
-    def get_samples(self, number_of_samples_required):
+    def get_samples(self, number_of_samples_required):  # noqa: ANN001, ANN201
         """Generates samples from the distribution associated with the Parameter.
 
         Parameters
@@ -278,7 +330,7 @@ class Parameter:
         """
         return self.distribution.get_samples(number_of_samples_required)
 
-    def get_description(self):
+    def get_description(self):  # noqa: ANN201
         """Provides a description of the Parameter.
 
         Returns:
@@ -288,7 +340,7 @@ class Parameter:
         """
         return self.distribution.get_description()
 
-    def get_recurrence_coefficients(self, order=None):
+    def get_recurrence_coefficients(self, order=None):  # noqa: ANN001, ANN201
         """Generates the recurrence coefficients.
 
         Parameters
@@ -303,7 +355,7 @@ class Parameter:
         """
         return self.distribution.get_recurrence_coefficients(order)
 
-    def get_jacobi_eigenvectors(self, order=None):
+    def get_jacobi_eigenvectors(self, order=None):  # noqa: ANN001, ANN201
         """Computes the eigenvectors of the Jacobi matrix.
 
         Parameters
@@ -318,23 +370,25 @@ class Parameter:
         """
         if order is None:
             order = self.order + 1
-            JacobiMat = self.get_jacobi_matrix(order)
+            self.get_jacobi_matrix(order)
             if order == 1:
-                V = [1.0]
+                V = [1.0]  # noqa: N806
         else:
             # D,V = np.linalg.eig(self.get_jacobi_matrix(order))
-            D, V = sc.linalg.eigh(self.get_jacobi_matrix(order))
+            D, V = sc.linalg.eigh(self.get_jacobi_matrix(order))  # noqa: N806
             idx = D.argsort()[::-1]
-            eigs = D[idx]
-            eigVecs = V[:, idx]
+            D[idx]
+            eigVecs = V[:, idx]  # noqa: N806
             # V = np.mat(V) # convert to matrix
             # i = np.argsort(D) # get the sorted indices
             # i = np.array(i) # convert to array
             # V = V[:,i]
         return eigVecs
 
-    def get_jacobi_matrix(self, order=None, ab=None):
-        """Computes the Jacobi matrix---a tridiagonal matrix of the recurrence coefficients.
+    def get_jacobi_matrix(self, order=None, ab=None):  # noqa: ANN001, ANN201
+        """Computes the Jacobi matrix---a tridiagonal matrix of the recurrence.
+
+        coefficients.
 
         Parameters
         ----------
@@ -357,10 +411,12 @@ class Parameter:
         order = int(order)
         # The case of order 1~
         if int(order) == 1:
-            JacobiMatrix = ab[0, 0]
+            JacobiMatrix = ab[0, 0]  # noqa: N806
         # For everything else~
         else:
-            JacobiMatrix = np.zeros((int(order), int(order)))  # allocate space
+            JacobiMatrix = np.zeros(  # noqa: N806
+                (int(order), int(order))
+            )  # allocate space
             JacobiMatrix[0, 0] = ab[0, 0]
             JacobiMatrix[0, 1] = np.sqrt(ab[1, 1])
             k = order - 1
@@ -373,8 +429,10 @@ class Parameter:
             JacobiMatrix[order - 1, order - 2] = np.sqrt(ab[order - 1, 1])
         return JacobiMatrix
 
-    def _get_orthogonal_polynomial(self, points, order=None, grad=False, hess=False):
-        """Private function that evaluates the univariate orthogonal polynomial at quadrature points.
+    def _get_orthogonal_polynomial(self, points, order=None, grad=False, hess=False):  # noqa: ANN001, ANN202
+        """Private function that evaluates the univariate orthogonal polynomial at.
+
+        quadrature points.
 
         :param Parameter self:
             An instance of the Parameter object.
@@ -383,11 +441,8 @@ class Parameter:
         :param int order:
             Order up to which the orthogonal polynomial must be obtained.
         """
-        if order is None:
-            order = self.order + 1
-        else:
-            order = order + 1
-        gridPoints = np.asarray(points).copy().ravel()
+        order = self.order + 1 if order is None else order + 1
+        gridPoints = np.asarray(points).copy().ravel()  # noqa: N806
         if self.ab is None:
             self.ab = self.get_recurrence_coefficients(order)
         ab = self.ab
@@ -400,7 +455,8 @@ class Parameter:
                 grid_flag = 1
         if grid_flag == 1:
             for r in range(0, gridPoints.shape[0]):
-                gridPoints[r] = (self.bounds[1] - self.bounds[0]) * ( (gridPoints[r] - self.lower) / (self.upper - self.lower) )  + self.bounds[0]
+                gridPoints[r] = (self.bounds[1] - self.bounds[0]) * ( (gridPoints[r] -
+                self.lower) / (self.upper - self.lower) )  + self.bounds[0]
             #print(gridPoints)
         print('After:')
         print(gridPoints)
@@ -453,13 +509,17 @@ class Parameter:
 
         return orthopoly, derivative_orthopoly, dderivative_orthopoly
 
-    def _get_local_quadrature(self, order=None, ab=None):
-        """Returns the 1D quadrature points and weights for the parameter. WARNING: Should not be called under normal circumstances.
+    def _get_local_quadrature(self, order=None, ab=None):  # noqa: ANN001, ANN202
+        """Returns the 1D quadrature points and weights for the parameter. WARNING:.
+
+        Should not be called under normal circumstances.
 
         :param Parameter self:
             An instance of the Parameter class
         :param int N:
-            Number of quadrature points and weights required. If order is not specified, then by default the method will return the number of points defined in the parameter itself.
+            Number of quadrature points and weights required. If order is not specified,
+            then by default the method will return the number of points defined in the
+            parameter itself.
         :return:
             A N-by-1 matrix that contains the quadrature points
         :return:
@@ -474,20 +534,17 @@ class Parameter:
         raise (ValueError, "Error in endpoints specification.")
 
 
-def get_local_quadrature(self, order=None, ab=None):
+def get_local_quadrature(self, order=None, ab=None):  # noqa: ANN001, ANN201, D103
     # Check for extra input argument!
-    if order is None:
-        order = self.order + 1
-    else:
-        order = order + 1
+    order = self.order + 1 if order is None else order + 1
 
     if ab is None:
         # Get the recurrence coefficients & the jacobi matrix
-        JacobiMat = self.get_jacobi_matrix(order)
+        JacobiMat = self.get_jacobi_matrix(order)  # noqa: N806
         ab = self.get_recurrence_coefficients(order + 1)
     else:
         ab = ab[0 : order + 1, :]
-        JacobiMat = self.get_jacobi_matrix(order, ab)
+        JacobiMat = self.get_jacobi_matrix(order, ab)  # noqa: N806
     # If statement to handle the case where order = 1
     if order == 1:
         # Check to see whether upper and lower bound are defined:
@@ -501,14 +558,14 @@ def get_local_quadrature(self, order=None, ab=None):
     else:
         # Compute eigenvalues & eigenvectors of Jacobi matrix
         # D,V = np.linalg.eig(JacobiMat)
-        D, V = sc.linalg.eigh(JacobiMat)
+        D, V = sc.linalg.eigh(JacobiMat)  # noqa: N806
         # V = np.mat(V) # convert to matrix
         # local_points = np.sort(D) # sort by the eigenvalues
         # i = np.argsort(D) # get the sorted indices
         # i = np.array(i) # convert to array
         idx = D.argsort()[::-1]
         eigs = D[idx]
-        eigVecs = V[:, idx]
+        eigVecs = V[:, idx]  # noqa: N806
 
         w = np.linspace(1, order + 1, order)  # create space for weights
         p = np.ones((int(order), 1))
@@ -523,16 +580,13 @@ def get_local_quadrature(self, order=None, ab=None):
     return p, w
 
 
-def get_local_quadrature_radau(self, order=None, ab=None):
+def get_local_quadrature_radau(self, order=None, ab=None):  # noqa: ANN001, ANN201, D103
     if self.endpoints.lower() == "lower":
         end0 = self.lower
     elif self.endpoints.lower() == "upper":
         end0 = self.upper
-    if order is None:
-        order = self.order - 1
-    else:
-        order = order - 1
-    N = order
+    order = self.order - 1 if order is None else order - 1
+    N = order  # noqa: N806
     if ab is None:
         ab = self.get_recurrence_coefficients(order + 1)
     else:
@@ -547,12 +601,9 @@ def get_local_quadrature_radau(self, order=None, ab=None):
     return get_local_quadrature(self, order=order + 1, ab=ab)
 
 
-def get_local_quadrature_lobatto(self, order=None, ab=None):
-    if order is None:
-        order = self.order - 2
-    else:
-        order = order - 2
-    N = order
+def get_local_quadrature_lobatto(self, order=None, ab=None):  # noqa: ANN001, ANN201, D103
+    order = self.order - 2 if order is None else order - 2
+    N = order  # noqa: N806
     endl = self.lower
     endr = self.upper
     if ab is None:
@@ -576,7 +627,7 @@ def get_local_quadrature_lobatto(self, order=None, ab=None):
     return get_local_quadrature(self, order=order + 2, ab=ab)
 
 
-def distribution_error():
+def distribution_error() -> NoReturn:  # noqa: D103
     raise (
         ValueError,
         "Please select a valid distribution for your parameter; documentation can be found at www.effective-quadratures.org",

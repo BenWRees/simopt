@@ -1,4 +1,4 @@
-# ---
+# ---  # noqa: D100
 # jupyter:
 #   jupytext:
 #     formats: ipynb,py:percent
@@ -18,12 +18,12 @@
 #
 # This script is intended to help with debugging a problem.
 #
-# It imports a problem, initializes a problem object with given factors, sets up pseudorandom number generators, and runs multiple replications at a given solution.
+# It imports a problem, initializes a problem object with given factors, sets up pseudorandom number generators, and runs multiple replications at a given solution.  # noqa: E501
 
 # %% [markdown]
 # ## Append SimOpt Path
 #
-# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.
+# Since the notebook is stored in simopt/notebooks, we need to append the parent simopt directory to the system path to import the necessary modules later on.  # noqa: E501
 
 # %%
 import sys
@@ -80,8 +80,8 @@ num_macroreps = 10
 
 # %%
 # Create and attach rngs to solution
-from mrg32k3a.mrg32k3a import MRG32k3a
-from simopt.base import Solution
+from mrg32k3a.mrg32k3a import MRG32k3a  # noqa: E402
+from simopt.base import Solution  # noqa: E402
 
 rng_list = [MRG32k3a(s_ss_sss_index=[0, ss, 0]) for ss in range(myproblem.model.n_rngs)]
 mysolution = Solution(x, myproblem)

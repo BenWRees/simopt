@@ -15,7 +15,7 @@ class Pareto(Distribution):
     The shape parameter associated with the Pareto distribution.
     """
 
-    def __init__(self, shape_parameter):
+    def __init__(self, shape_parameter) -> None:  # noqa: ANN001, D107
         if shape_parameter is None:
             self.shape_parameter = 1.0
         else:
@@ -34,7 +34,7 @@ class Pareto(Distribution):
             0.999, self.shape_parameter + 20.0, RECURRENCE_PDF_SAMPLES
         )
 
-    def get_description(self):
+    def get_description(self):  # noqa: ANN201
         """A description of the Pareto distribution.
 
         :param Pareto self:
@@ -42,14 +42,13 @@ class Pareto(Distribution):
         :return:
             A string describing the Pareto distribution.
         """
-        text = (
+        return (
             "is a pareto distribution which is characterised by its shape parameter, which here is"
             + str(self.shape_parameter)
             + ". While the distribution can be characterized by a shape parameter and a scale parameter, in Effective Quadratures we use only the one, that is the scale parameter is set to 1. "
         )
-        return text
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """A Pareto probability density function.
 
         :param Pareto self:
@@ -57,7 +56,8 @@ class Pareto(Distribution):
         :param points:
             Matrix of points for defining the probability density function.
         :return:
-            An array of N equidistant values over the support of the Pareto distribution.
+            An array of N equidistant values over the support of the Pareto
+            distribution.
         :return:
             Probability density values along the support of the Pareto distribution.
         """
@@ -65,7 +65,7 @@ class Pareto(Distribution):
             return self.parent.pdf(points)
         raise ValueError("Please digit an input for get_pdf method")
 
-    def get_cdf(self, points=None):
+    def get_cdf(self, points=None):  # noqa: ANN001, ANN201
         """A Pareto cumulative density function.
 
         :param Pareto self:
@@ -73,7 +73,8 @@ class Pareto(Distribution):
         :param matrix points:
             Matrix of points for defining the cumulative density function.
         :return:
-            An array of N equidistant values over the support of the Pareto distribution.
+            An array of N equidistant values over the support of the Pareto
+            distribution.
         :return:
             Cumulative density values along the support of the Pareto distribution.
         """
@@ -81,30 +82,29 @@ class Pareto(Distribution):
             return self.parent.cdf(points)
         raise ValueError("Please digit an input for get_cdf method")
 
-    def get_icdf(self, xx):
+    def get_icdf(self, xx):  # noqa: ANN001, ANN201
         """A Pareto inverse cumulative density function.
 
         :param Pareto:
             An instance of Pareto class
         :param matrix xx:
-            A matrix of points at which the inverse cumulative density function need to be evaluated.
+            A matrix of points at which the inverse cumulative density function need to
+            be evaluated.
         :return:
             Inverse cumulative density function values of the Pareto distribution.
         """
         return self.parent.ppf(xx)
 
-    def get_samples(self, m=None):
+    def get_samples(self, m=None):  # noqa: ANN001, ANN201
         """Generates samples from the Pareto distribution.
 
         :param Pareto self:
             An instance of Pareto class
         :param integer m:
-            Number of random samples. If no value is provided, a default of 5e05 is assumed.
+            Number of random samples. If no value is provided, a default of 5e05 is
+            assumed.
         :return:
             A N-by-1 vector that contains the samples.
         """
-        if m is not None:
-            number = m
-        else:
-            number = 500000
+        number = m if m is not None else 500000
         return self.parent.rvs(size=number)

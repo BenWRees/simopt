@@ -1,4 +1,4 @@
-import numpy as np
+import numpy as np  # noqa: D100
 import scipy.linalg
 import scipy.optimize
 from scipy.linalg import eigh
@@ -12,9 +12,10 @@ __all__ = ["GaussianProcess"]
 
 
 class GaussianProcess(BaseFunction):
-    r"""Fits a Gaussian Process by maximizing the marginal likelihood
+    r"""Fits a Gaussian Process by maximizing the marginal likelihood.
 
-    Given :math:`M` pairs of :math:`\mathbf{x}_i \in \mathbb{R}^m` and :math:`y_i \in \mathbb{R}`,
+    Given :math:`M` pairs of :math:`\mathbf{x}_i \in \mathbb{R}^m` and :math:`y_i \in
+    \mathbb{R}`,
     this fits a model 
 
     .. math::
@@ -26,7 +27,8 @@ class GaussianProcess(BaseFunction):
     where :math:`\mathbf{L}` is a lower triangular matrix,
     :math:`\lbrace \psi_j \rbrace_j` is a polynomial basis (e.g., linear),
     and :math:`\boldsymbol{\alpha}, \boldsymbol{\beta}` are vectors of weights.
-    These parameters are choosen to maximize the log-marginal likelihood (see [RW06]_, Sec. 2.7), 
+    These parameters are choosen to maximize the log-marginal likelihood (see [RW06]_,
+    Sec. 2.7),
     or equivalently minimize
 
     .. math::
@@ -34,8 +36,9 @@ class GaussianProcess(BaseFunction):
     \min_{\mathbf{L}} & \ 
     \frac12 \mathbf{y}^\top \boldsymbol{\alpha}
     + \frac12 \log \det (\mathbf{K} + \tau \mathbf{I}), & \quad 
-    [\mathbf{K}]_{i,j} &= e^{-\frac12 \| \mathbf{L}(\mathbf{x}_i -\mathbf{x}_j)\|_2^2} \\
-		\text{where} & \ 
+    [\mathbf{K}]_{i,j} &= e^{-\frac12 \| \mathbf{L}(\mathbf{x}_i -\mathbf{x}_j)\|_2^2}
+    \\
+    \text{where} & \
     \begin{bmatrix}
 				\mathbf{K} + \tau \mathbf{I} & \mathbf{V} \\ \mathbf{V}^\top & \mathbf{0}
     \end{bmatrix} 
@@ -50,7 +53,8 @@ class GaussianProcess(BaseFunction):
     &
     \quad [\mathbf{V}]_{i,j} &= \psi_j(\mathbf{x}_i).
 	
-    Here :math:`\tau` denotes the nugget--a Tikhonov-like regularization term commonly used to 
+    Here :math:`\tau` denotes the nugget--a Tikhonov-like regularization term commonly
+    used to
     combat the ill-conditioning of the kernel matrix :math:`\mathbf{K}`.
     The additional constraint for the polynomial basis is described by Jones
     ([Jon01]_ eq. (3) and (4)).
@@ -73,7 +77,7 @@ class GaussianProcess(BaseFunction):
     ================ 	=============================================
     scalar   			:math:`\mathbf{L}(\ell) = e^{\ell}\mathbf{I}`
     scalar multiple 	:math:`\mathbf{L}(\ell) = e^{\ell} \mathbf{L}_0`
-    diagonal 			:math:`\mathbf{L}(\ell) = \text{diag}(\lbrace e^{\ell_i} \rbrace_{i})` 
+    diagonal 			:math:`\mathbf{L}(\ell) = \text{diag}(\lbrace e^{\ell_i} \rbrace_{i})`
     lower triangular	:math:`\mathbf{L}(\ell) = e^{\text{tril}(\boldsymbol{\ell})}`
     ================ 	=============================================
 
@@ -115,19 +119,27 @@ class GaussianProcess(BaseFunction):
 
     References:
     ----------
-    .. [RW06] Gaussian Processes for Machine Learning, Carl Edward Rasmussen and Christopher K. I. Williams,
+    .. [RW06] Gaussian Processes for Machine Learning, Carl Edward Rasmussen and
+    Christopher K. I. Williams,
     2006 MIT Press
 
     .. [Jon01] A Taxonomy of Global Optimization Methods Based on Response Surfaces,
     Donald R. Jones, Journal of Global Optimization, 21, pp. 345--383, 2001.
 
-    .. [MN10] "The complex step approximation to the Frechet derivative of a matrix function", 
-    Awad H. Al-Mohy and Nicholas J. Higham, Numerical Algorithms, 2010 (53), pp. 133--148.
+    .. [MN10] "The complex step approximation to the Frechet derivative of a matrix
+    function",
+    Awad H. Al-Mohy and Nicholas J. Higham, Numerical Algorithms, 2010 (53), pp. 133--
+    148.
     """
 
-    def __init__(
-        self, structure="const", degree=None, nugget=None, Lfixed=None, n_init=1
-    ):
+    def __init__(  # noqa: D107
+        self,
+        structure="const",  # noqa: ANN001
+        degree=None,  # noqa: ANN001
+        nugget=None,  # noqa: ANN001
+        Lfixed=None,  # noqa: ANN001, N803
+        n_init=1,  # noqa: ANN001
+    ) -> None:
         self.structure = structure
 
         self.rank = None  # currently disabled due to conditioning issues
@@ -144,8 +156,8 @@ class GaussianProcess(BaseFunction):
             assert Lfixed is not None, "Must specify 'Lfixed' to use scalar_mult"
             self.Lfixed = Lfixed
 
-    def _make_L(self, ell):
-        r"""Constructs the L matrix from the parameterization corresponding to the structure"""
+    def _make_L(self, ell):  # noqa: ANN001, ANN202, N802
+        r"""Constructs the L matrix from the parameterization corresponding to the structure."""
         if self.structure == "const":
             return np.exp(ell) * np.eye(self.m)
         if self.structure == "scalar_mult":
@@ -154,9 +166,9 @@ class GaussianProcess(BaseFunction):
             return np.diag(np.exp(ell))
         if self.structure == "tril":
             # Construct the L matrix
-            L = np.zeros((self.m * self.m,), dtype=ell.dtype)
+            L = np.zeros((self.m * self.m,), dtype=ell.dtype)  # noqa: N806
             L[self.tril_flat] = ell
-            L = L.reshape(self.m, self.m)
+            L = L.reshape(self.m, self.m)  # noqa: N806
 
             # This is a more numerically stable way to compute expm(L) - I
             # Lexp = L.dot(scipy.linalg.expm(L))
@@ -164,39 +176,38 @@ class GaussianProcess(BaseFunction):
             # JMH 8 Aug 2019: I'm less sure about the value of parameterizing as L*expm(L)
             # Specifically, having the zero matrix easily accessible doesn't seem like a good thing
             # and he gradient is more accurately computed using this form.
-            Lexp = scipy.linalg.expm(L)
+            return scipy.linalg.expm(L)
+        return None
 
-            return Lexp
-
-    def _log_marginal_likelihood(
+    def _log_marginal_likelihood(  # noqa: ANN202
         self,
-        ell,
-        X=None,
-        y=None,
-        return_obj=True,
-        return_grad=False,
-        return_alpha_beta=False,
+        ell,  # noqa: ANN001
+        X=None,  # noqa: ANN001, N803
+        y=None,  # noqa: ANN001
+        return_obj=True,  # noqa: ANN001
+        return_grad=False,  # noqa: ANN001
+        return_alpha_beta=False,  # noqa: ANN001
     ):
         if X is None:
-            X = self.X
+            X = self.X  # noqa: N806
         if y is None:
             y = self.y
 
         # Extract basic constants
-        M = X.shape[0]
-        m = X.shape[1]
+        M = X.shape[0]  # noqa: N806
+        X.shape[1]
 
-        L = self._make_L(ell)
+        L = self._make_L(ell)  # noqa: N806
         # Compute the squared distance
-        Y = np.dot(L, X.T).T
+        Y = np.dot(L, X.T).T  # noqa: N806
         dij = pdist(Y, "sqeuclidean")
 
         # Covariance matrix
-        K = np.exp(-0.5 * squareform(dij))
+        K = np.exp(-0.5 * squareform(dij))  # noqa: N806
 
         # Solve the linear system to compute the coefficients
         # alpha = np.dot(ev,(1./(ew+tikh))*np.dot(ev.T,y))
-        A = np.vstack(
+        A = np.vstack(  # noqa: N806
             [
                 np.hstack([K + self.nugget * np.eye(K.shape[0]), self.V]),
                 np.hstack([self.V.T, np.zeros((self.V.shape[1], self.V.shape[1]))]),
@@ -205,8 +216,8 @@ class GaussianProcess(BaseFunction):
         b = np.hstack([y, np.zeros(self.V.shape[1])])
 
         # As A can be singular, we use an eigendecomposition based inverse
-        ewA, evA = eigh(A)
-        I = np.abs(ewA) > 5 * np.finfo(float).eps
+        ewA, evA = eigh(A)  # noqa: N806
+        I = np.abs(ewA) > 5 * np.finfo(float).eps  # noqa: E741, N806
         x = np.dot(evA[:, I], (1.0 / ewA[I]) * np.dot(evA[:, I].T, b))
 
         alpha = x[:M]
@@ -235,14 +246,14 @@ class GaussianProcess(BaseFunction):
         # Build the derivative of the covariance matrix K wrt to L
 
         if self.structure == "tril":
-            dK = np.zeros((M, M, len(ell)))
-            for idx, (k, el) in enumerate(self.tril_ij):
+            dK = np.zeros((M, M, len(ell)))  # noqa: N806
+            for idx, (k, el) in enumerate(self.tril_ij):  # noqa: B007
                 eidx = np.zeros(ell.shape)
                 eidx[idx] = 1.0
                 # Approximation of the matrix exponential derivative [MH10]
                 h = 1e-10
-                dL = np.imag(self._make_L(ell + 1j * h * eidx)) / h
-                dY = np.dot(dL, X.T).T
+                dL = np.imag(self._make_L(ell + 1j * h * eidx)) / h  # noqa: N806
+                dY = np.dot(dL, X.T).T  # noqa: N806
                 for i in range(M):
                     # Evaluate the dot product
                     # dK[i,j,idx] -= np.dot(Y[i] - Y[j], dY[i] - dY[j])
@@ -251,7 +262,7 @@ class GaussianProcess(BaseFunction):
                 dK[:, :, idx] *= K
 
         elif self.structure == "diag":
-            dK = np.zeros((M, M, len(ell)))
+            dK = np.zeros((M, M, len(ell)))  # noqa: N806
             for idx, (k, el) in enumerate(self.tril_ij):
                 for i in range(M):
                     dK[i, :, idx] -= (Y[i, k] - Y[:, k]) * (Y[i, el] - Y[:, el])
@@ -263,7 +274,7 @@ class GaussianProcess(BaseFunction):
             # simply need
             # dK[i,j,1] = (Y[i] - Y[j])*(Y[i] - Y[j])*K
             # which we have already computed
-            dK = -(squareform(dij) * K).reshape(M, M, 1)
+            dK = -(squareform(dij) * K).reshape(M, M, 1)  # noqa: N806
 
         # Now compute the gradient
         grad = np.zeros(len(ell))
@@ -274,7 +285,7 @@ class GaussianProcess(BaseFunction):
             # I = (ew>5*np.finfo(float).eps)
             # print "k", k, "dK", dK.shape
 
-            Kinv_dK = np.dot(ev, (np.dot(ev.T, dK[:, :, k]).T / ew).T)
+            Kinv_dK = np.dot(ev, (np.dot(ev.T, dK[:, :, k]).T / ew).T)  # noqa: N806
             # Note flipped signs from RW06 eq. 5.9
             grad[k] = 0.5 * np.trace(Kinv_dK)
             grad[k] -= 0.5 * np.dot(alpha, np.dot(alpha, dK[:, :, k]))
@@ -283,30 +294,30 @@ class GaussianProcess(BaseFunction):
             return obj, grad
         if not return_obj:
             return grad
+        return None
 
-    def _obj(self, ell, X=None, y=None):
+    def _obj(self, ell, X=None, y=None):  # noqa: ANN001, ANN202, N803
         return self._log_marginal_likelihood(
             ell, X, y, return_obj=True, return_grad=False, return_alpha_beta=False
         )
 
-    def _grad(self, ell, X=None, y=None):
+    def _grad(self, ell, X=None, y=None):  # noqa: ANN001, ANN202, N803
         return self._log_marginal_likelihood(
             ell, X, y, return_obj=False, return_grad=True, return_alpha_beta=False
         )
 
-    def _fit_init(self, X, y):
+    def _fit_init(self, X, y) -> None:  # noqa: ANN001, N803
         m = self.m = X.shape[1]
         self.X = X
         self.y = y
         # Setup structure based properties
         if self.structure == "tril":
-            if self.rank is None:
-                rank = m
-            else:
-                rank = self.rank
+            rank = m if self.rank is None else self.rank
 
             self.tril_ij = [
-                (i, j) for i, j in zip(*np.tril_indices(m)) if i >= (m - rank)
+                (i, j)
+                for i, j in zip(*np.tril_indices(m), strict=False)
+                if i >= (m - rank)
             ]
             self.tril_flat = np.array([i * m + j for i, j in self.tril_ij])
 
@@ -320,8 +331,8 @@ class GaussianProcess(BaseFunction):
         else:
             self.V = np.zeros((X.shape[0], 0))
 
-    def fit(self, X, y, L0=None):
-        """Fit a Gaussian process model
+    def fit(self, X, y, L0=None) -> None:  # noqa: ANN001, N803
+        """Fit a Gaussian process model.
 
         Parameters
         ----------
@@ -330,14 +341,14 @@ class GaussianProcess(BaseFunction):
         y: array-like (M,)
                 y[i] is the output at X[i]
         """
-        X = np.array(X)
+        X = np.array(X)  # noqa: N806
         y = np.array(y).flatten()
 
         # Initialized cached values for fit
         self._fit_init(X, y)
 
         if L0 is None:
-            L0 = np.eye(self.m)
+            L0 = np.eye(self.m)  # noqa: N806
 
         if self.structure == "tril":
             ell0 = np.array([L0[i, j] for i, j in self.tril_ij])
@@ -353,7 +364,7 @@ class GaussianProcess(BaseFunction):
         # TODO: Implement multiple initializations
         self._fit(ell0)
 
-    def _fit(self, ell0):
+    def _fit(self, ell0) -> None:  # noqa: ANN001
         # the implementation in l_bfgs_b seems flaky when we have invalid values
         # ell, obj, d = fmin_l_bfgs_b(self._obj, ell0, fprime = self._grad, disp = True)
         res = scipy.optimize.minimize(
@@ -370,21 +381,21 @@ class GaussianProcess(BaseFunction):
         )
         self._ell = ell
 
-    def eval(self, Xnew, return_cov=False):
-        Y = np.dot(self.L, self.X.T).T
-        Ynew = np.dot(self.L, Xnew.T).T
+    def eval(self, Xnew, return_cov=False):  # noqa: ANN001, ANN201, D102, N803
+        Y = np.dot(self.L, self.X.T).T  # noqa: N806
+        Ynew = np.dot(self.L, Xnew.T).T  # noqa: N806
         dij = cdist(Ynew, Y, "sqeuclidean")
-        K = np.exp(-0.5 * dij)
+        K = np.exp(-0.5 * dij)  # noqa: N806
         if self.degree is not None:
-            V = self.basis.V(Xnew)
+            V = self.basis.V(Xnew)  # noqa: N806
         else:
-            V = np.zeros((Xnew.shape[0], 0))
+            V = np.zeros((Xnew.shape[0], 0))  # noqa: N806
 
-        fXnew = np.dot(K, self.alpha) + np.dot(V, self.beta)
+        fXnew = np.dot(K, self.alpha) + np.dot(V, self.beta)  # noqa: N806
         if return_cov:
-            KK = np.exp(-0.5 * squareform(pdist(Y, "sqeuclidean")))
+            KK = np.exp(-0.5 * squareform(pdist(Y, "sqeuclidean")))  # noqa: N806
             ew, ev = eigh(KK)
-            I = ew > 500 * np.finfo(float).eps
+            I = ew > 500 * np.finfo(float).eps  # noqa: E741, N806
             z = ev[:, I].dot(np.diag(1.0 / ew[I]).dot(ev[:, I].T.dot(K.T)))
             # z = np.dot(ev[:,I], np.dot(np.diag(1./ew[I]).dot(ev[:,I].T.dot( K.T)) ))
             cov = np.array([1 - np.dot(K[i, :], z[:, i]) for i in range(Xnew.shape[0])])

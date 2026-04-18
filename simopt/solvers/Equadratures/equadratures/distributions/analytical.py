@@ -1,4 +1,4 @@
-"""The Analytical distribution"""
+"""The Analytical distribution."""
 
 import numpy as np
 import scipy.stats as stats
@@ -15,7 +15,7 @@ class Analytical(Distribution):
           An instance of the Weight class.
     """
 
-    def __init__(self, weight_function):
+    def __init__(self, weight_function) -> None:  # noqa: ANN001, D107
         self.weight_function = weight_function
         self.data = weight_function.data
         self.lower = weight_function.lower
@@ -25,7 +25,7 @@ class Analytical(Distribution):
         self.bounds = weight_function.support
         self.x_range_for_pdf = weight_function.x_range_for_pdf
 
-    def get_description(self):
+    def get_description(self):  # noqa: ANN201
         """A destription of Analytical distribution.
 
         :param Analytical self:
@@ -33,7 +33,7 @@ class Analytical(Distribution):
         :return:
             A string describing the Analytical distribution.
         """
-        text = (
+        return (
             "is a Analytical distribution defined over a support from "
             + str(self.lower)
             + " to "
@@ -45,23 +45,24 @@ class Analytical(Distribution):
             + str(self.variance)
             + "."
         )
-        return text
 
-    def get_pdf(self, points=None):
+    def get_pdf(self, points=None):  # noqa: ANN001, ANN201
         """A Analytical probability density function.
 
         :param Analytical self:
             An instance of Analytical class.
         :param points:
-            An array of points in which the probability density function needs to be calculated.
+            An array of points in which the probability density function needs to be
+            calculated.
         :return:
             Probability density values along the support of Analytical distribution.
         ** Notes **
-        To obtain a probability density function from finite samples, this function uses kerne density estimation (with Gaussian kernel).
+        To obtain a probability density function from finite samples, this function uses
+        kerne density estimation (with Gaussian kernel).
         """
         return self.weight_function.get_pdf(points)
 
-    def get_cdf(self, points=None):
+    def get_cdf(self, points=None):  # noqa: ANN001, ANN201, D102
         y = self.get_pdf()
         summ = np.sum(y)
         p = np.array(y / summ)
@@ -70,7 +71,7 @@ class Analytical(Distribution):
         )
         return analytical.cdf(points)
 
-    def get_recurrence_coefficients(self, order):
+    def get_recurrence_coefficients(self, order):  # noqa: ANN001, ANN201
         """Recurrence coefficients for the Analytical distribution.
 
         :param Analytical self:
@@ -124,13 +125,14 @@ class Analytical(Distribution):
             s = s1
         return ab
 
-    def get_icdf(self, xx):
+    def get_icdf(self, xx):  # noqa: ANN001, ANN201
         """A Analytical inverse cumulative distribution function.
 
         :param Analytical self:
             An instance of Analytical class.
         :param array xx:
-            An array of points in which the inverse cumulative density function needs to be evaluated.
+            An array of points in which the inverse cumulative density function needs to
+            be evaluated.
         :return:
             Inverse cumulative density function values of the Analytical distribution.
         """

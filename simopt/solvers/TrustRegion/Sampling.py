@@ -1,13 +1,13 @@
-import warnings
+import warnings  # noqa: D100, N999
 from math import ceil, log
 
 warnings.filterwarnings("ignore")
 
-from math import floor
+from math import floor  # noqa: E402
 
-import numpy as np
+import numpy as np  # noqa: E402
 
-from simopt.base import Problem
+from simopt.base import Problem  # noqa: E402
 
 __all__ = [
     "ASTROMoRFSampling",
@@ -18,18 +18,15 @@ __all__ = [
 ]
 
 
-class SamplingRule:
-    def __init__(self, tr_instance, sampling_rule):
+class SamplingRule:  # noqa: D101
+    def __init__(self, tr_instance, sampling_rule) -> None:  # noqa: ANN001, D107
         self.tr_instance = tr_instance
         self.sampling_rule = sampling_rule
         self.kappa = None
 
     # When sampling_rule is called is the behaviour of the sampling rule
-    def __call__(self, problem, k, current_solution, delta_k, sample_after=True):
-        current_solution = self.sampling_rule(
-            problem, k, current_solution, delta_k, sample_after
-        )
-        return current_solution
+    def __call__(self, problem, k, current_solution, delta_k, sample_after=True):  # noqa: ANN001, ANN204, D102
+        return self.sampling_rule(problem, k, current_solution, delta_k, sample_after)
 
     # def __call__(self, *params) :
     # 	current_solution, budget = self.sampling_instance(*params)
@@ -39,12 +36,12 @@ class SamplingRule:
 # This is a basic dynamic sampling rule - samples the objective fuction more
 
 
-class BasicSampling(SamplingRule):
-    def __init__(self, tr_instance):
+class BasicSampling(SamplingRule):  # noqa: D101
+    def __init__(self, tr_instance) -> None:  # noqa: ANN001, D107
         self.tr_instance = tr_instance
         super().__init__(tr_instance, self.sampling)
 
-    def sampling(self, problem, k, current_solution, delta_k, sample_after=True):
+    def sampling(self, problem, k, current_solution, delta_k, sample_after=True):  # noqa: ANN001, ANN201, ARG002, D102
         # sample 10 times
         sample_number = 10
         problem.simulate(current_solution, sample_number)
@@ -53,27 +50,26 @@ class BasicSampling(SamplingRule):
 
 
 # ASTRODF originial adaptive sampling rule
-class OriginalAdaptiveSampling(SamplingRule):
-    def __init__(self, tr_instance):
+class OriginalAdaptiveSampling(SamplingRule):  # noqa: D101
+    def __init__(self, tr_instance) -> None:  # noqa: ANN001, D107
         self.kappa = 1
         self.tr_instance = tr_instance
         super().__init__(tr_instance, self.sampling)
 
-    def sample_size(self, k, sig, delta_k):
+    def sample_size(self, k, sig, delta_k):  # noqa: ANN001, ANN201, D102
         alpha_k = 1
         lambda_k = 10 * log(k, 10) ** 1.5
         kappa = 10**2
-        S_k = floor(
+        return floor(
             max(
                 5,
                 lambda_k,
                 (lambda_k * sig) / ((kappa ^ 2) * delta_k ** (2 * (1 + 1 / alpha_k))),
             )
         )
-        # S_k = math.floor(max(lambda_k,(lambda_k*sig)/((kappa^2)*delta**(2*(1+1/alpha_k)))))
-        return S_k
+        # S_k = math.floor(max(lambda_k,(lambda_k*sig)/((kappa^2)*delta**(2*(1+1/alpha_k)))))  # noqa: E501
 
-    def sampling(self, problem, k, current_solution, delta_k, sample_after=True):
+    def sampling(self, problem, k, current_solution, delta_k, sample_after=True):  # noqa: ANN001, ANN201, ARG002, D102
         # need to check there is existing result
         problem.simulate(current_solution, 1)
         self.tr_instance.budget.request(1)
@@ -91,8 +87,8 @@ class OriginalAdaptiveSampling(SamplingRule):
         return current_solution
 
 
-class AdaptiveSampling(SamplingRule):
-    def __init__(self, tr_instance):
+class AdaptiveSampling(SamplingRule):  # noqa: D101
+    def __init__(self, tr_instance) -> None:  # noqa: ANN001, D107
         self.kappa = 1
         # self.pilot_run = None
         super().__init__(tr_instance, self.sampling_strategy)
@@ -100,7 +96,7 @@ class AdaptiveSampling(SamplingRule):
         # self.expended_budget = 0
         self.delta_power = 2 if tr_instance.factors["crn_across_solns"] else 4
 
-    def calculate_pilot_run(self, k, problem):
+    def calculate_pilot_run(self, k, problem):  # noqa: ANN001, ANN201, D102
         lambda_min = self.tr_instance.factors["lambda_min"]
         lambda_max = self.tr_instance.budget.remaining
         return ceil(
@@ -108,7 +104,7 @@ class AdaptiveSampling(SamplingRule):
             - 1
         )
 
-    def calculate_kappa(self, k, problem, current_solution, delta_k):
+    def calculate_kappa(self, k, problem, current_solution, delta_k):  # noqa: ANN001, ANN201, D102
         lambda_max = self.tr_instance.budget.remaining
         pilot_run = self.calculate_pilot_run(k, problem)
 
@@ -116,7 +112,7 @@ class AdaptiveSampling(SamplingRule):
         problem.simulate(current_solution, pilot_run)
         self.tr_instance.budget.request(pilot_run)
 
-        # current_solution, expended_budget = self.__calculate_kappa(problem, current_solution, delta_k, expended_budget)
+        # current_solution, expended_budget = self.__calculate_kappa(problem, current_solution, delta_k, expended_budget)  # noqa: E501
         sample_size = pilot_run
 
         while True:
@@ -148,7 +144,10 @@ class AdaptiveSampling(SamplingRule):
     def get_stopping_time(
         self, sig2: float, delta: float, k: int, problem: Problem
     ) -> int:
-        """Compute the sample size based on adaptive sampling stopping rule using the optimality gap"""
+        """Compute the sample size based on adaptive sampling stopping rule using the.
+
+        optimality gap.
+        """
         pilot_run = self.calculate_pilot_run(k, problem)
         if self.kappa == 0:
             self.kappa = 1
@@ -165,7 +164,7 @@ class AdaptiveSampling(SamplingRule):
         return sample_size
 
     # this is sample_type = 'conditional after'
-    def adaptive_sampling_1(self, problem, k, new_solution, delta_k):
+    def adaptive_sampling_1(self, problem, k, new_solution, delta_k):  # noqa: ANN001, ANN201, D102
         lambda_max = self.tr_instance.budget.remaining
         pilot_run = self.calculate_pilot_run(k, problem)
 
@@ -189,7 +188,7 @@ class AdaptiveSampling(SamplingRule):
         return new_solution
 
     # this is sample_type = 'conditional before'
-    def adaptive_sampling_2(self, problem, k, new_solution, delta_k):
+    def adaptive_sampling_2(self, problem, k, new_solution, delta_k):  # noqa: ANN001, ANN201, D102
         lambda_max = self.tr_instance.budget.remaining
         sample_size = new_solution.n_reps
         sig2 = new_solution.objectives_var[0]
@@ -207,7 +206,7 @@ class AdaptiveSampling(SamplingRule):
             sig2 = new_solution.objectives_var[0]
         return new_solution
 
-    def sampling_strategy(self, problem, k, new_solution, delta_k, sample_after=True):
+    def sampling_strategy(self, problem, k, new_solution, delta_k, sample_after=True):  # noqa: ANN001, ANN201, D102
         if sample_after:
             return self.adaptive_sampling_1(problem, k, new_solution, delta_k)
 
@@ -215,9 +214,9 @@ class AdaptiveSampling(SamplingRule):
 
 
 class ASTROMoRFSampling(AdaptiveSampling):
-    """ASTRO-MoRF sampling rule"""
+    """ASTRO-MoRF sampling rule."""
 
-    def __init__(self, tr_instance):
+    def __init__(self, tr_instance) -> None:  # noqa: ANN001, D107
         self.kappa = 1
         super().__init__(tr_instance)
         self.delta_power = 2 if tr_instance.factors["crn_across_solns"] else 4

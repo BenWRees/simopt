@@ -1,0 +1,50 @@
+{
+  "solver_names": ["ADAM", "ASTRODF", "NELDMD", "RNDSRCH", "STRONG", "ASTROMORF"],
+  "problem_names": ["SAN-1", "NETWORK-1", "ROSENBROCK-1", "PARAMESTI-1", "DYNAMNEWS-1"],
+  "dim_sizes": [100],
+  "fixed_factors": {
+    "ADAM": {
+      "DYNAMNEWS-1":  {"crn_across_solns": false, "r": 5,  "beta_1": 0.931,  "beta_2": 0.9624, "alpha": 0.38},
+      "NETWORK-1":    {"crn_across_solns": false, "r": 47, "beta_1": 0.824,  "beta_2": 0.925,  "alpha": 0.13},
+      "PARAMESTI-1":  {"crn_across_solns": false, "r": 5,  "beta_1": 0.931,  "beta_2": 0.9624, "alpha": 0.38},
+      "ROSENBROCK-1": {"crn_across_solns": false, "r": 11, "beta_1": 0.848,  "beta_2": 0.9874, "alpha": 1.13},
+      "SAN-1":        {"crn_across_solns": false, "r": 88, "beta_1": 0.907,  "beta_2": 0.9937, "alpha": 1.5}
+    },
+    "ASTRODF": {
+      "DYNAMNEWS-1":  {"crn_across_solns": false, "eta_1": 0.101, "eta_2": 0.95, "gamma_1": 3.5, "gamma_2": 0.4, "lambda_min": 10, "ps_sufficient_reduction": 0.94},
+      "NETWORK-1":    {"crn_across_solns": false, "eta_1": 0.101, "eta_2": 0.95, "gamma_1": 3.5, "gamma_2": 0.4, "lambda_min": 10, "ps_sufficient_reduction": 0.94},
+      "PARAMESTI-1":  {"crn_across_solns": false, "eta_1": 0.3,   "eta_2": 0.64, "gamma_1": 2.4, "gamma_2": 0.75, "lambda_min": 5,  "ps_sufficient_reduction": 0.75},
+      "ROSENBROCK-1": {"crn_across_solns": false, "eta_1": 0.119, "eta_2": 0.87, "gamma_1": 1.5, "gamma_2": 0.65, "lambda_min": 6,  "ps_sufficient_reduction": 0.56},
+      "SAN-1":        {"crn_across_solns": false, "eta_1": 0.028, "eta_2": 0.61, "gamma_1": 3.7, "gamma_2": 0.55, "lambda_min": 3,  "ps_sufficient_reduction": 0.31}
+    },
+    "ASTROMORF": {
+      "DYNAMNEWS-1":  {"crn_across_solns": false, "eta_1": 0.218, "eta_2": 0.29, "gamma_1": 3.4, "gamma_2": 1.97, "gamma_3": 0.38, "lambda_min": 5,  "subproblem_regularisation": 0.06, "ps_sufficient_reduction": 0.16, "mu": 3812.0},
+      "NETWORK-1":    {"crn_across_solns": false, "eta_1": 0.246, "eta_2": 0.63, "gamma_1": 3.0, "gamma_2": 2.0,  "gamma_3": 0.75, "lambda_min": 27, "subproblem_regularisation": 0.28, "ps_sufficient_reduction": 0.66, "mu": 8144.0},
+      "PARAMESTI-1":  {"crn_across_solns": false, "eta_1": 0.191, "eta_2": 0.26, "gamma_1": 3.6, "gamma_2": 1.91, "gamma_3": 0.4,  "lambda_min": 3,  "subproblem_regularisation": 0.33, "ps_sufficient_reduction": 0.75, "mu": 7216.0},
+      "ROSENBROCK-1": {"crn_across_solns": false, "eta_1": 0.155, "eta_2": 0.52, "gamma_1": 2.8, "gamma_2": 1.52, "gamma_3": 0.5,  "lambda_min": 16, "subproblem_regularisation": 0.25, "ps_sufficient_reduction": 0.5,  "mu": 5050.0},
+      "SAN-1":        {"crn_across_solns": false, "eta_1": 0.146, "eta_2": 0.37, "gamma_1": 1.7, "gamma_2": 1.67, "gamma_3": 0.18, "lambda_min": 23, "subproblem_regularisation": 0.39, "ps_sufficient_reduction": 0.0,  "mu": 4741.0}
+    },
+    "NELDMD": {
+      "DYNAMNEWS-1":  {"crn_across_solns": false, "r": 5,  "alpha": 1.53, "gammap": 2.4, "betap": 0.25, "delta": 0.85, "initial_spread": 0.13},
+      "NETWORK-1":    {"crn_across_solns": false, "r": 28, "alpha": 0.59, "gammap": 2.3, "betap": 0.8,  "delta": 0.65, "initial_spread": 0.5},
+      "PARAMESTI-1":  {"crn_across_solns": false, "r": 11, "alpha": 0.88, "gammap": 2.8, "betap": 0.55, "delta": 0.1,  "initial_spread": 0.16},
+      "ROSENBROCK-1": {"crn_across_solns": false, "r": 23, "alpha": 1.44, "gammap": 2.0, "betap": 0.9,  "delta": 0.55, "initial_spread": 0.07},
+      "SAN-1":        {"crn_across_solns": false, "r": 5,  "alpha": 1.53, "gammap": 2.4, "betap": 0.25, "delta": 0.85, "initial_spread": 0.13}
+    },
+    "RNDSRCH": {
+      "DYNAMNEWS-1":  {"crn_across_solns": false, "sample_size": 94},
+      "NETWORK-1":    {"crn_across_solns": false, "sample_size": 75},
+      "PARAMESTI-1":  {"crn_across_solns": false, "sample_size": 69},
+      "ROSENBROCK-1": {"crn_across_solns": false, "sample_size": 75},
+      "SAN-1":        {"crn_across_solns": false, "sample_size": 20}
+    },
+    "STRONG": {
+      "DYNAMNEWS-1":  {"crn_across_solns": false, "n0": 36, "n_r": 5,  "eta_0": 0.02,  "eta_1": 0.35, "gamma_1": 0.87, "gamma_2": 1.07, "lambda_2": 1.438},
+      "NETWORK-1":    {"crn_across_solns": false, "n0": 47, "n_r": 39, "eta_0": 0.013, "eta_1": 0.28, "gamma_1": 0.99, "gamma_2": 1.69, "lambda_2": 1.376},
+      "PARAMESTI-1":  {"crn_across_solns": false, "n0": 44, "n_r": 30, "eta_0": 0.094, "eta_1": 0.4,  "gamma_1": 0.68, "gamma_2": 1.2,  "lambda_2": 1.001},
+      "ROSENBROCK-1": {"crn_across_solns": false, "n0": 22, "n_r": 42, "eta_0": 0.001, "eta_1": 0.38, "gamma_1": 0.56, "gamma_2": 1.57, "lambda_2": 1.063},
+      "SAN-1":        {"crn_across_solns": false, "n0": 22, "n_r": 42, "eta_0": 0.001, "eta_1": 0.38, "gamma_1": 0.56, "gamma_2": 1.57, "lambda_2": 1.063}
+    }
+  },
+  "budgets": [10000]
+}

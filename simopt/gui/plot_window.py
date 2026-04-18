@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import annotations  # noqa: D100
 
 import logging
 import os
@@ -7,7 +7,7 @@ from functools import partial
 from tkinter import Listbox, Scrollbar, ttk
 from tkinter.constants import MULTIPLE
 from tkinter.font import nametofont
-from typing import Literal, Union
+from typing import Literal
 
 from PIL import Image, ImageTk
 
@@ -120,10 +120,10 @@ class PlotWindow(Toplevel):
         # ("solvers:",self.all_solvers)
         if self.metaList is not None:
             i = 0
-            # Getting the names for the solvers from the metalist and add it to the solver menu
+            # Getting the names for the solvers from the metalist and add it to the solver menu  # noqa: E501
             for name in self.metaList.solver_names:
                 self.solver_menu.insert(i, name)
-                i += 1
+                i += 1  # noqa: SIM113
         else:
             self.all_solvers = []
             i = 0
@@ -318,7 +318,7 @@ class PlotWindow(Toplevel):
             relx=0.65, rely=0.15, relheight=0.2, relwidth=0.3
         )
 
-    def add_plot(self) -> None:
+    def add_plot(self) -> None:  # noqa: D102
         self.plot_exp_list = []
 
         solver_lst = ""
@@ -642,12 +642,12 @@ class PlotWindow(Toplevel):
         # background color on leving widget
         button.bind("<Leave>", func=lambda _: button.config(background=color_on_leave))
 
-    def solver_select_function(self) -> None:
+    def solver_select_function(self) -> None:  # noqa: D102
         # if user clicks plot type then a solver, this is update parameters
         if self.plot_var.get() != "Plot" and self.plot_var.get() != "":
             self.get_parameters_and_settings(0, self.plot_var.get())
 
-    def get_parameters_and_settings(
+    def get_parameters_and_settings(  # noqa: D102
         self,
         plot_choice: Literal[
             "All Progress Curves",
@@ -731,7 +731,7 @@ class PlotWindow(Toplevel):
             raise ValueError(error_msg)
         self.param_list = param_list
 
-        # self.params = [tk.StringVar(master=self), tk.StringVar(master=self), tk.StringVar(master=self), tk.StringVar(master=self), tk.StringVar(master=self)]
+        # self.params = [tk.StringVar(master=self), tk.StringVar(master=self), tk.StringVar(master=self), tk.StringVar(master=self), tk.StringVar(master=self)]  # noqa: E501
 
         self.CI_label_frame.destroy()
         self.CI_label_frame = ttk.LabelFrame(
@@ -795,7 +795,7 @@ class PlotWindow(Toplevel):
                 offvalue=False,
             )
             entry1.select()
-            # entry1 = ttk.OptionMenu(self.settings_canvas, self.params[0], "True", *tf_list)
+            # entry1 = ttk.OptionMenu(self.settings_canvas, self.params[0], "True", *tf_list)  # noqa: E501
             label1 = tk.Label(
                 master=self.settings_canvas,
                 text="Show Confidence Intervals",
@@ -989,12 +989,12 @@ class PlotWindow(Toplevel):
                 entry.grid(row=i, column=1, padx=10, pady=3)
             i += 1
 
-    def clear_row(self, place: int) -> None:
+    def clear_row(self, place: int) -> None:  # noqa: D102
         self.plot_CI_list.pop(place)
         self.plot_exp_list.pop(place)
         logging.debug("Clear")
 
-    def plot_button(self) -> None:
+    def plot_button(self) -> None:  # noqa: D102
         self.postrep_window = Toplevel(self)
         self.postrep_window.center_window(0.8)
         self.postrep_window.set_style()
@@ -1029,7 +1029,7 @@ class PlotWindow(Toplevel):
 
             # panel.place(x=10,y=0)
 
-    def view_one_plot(self, path_name: os.PathLike | str) -> None:
+    def view_one_plot(self, path_name: os.PathLike | str) -> None:  # noqa: D102
         self.postrep_window = Toplevel(self)
         self.postrep_window.center_window(0.8)
         self.postrep_window.set_style()

@@ -217,7 +217,9 @@ class DataFarmingWindow(Toplevel):
         self.experiment_name = name.replace("_design", "")
 
         # convert loaded design to data frame
-        self.design_table = pd.read_csv(self.csv_filename, sep="\t", header=None, index_col=False)
+        self.design_table = pd.read_csv(
+            self.csv_filename, sep="\t", header=None, index_col=False
+        )
         self.design_table.columns = self.design_table.iloc[0]
 
         # Get design information from table
@@ -349,7 +351,7 @@ class DataFarmingWindow(Toplevel):
         """Enable the run button."""
         self.run_button.configure(state="normal")
 
-    def show_design_options(self) -> None:
+    def show_design_options(self) -> None:  # noqa: D102
         # Design type selection menu
         self.design_frame = tk.Frame(master=self)
         self.design_frame.grid(row=5, column=0)
@@ -450,7 +452,7 @@ class DataFarmingWindow(Toplevel):
             )
             self.con_design_button.grid(row=1, column=4)
 
-    def mod_design(self) -> None:
+    def mod_design(self) -> None:  # noqa: D102
         self.default_values = [
             self.default_value.get() for self.default_value in self.default_values_list
         ]  # default value of each factor
@@ -485,7 +487,7 @@ class DataFarmingWindow(Toplevel):
         self.display_design_tree()
         self.con_design()
 
-    def con_design(self) -> None:
+    def con_design(self) -> None:  # noqa: D102
         # Create design txt file
         # Load name specified by user
         self.experiment_name = self.design_filename_var.get()
@@ -991,7 +993,7 @@ class DataFarmingWindow(Toplevel):
                     variable=self.checkstate,
                     command=self.include_factor,
                 )
-                # self.checkbox.grid( row = self.factor_que_length, column = 3, sticky = 'nsew')
+                # self.checkbox.grid( row = self.factor_que_length, column = 3, sticky = 'nsew')  # noqa: E501
                 self.checkstate_list.append(self.checkstate)
 
                 self.check_widgets[factor] = self.checkbox
@@ -1044,7 +1046,7 @@ class DataFarmingWindow(Toplevel):
                     variable=self.checkstate,
                     command=self.include_factor,
                 )
-                # self.checkbox.grid( row = self.factor_que_length, column = 3, sticky = 'nsew')
+                # self.checkbox.grid( row = self.factor_que_length, column = 3, sticky = 'nsew')  # noqa: E501
                 self.checkstate_list.append(self.checkstate)
 
                 self.check_widgets[factor] = self.checkbox
@@ -1054,7 +1056,7 @@ class DataFarmingWindow(Toplevel):
         self.show_design_options()
 
     # Used to display the design tree for both created and loaded designs
-    def display_design_tree(self) -> None:
+    def display_design_tree(self) -> None:  # noqa: D102
         # Initialize design tree
         self.create_design_frame = tk.Frame(master=self)
         self.create_design_frame.grid(row=6, column=0)
@@ -1202,7 +1204,9 @@ class DataFarmingWindow(Toplevel):
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("w") as file:
             for factor_index, factor in enumerate(self.model_object.specifications):
-                factor_datatype = self.model_object.specifications[factor].get("datatype")
+                factor_datatype = self.model_object.specifications[factor].get(
+                    "datatype"
+                )
                 is_datafarmable_factor = self.model_object.specifications[factor].get(
                     "isDatafarmable", True
                 )
@@ -1332,9 +1336,9 @@ class DataFarmingWindow(Toplevel):
             self.factor_default = self.model_object.specifications[factor].get(
                 "default"
             )
-            self.factor_isDatafarmable = self.model_object.specifications[
-                factor
-            ].get("isDatafarmable")
+            self.factor_isDatafarmable = self.model_object.specifications[factor].get(
+                "isDatafarmable"
+            )
 
             # Disable / enable experiment option widgets depending on factor type
             if (

@@ -130,7 +130,6 @@ class ExampleProblem(Problem):
         # Change if f is changed
         # TODO: figure out what f is
         return (0,) * self.dim
-    
 
     @property
     def dim(self) -> int:  # noqa: D102
@@ -141,7 +140,6 @@ class ExampleProblem(Problem):
     @dim.setter
     def dim(self, value: int) -> None:
         self._dim = value
-
 
     @property
     def lower_bounds(self) -> tuple:  # noqa: D102

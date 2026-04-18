@@ -157,7 +157,7 @@ class MirrorDescent(Solver):
         Returns:
                 The value of the mirror map at x.
         """
-        return 0.5 * np.linalg.norm(x, ord=2) ** 2
+        return float(0.5 * np.linalg.norm(x, ord=2) ** 2)
 
     def bregman_divergence(
         self, value_1: np.ndarray, value_2: np.ndarray, gradient: np.ndarray
@@ -176,7 +176,7 @@ class MirrorDescent(Solver):
         taylor_exp = self.mirror_map(value_2) + np.dot(gradient, diff)
         return self.mirror_map(value_1) - taylor_exp
 
-    def solve(self, problem: Problem) -> None:
+    def solve(self, problem: Problem) -> None:  # ty: ignore[invalid-method-override]
         """Run a single macroreplication of the solver on a problem.
 
         Args:
@@ -206,8 +206,8 @@ class MirrorDescent(Solver):
         )
 
         self.problem.simulate(self.incumbent_solution, r)
-        self.current_fn_estimate = (self.incumbent_solution.objectives_mean.item())
-        
+        self.current_fn_estimate = self.incumbent_solution.objectives_mean.item()
+
         self.recommended_solns.append(self.incumbent_solution)
         self.intermediate_budgets.append(self.budget.used)
         self.fn_estimates.append(self.current_fn_estimate)
@@ -222,13 +222,13 @@ class MirrorDescent(Solver):
         # self.iterations: list[int] = []
 
         while self.budget.remaining > 0:
-
             curr_x = np.array(self.incumbent_x)
 
             # Check proximity to bounds for finite difference direction
             forward = np.isclose(curr_x, lower_bound, atol=1e-7).astype(int)
             backward = np.isclose(curr_x, upper_bound, atol=1e-7).astype(int)
-            # BdsCheck: 1 stands for forward, -1 stands for backward, 0 means central diff
+            # BdsCheck: 1 stands for forward, -1 stands for backward, 0 means central
+            # diff
             bounds_check = np.subtract(forward, backward)
 
             # Compute gradient of mirror map at current point
@@ -240,7 +240,9 @@ class MirrorDescent(Solver):
                 self.budget.request(2 * r)
             else:
                 # grad = self.finite_diff(self.incumbent_solution, bounds_check)
-                grad = finite_diff(self, self.incumbent_solution, bounds_check, problem, 1e-8, r)
+                grad = finite_diff(
+                    self, self.incumbent_solution, bounds_check, problem, 1e-8, r
+                )
                 self.budget.request(2 * self.problem.dim * r)
 
             # Apply gradient clipping if enabled
@@ -248,10 +250,13 @@ class MirrorDescent(Solver):
                 grad = grad_clip_value * (grad / np.linalg.norm(grad))
 
             # Define Bregman divergence function for optimization
-            breg_div = lambda x: self.bregman_divergence(x, curr_x, grad_mirror)
+            def breg_div(x):  # noqa: ANN001, ANN202
+                return self.bregman_divergence(x, curr_x, grad_mirror)  # noqa: B023
 
             # Solve the optimization problem
-            obj_fn = lambda x: alpha * np.dot(x, grad) + breg_div(x)
+            def obj_fn(x):  # noqa: ANN001, ANN202
+                return alpha * np.dot(x, grad) + breg_div(x)  # noqa: B023
+
             obj_new_x = minimize(obj_fn, curr_x)
             new_x = obj_new_x.x
 
@@ -267,7 +272,7 @@ class MirrorDescent(Solver):
                 self.incumbent_x, self.problem
             )
             self.problem.simulate(self.incumbent_solution, r)
-            self.current_fn_estimate = (self.incumbent_solution.objectives_mean.item())
+            self.current_fn_estimate = self.incumbent_solution.objectives_mean.item()
 
             self.iteration_count += 1
 
@@ -285,7 +290,8 @@ class MirrorDescent(Solver):
 
         Args:
                 new_solution: The current iteration's solution.
-                bounds_check: Array indicating boundary check for finite difference type.
+                bounds_check: Array indicating boundary check for finite difference
+                type.
                         1 for forward, -1 for backward, 0 for central difference.
 
         Returns:
@@ -296,7 +302,7 @@ class MirrorDescent(Solver):
         lower_bound = np.array(self.problem.lower_bounds)
         upper_bound = np.array(self.problem.upper_bounds)
         dim = len(new_x)
-        FnPlusMinus = np.zeros((dim, 3))
+        FnPlusMinus = np.zeros((dim, 3))  # noqa: N806
         grad = np.zeros(dim)
 
         for i in range(dim):
@@ -354,7 +360,7 @@ class MirrorDescent(Solver):
 
     #     Args:
     #             new_solution: The current iteration's solution.
-    #             bounds_check: Array indicating boundary check for finite difference type.
+    # bounds_check: Array indicating boundary check for finite difference type.
     #                     1 for forward, -1 for backward, 0 for central difference.
 
     #     Returns:
@@ -373,13 +379,16 @@ class MirrorDescent(Solver):
     #     return np.mean(grads, axis=1)
 
     def finite_diff_spsa(
-        self, new_solution: Solution, bounds_check: np.ndarray
+        self,
+        new_solution: Solution,
+        bounds_check: np.ndarray,  # noqa: ARG002
     ) -> np.ndarray:
         """Compute SPSA-like finite difference approximation of the gradient.
 
         Args:
                 new_solution: The current iteration's solution.
-                bounds_check: Array indicating boundary check for finite difference type.
+                bounds_check: Array indicating boundary check for finite difference
+                type.
 
         Returns:
                 The averaged gradient approximation from SPSA-style estimates.
