@@ -130,7 +130,7 @@ def _bootstrap_curves_conf_int(
         # Bias correction factor
         bs_std = np.std(bs_vals)
         z0 = (np.percentile(bs_vals, 50) - original_val) / bs_std if bs_std > 0 else 0
-        
+
         alpha = 1 - conf_level
         z_alpha_lower = stats.norm.ppf(alpha / 2)
         z_alpha_upper = stats.norm.ppf(1 - alpha / 2)
