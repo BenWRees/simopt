@@ -691,10 +691,10 @@ class ADPSolver(Solver):
             )
 
         best_decision = sol_df.iloc[-1]["solution"]
-        # Charge for all macroreplications.  wrapped_solver.budget.used only
-        # reflects the last macrorep (Solver.run resets it each time), so we
-        # charge n_macroreps x last_used as a conservative upper bound.
-        budget_used_per_mrep = wrapped_solver.budget.used
+        # Charge for all macroreplications.  run_solver() deep-copies the
+        # solver, so wrapped_solver itself never receives a .budget attribute.
+        # Use the max budget recorded in the solution DataFrame instead.
+        budget_used_per_mrep = int(sol_df["budget"].max())
         total_solver_cost = n_macroreps * budget_used_per_mrep
         # Don't charge more than what's available.
         total_solver_cost = min(total_solver_cost, self.budget.remaining)
