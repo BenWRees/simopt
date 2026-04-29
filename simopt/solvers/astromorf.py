@@ -29,12 +29,10 @@ progress stalls.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import math
 import traceback
 import warnings
-from collections import Counter
 from collections.abc import Callable
 from enum import Enum
 from functools import partial
@@ -52,7 +50,7 @@ from numpy.polynomial.legendre import legder, legvander
 from numpy.polynomial.polynomial import polyder, polyvander
 from pydantic import Field, model_validator
 from scipy.optimize import NonlinearConstraint, minimize
-from scipy.special import betainc, factorial
+from scipy.special import factorial
 
 from simopt.base import (
     ConstraintType,
@@ -213,6 +211,226 @@ POLY_BASIS_LOOKUP: dict[PolyBasisType, PolynomialBasisAdapter] = {
 }
 
 
+# ── CABS (Decomposed Cost-Aware Bandit Selector) defaults ─────────────────
+CABS_DEFAULTS: dict = {
+    "gamma": 0.95,     # discount factor for running stats
+    "c_p": 0.25,       # UCB coefficient on pull-count bonus β_p
+    "c_g": 0.5,        # UCB coefficient on accept-count bonus β_g
+    "eps_n": 0.1,      # prior pseudo-pulls per dimension
+    "eps_a": 0.1,      # prior pseudo-accepts per dimension
+    "rho_max": 0.9,    # safe-dimension VP-convergence gate
+    "w_safe": 10,      # window for safe-dimension acceptance rate
+    "eta_safe": 0.05,  # acceptance floor for "safe"
+    "c2_est": 1.0,     # initial per-accept gain prior G[d] ≈ C2 * A[d]
+    "delta_inc_cap": 2,  # max single-step expansion
+}
+
+
+class CABSSelector:
+    """Decomposed Cost-Aware Bandit Selector (CABS).
+
+    Implements the decomposed-UCB dimension-selection rule. 
+    For each candidate dimension d, we maintain
+    discounted running statistics:
+
+        N[d]  — pulls (total attempts using d)
+        A[d]  — successful pulls (accepted steps using d)
+        G[d]  — cumulative reward R_k^{cabs} = max(delta F,0)/radius**2 
+        at accepted steps
+
+    Decomposition:
+        rho(d) = A[d] / N[d]              (acceptance probability)
+        g(d) = G[d] / max(A[d], eps_a)   (expected gain given acceptance)
+
+    Decomposed UCB index per §4:
+
+        I_k^{dec}(d) =
+            ( rho·g + rho beta_g + g beta_p ) / (2d + 1)
+          where beta_p = c_p  sqrt(log(sum N) / N[d]),
+                beta_g = c_g  sqrt(log(sum N) / max(A[d], eps_a))
+
+    Uses a cold-arm optimistic-under-uncertainty prior.
+    For a candidate d whose accept count A[d] has not yet exceeded
+    ``2eps_a``, the gain estimate ĝ(d) is replaced by the maximum
+    observed ĝ across "warm" arms, encouraging exploration of unproven
+    dimensions until they accumulate enough acceptance evidence.
+
+    Selection: restrict to a "safe" candidate set (cheap nearby dims plus
+    any d already meeting rho_k < rho_max with r_k ≥ eta_safe), then pick
+    argmax of I_k^{dec}.
+    """
+
+    def __init__(
+        self,
+        d_min: int,
+        d_cap: int,
+        gamma: float = CABS_DEFAULTS["gamma"],
+        c_p: float = CABS_DEFAULTS["c_p"],
+        c_g: float = CABS_DEFAULTS["c_g"],
+        eps_n: float = CABS_DEFAULTS["eps_n"],  
+        eps_a: float = CABS_DEFAULTS["eps_a"],  
+        rho_max: float = CABS_DEFAULTS["rho_max"],
+        w_safe: int = CABS_DEFAULTS["w_safe"],  
+        eta_safe: float = CABS_DEFAULTS["eta_safe"],
+        c2_est: float = CABS_DEFAULTS["c2_est"],  
+        delta_inc_cap: int = CABS_DEFAULTS["delta_inc_cap"],
+    ) -> None:
+        """Create a CABSSelector instance.
+
+        Args:
+            d_min (int): smallest dimension to consider 
+            d_cap (int): largest dimension to consider 
+            gamma (float, optional): discount factor for running stats. 
+            Defaults to CABS_DEFAULTS["gamma"].
+            c_p (float, optional): UCB coefficient on pull-count bonus. 
+            Defaults to CABS_DEFAULTS["c_p"].
+            c_g (float, optional): UCB coefficient on accept-count bonus. 
+            Defaults to CABS_DEFAULTS["c_g"].
+            eps_n (float, optional): prior pseudo-pulls per dimension. 
+            Defaults to CABS_DEFAULTS["eps_n"].
+            eps_a (float, optional): prior pseudo-accepts per dimension. 
+            Defaults to CABS_DEFAULTS["eps_a"].
+            rho_max (float, optional): safe-dimension VP-convergence gate. 
+            Defaults to CABS_DEFAULTS["rho_max"].
+            w_safe (int, optional): window for safe-dimension acceptance rate. 
+            Defaults to CABS_DEFAULTS["w_safe"].
+            eta_safe (float, optional): acceptance floor for "safe". 
+            Defaults to CABS_DEFAULTS["eta_safe"].
+            c2_est (float, optional): initial per-accept gain prior. 
+            Defaults to CABS_DEFAULTS["c2_est"].
+            delta_inc_cap (int, optional): max single-step expansion. 
+            Defaults to CABS_DEFAULTS["delta_inc_cap"].
+        """
+        self.d_min = int(d_min)
+        self.d_cap = int(max(d_min, d_cap))
+        self.gamma = float(gamma)
+        self.c_p = float(c_p)
+        self.c_g = float(c_g)
+        self.eps_n = float(eps_n)
+        self.eps_a = float(eps_a)
+        self.rho_max = float(rho_max)
+        self.w_safe = int(w_safe)
+        self.eta_safe = float(eta_safe)
+        self.delta_inc_cap = int(delta_inc_cap)
+
+        # Prior-initialised stats per dimension (§7.3).
+        self.N: dict[int, float] = {}
+        self.A: dict[int, float] = {}
+        self.G: dict[int, float] = {}
+        for d in range(self.d_min, self.d_cap + 1):
+            self.N[d] = self.eps_n
+            self.A[d] = 0.5 * self.eps_n
+            self.G[d] = float(c2_est) * 0.5 * self.eps_n
+
+        # Per-dimension rolling acceptance window (for safe-set gate).
+        self.accept_window: dict[int, list[bool]] = {
+            d: [] for d in range(self.d_min, self.d_cap + 1)
+        }
+        # Per-dimension last observed rho_k (for safe-set gate).
+        self.last_rho: dict[int, float] = dict.fromkeys(
+            range(self.d_min, self.d_cap + 1), 0.0
+            )
+
+        self.last_signals: dict = {"d_selected": self.d_min, "source": "init"}
+
+    def update(
+        self,
+        d_k: int,
+        accepted: bool,
+        reward: float,
+        rho_k: float,
+    ) -> None:
+        """Apply discounted update for the pulled dimension d_k."""
+        d_k = int(d_k)
+        if d_k not in self.N:
+            self.N[d_k] = self.eps_n
+            self.A[d_k] = 0.5 * self.eps_n
+            self.G[d_k] = 0.5 * self.eps_n
+            self.accept_window[d_k] = []
+            self.last_rho[d_k] = 0.0
+
+        # Discount all dims (slow forgetting); add increment only at d_k.
+        for d in self.N:
+            self.N[d] *= self.gamma
+            self.A[d] *= self.gamma
+            self.G[d] *= self.gamma
+        self.N[d_k] += 1.0
+        if accepted:
+            self.A[d_k] += 1.0
+            self.G[d_k] += max(0.0, float(reward))
+
+        win = self.accept_window[d_k]
+        win.append(bool(accepted))
+        if len(win) > self.w_safe:
+            win.pop(0)
+        self.last_rho[d_k] = float(rho_k)
+
+    def _safe_candidates(self, d_k: int) -> list[int]:
+        """Return the safe candidate set S(k) per §5.
+
+        Always includes d_k and its neighbours (clamped); additionally any
+        dimension whose windowed acceptance rate ≥ eta_safe and last rho_k <
+        rho_max. Allows a moderate expansion step (matches FDSS delta_inc_cap).
+        """
+        nearby = {d_k, max(self.d_min, d_k - 1), min(self.d_cap, d_k + 1)}
+        nearby.add(min(self.d_cap, d_k + self.delta_inc_cap))
+
+        for d, win in self.accept_window.items():
+            if len(win) == 0:
+                continue
+            r_bar = sum(1.0 for a in win if a) / len(win)
+            if r_bar >= self.eta_safe and self.last_rho[d] < self.rho_max:
+                nearby.add(d)
+        return sorted(d for d in nearby if self.d_min <= d <= self.d_cap)
+
+    def select(self, d_k: int) -> int:
+        """Return d_{k+1} = argmax_{d ∈ S(k)} I_k^{dec}(d)."""
+        candidates = self._safe_candidates(d_k)
+        if not candidates:
+            self.last_signals = {"d_selected": int(d_k), "source": "empty-safe-set"}
+            return int(d_k)
+
+        total_n = max(1.0, float(sum(self.N.values())))  
+        n_log = math.log(1.0 + total_n)  
+
+        # cold-arm optimistic-under-uncertainty ĝ prior.
+        observed_g = [
+            self.G[d_] / max(self.eps_a, self.A[d_])
+            for d_ in self.N
+            if self.N[d_] > 2.0 * self.eps_n
+        ]
+        g_max_observed = max(observed_g) if observed_g else 1.0
+
+        best_d = candidates[0]
+        best_idx = -math.inf
+        scores: dict[int, float] = {}
+        for d in candidates:
+            n_d = max(self.eps_n, self.N[d])  
+            a_d = max(self.eps_a, self.A[d])  
+            g_d = max(0.0, self.G[d])  
+            p_hat = min(1.0, self.A[d] / n_d)
+
+            g_hat = float(g_max_observed) if self.A[d] < 2.0 * self.eps_a else g_d / a_d
+
+            beta_p = self.c_p * math.sqrt(n_log / n_d)
+            beta_g = self.c_g * math.sqrt(n_log / a_d)
+
+            cost_pen = 2.0 * d + 1.0
+            idx = (p_hat * g_hat + p_hat * beta_g + g_hat * beta_p) / cost_pen
+            scores[d] = idx
+            if idx > best_idx:
+                best_idx = idx
+                best_d = d
+
+        self.last_signals = {
+            "d_selected": int(best_d),
+            "source": "cabs-ucb",
+            "candidates": candidates,
+            "scores": scores,
+        }
+        return int(best_d)
+
+
 class ASTROMoRFConfig(SolverConfig):
     """Configuration for ASTROMoRF solver."""
 
@@ -240,7 +458,8 @@ class ASTROMoRFConfig(SolverConfig):
         Field(
             default=2.5,
             gt=1,
-            description="trust-region radius increase rate after very successful iteration",  # noqa: E501
+            description=("trust-region radius increase rate " \
+            "after very successful iteration"),  
         ),
     ]
     gamma_2: Annotated[
@@ -248,7 +467,8 @@ class ASTROMoRFConfig(SolverConfig):
         Field(
             default=1.2,
             gt=1,
-            description="trust-region radius increase rate after successful iteration",
+            description=("trust-region radius increase rate " \
+            "after successful iteration"),
         ),
     ]
     gamma_3: Annotated[
@@ -257,7 +477,8 @@ class ASTROMoRFConfig(SolverConfig):
             default=0.5,
             gt=0,
             lt=1,
-            description="trust-region radius decrease rate after unsuccessful iteration",  # noqa: E501
+            description=("trust-region radius decrease rate " \
+            "after unsuccessful iteration"),  
         ),
     ]
     lambda_min: Annotated[
@@ -329,23 +550,10 @@ class ASTROMoRFConfig(SolverConfig):
         bool,
         Field(
             default=True,
-            description="adaptively adjust subspace dimension based on solver progress",
+            description="adaptively adjust subspace dimension via the CABS selector",
             alias="adaptive subspace dimension",
         ),
     ]
-    variance_explained_threshold: Annotated[
-        float,
-        Field(
-            default=0.95,
-            ge=0.5,
-            le=1.0,
-            description="fraction of variance to capture when determining optimal subspace dimension",  # noqa: E501
-            alias="variance explained threshold",
-        ),
-    ]
-    # (Previously supported budget-aware config fields have been removed
-    # in favor of hard-coded adaptive-subspace parameters embedded in the
-    # solver implementation.)
 
     @model_validator(mode="after")
     def _validate_eta_2_greater_than_eta_1(self) -> Self:
@@ -362,14 +570,6 @@ class ASTROMoRFConfig(SolverConfig):
 
 class ASTROMORF(Solver):
     """The ASTROMoRF solver."""
-
-    # Hard-coded adaptive-subspace defaults (budget-aware behavior is embedded)
-    DEFAULT_COST_PENALTY: float = 0.05
-    DEFAULT_COST_POWER: float = 2.0
-    DEFAULT_BUDGET_ALPHA: float = 0.5
-    DEFAULT_BASELINE_BUDGET: float = 1000.0
-    DEFAULT_SUFFICIENT_SCORE_TOL: float = 0.01
-    DEFAULT_PREFER_SMALL_SUFFICIENT: bool = True
 
     name: str = "ASTROMORF"
     config_class: ClassVar[type[SolverConfig]] = ASTROMoRFConfig
@@ -626,70 +826,21 @@ class ASTROMORF(Solver):
         self.recent_prediction_errors: list = []  # Store last few relative errors
 
         # Adaptive subspace dimension tracking
-        self.consecutive_unsuccessful: int = 0
-        self.consecutive_successful: int = 0
-        self.recent_gradient_norms: list[float] = []
-        self.d_history: list[int] = [self.d]  # Track subspace dimension over time
-        self.max_d: int = self.problem.dim - 1  # Max subspace dimension
-        self.previous_model_information: list = []  # Store previous model info for dimension decisions  # noqa: E501
+        self.d_history: list[int] = [self.d]
+        self.max_d: int = self.problem.dim - 1
+        self.initial_subspace_dimension: int = self.d
 
-        # Enhanced tracking for adaptive dimension stopping rule
-        # Maps dimension d -> list of (iteration, residual_norm, prediction_error,
-        # success)
-        self.dimension_performance: dict[int, list[tuple[int, float, float, bool]]] = {}
-        # Store eigenvalue spectrum from gradient outer products for variance-explained
-        # stopping rule
-        self.gradient_eigenvalues: list[np.ndarray] = []
-        # Store model quality metrics per dimension at each iteration
-        self.model_quality_by_dimension: dict[int, list[float]] = {}
-        # Store the subspace stability measure (angle between consecutive subspaces)
-        self.subspace_angles: list[float] = []
-        # Threshold for variance explained stopping rule (fraction of total variance to
-        # capture)
-        self.variance_explained_threshold: float = self.factors.get(
-            "variance explained threshold", 0.95
-        )
-        # Adaptive-subspace parameters are hard-coded via class defaults
-        # (do not read these from solver factors/config)
-        # Instances can still override attributes manually if necessary.
-        # The defaults below were chosen from synthetic tuning experiments.
-        # Note: keep these lines for clarity; they do not read from config.
-        self.cost_penalty = float(self.DEFAULT_COST_PENALTY)
-        self.cost_power = float(self.DEFAULT_COST_POWER)
-        self.budget_alpha = float(self.DEFAULT_BUDGET_ALPHA)
-        self.baseline_budget = float(self.DEFAULT_BASELINE_BUDGET)
-        self.sufficient_score_tol = float(self.DEFAULT_SUFFICIENT_SCORE_TOL)
-        self.prefer_small_sufficient = bool(self.DEFAULT_PREFER_SMALL_SUFFICIENT)
+        # CABS bandit observables (published by compute_ratio / fit, consumed by
+        # _apply_cabs_update). Default to neutral values for the first iteration.
+        self._last_bandit_reward: float = 0.0
+        self._last_rho_k: float = 0.0
+        # Snapshot of self.incumbent_x before each iteration's accept/reject step;
+        # CABS reads it to determine whether the step was accepted.
+        self._x_before_iter: tuple[float, ...] | None = None
 
-        # Plateau detection and dimension reset mechanism
-        self.initial_subspace_dimension: int = (
-            self.d
-        )  # Store initial d for reset target
-        self.recent_objective_values: list[
-            float
-        ] = []  # Track recent objective values for plateau detection
-        # Number of iterations to check for plateau: compute based on available budget
-        # so short/long runs adapt automatically. Use a coarse heuristic:
-        # plateau_window = clamp(budget // 50, 3, 20)
-        try:
-            budget_total = int(self.budget.total) if hasattr(self, "budget") else None
-        except Exception:
-            budget_total = None
-
-        # Compute plateau window via piecewise mapping helper
-        self.plateau_window: int = int(self.compute_plateau_window(budget_total))
-        self.plateau_threshold: float = (
-            0.01  # Relative improvement threshold (0.5% - less strict than 0.1%)
-        )
-        self.in_dimension_reset: bool = (
-            False  # Whether we're in a dimension reset cycle
-        )
-        self.reset_start_iteration: int = 0  # When the reset cycle started
-        self.reset_target_d: int = self.d  # Target dimension to decay back to
-        self.dimension_reset_count: int = 0  # Number of times we've triggered a reset
-        self.max_dimension_resets: int = (
-            5  # Maximum number of resets allowed per run (increased from 3)
-        )
+        # CABS selector (single adaptive-dimension rule).
+        self.cabs = CABSSelector(d_min=1, d_cap=self.max_d)
+        self.cabs_log: list[dict] = []
 
         # Warm starting: store the active subspace from previous iteration
         self.prev_U = None
@@ -697,118 +848,13 @@ class ASTROMORF(Solver):
         # Store previous Hessian for ellipsoidal trust-region construction
         self.prev_H = np.eye(self.problem.dim)
 
-        # Track last iteration when `d` changed to avoid long suppression
+        # Track last iteration when `d` changed (used by d_history bookkeeping).
         self.last_d_change_iteration: int = 0
 
         # create initializations of the model functions
         self.model = None
         self.model_grad = None
         self.model_hess = None
-
-    def step_iteration(self, d: int) -> dict:
-        """Execute a single solver iteration with the given subspace dimension.
-
-        This method is designed for external controllers (e.g. bandit agents)
-        that choose the subspace dimension ``d`` at each iteration. The caller
-        must first call ``_initialize_solving()`` (with ``self.problem`` and
-        ``self.budget`` already set) before invoking this method.
-
-        Args:
-            d: Subspace dimension to use for this iteration.
-
-        Returns:
-            A dict with keys ``delta_f`` (objective improvement, positive is
-            better), ``cost`` (budget consumed this step), ``done`` (whether
-            the budget is exhausted), ``new_obj``, and ``prev_obj``.
-        """
-        old_d = self.d
-        self.d = max(1, min(int(d), self.problem.dim - 1))
-        if self.d != old_d:
-            self.set_basis(self.factors["polynomial basis"], self.problem)
-
-        prev_obj = (
-            self.incumbent_solution.objectives_mean.item()
-            if self.incumbent_solution is not None
-            and self.incumbent_solution.objectives_mean is not None
-            else 0.0
-        )
-        budget_before = self.budget.used
-
-        try:
-            self.initial_evaluation()
-
-            U, fval, interpolation_solns, X, _fX = self.construct_model()  # noqa: N806
-            self.prev_U = U.copy()
-
-            candidate_solution = self.solve_subproblem(U)
-            candidate_solution, fval_tilde = self.simulate_candidate_soln(
-                candidate_solution, self.delta
-            )
-            self.compute_relative_error(candidate_solution, fval_tilde)
-            self.evaluate_candidate_solution(
-                fval, fval_tilde, interpolation_solns, candidate_solution, X
-            )
-
-            try:
-                if self.incumbent_solution is not None:
-                    current_objective = self.incumbent_solution.objectives_mean.item()
-                    self.record_objective_for_plateau_detection(current_objective)
-            except Exception:
-                pass
-
-            if (
-                self.delta >= self.delta_initial / 2
-                and self.d > self.problem.dim * 0.6
-                and self.degree != 2
-            ):
-                self.degree = 2
-            else:
-                self.degree = self.factors["polynomial degree"]
-
-            if self.iteration_count > 1:
-                self.iterations.append(self.iteration_count)
-                self.budget_history.append(self.budget.used)
-                if self.locked_incumbent_objective is not None:
-                    self.fn_estimates.append(self.locked_incumbent_objective)
-                else:
-                    self.fn_estimates.append(
-                        self.incumbent_solution.objectives_mean.item()
-                    )
-                self.record_update += 1
-            self.iteration_count += 1
-
-            new_obj = (
-                self.incumbent_solution.objectives_mean.item()
-                if self.incumbent_solution is not None
-                and self.incumbent_solution.objectives_mean is not None
-                else prev_obj
-            )
-            cost = self.budget.used - budget_before
-            done = self.budget.remaining <= 0
-
-            return {
-                "delta_f": new_obj - prev_obj,
-                "cost": float(cost),
-                "done": done,
-                "new_obj": new_obj,
-                "prev_obj": prev_obj,
-            }
-
-        except BudgetExhaustedError:
-            new_obj = (
-                self.incumbent_solution.objectives_mean.item()
-                if self.incumbent_solution is not None
-                and self.incumbent_solution.objectives_mean is not None
-                else prev_obj
-            )
-            cost = self.budget.used - budget_before
-            return {
-                "delta_f": new_obj - prev_obj,
-                "cost": float(cost),
-                "done": True,
-                "new_obj": new_obj,
-                "prev_obj": prev_obj,
-            }
 
     def solve(self, problem: ProblemLike) -> None:
         """Run a single macroreplication of the solver on a problem.
@@ -823,6 +869,10 @@ class ASTROMORF(Solver):
             while self.budget.remaining > 0:
                 # TODO: Rewrite
                 self.initial_evaluation()
+
+                # Snapshot incumbent x before the iteration's accept/reject step
+                # so CABS can determine whether a step was accepted.
+                self._x_before_iter = tuple(self.incumbent_x)
 
                 # Build random model
                 U, fval, interpolation_solns, X, fX = self.construct_model()  # noqa: N806
@@ -866,59 +916,9 @@ class ASTROMORF(Solver):
                     X,
                 )
 
-                # Record objective for plateau detection (keeps sliding window)
-                try:
-                    if (
-                        hasattr(self, "incumbent_solution")
-                        and self.incumbent_solution is not None
-                    ):
-                        current_objective = (
-                            self.incumbent_solution.objectives_mean.item()
-                        )
-                        self.record_objective_for_plateau_detection(current_objective)
-                except Exception:
-                    pass
-
                 # adaptive dimension update logic
                 if self.factors.get("adaptive subspace dimension", False):
                     self.compute_optimal_subspace_dimension()
-
-                # Adaptive subspace dimension adjustment
-                # if self.factors.get("adaptive subspace dimension", False):
-                #     # Record performance for this iteration's dimension
-                #     current_pred_error = (
-                #         self.recent_prediction_errors[-1]
-                #         if self.recent_prediction_errors else 0.0
-                #     )
-                #     was_successful = self.consecutive_successful > 0 or (
-                #         len(self.successful_iterations) > 0
-                #         and self.iteration_count in self.successful_iterations
-                #     )
-                #     # Compute residual norm from model quality
-                #     try:
-                #         residual_norm = np.sqrt(np.sum(
-                # (np.array([self.model(x.reshape(-1, 1)) for x in X]) - fX.flatten())
-                # ** 2
-                #         ))
-                #     except Exception:
-                #         residual_norm = 0.0
-
-                #     self.record_dimension_performance(
-                #         self.d, residual_norm, abs(current_pred_error), was_successful
-                #     )
-
-                #     # Record objective value for plateau detection
-                #     current_objective = self.incumbent_solution.objectives_mean.item()
-                #     self.record_objective_for_plateau_detection(current_objective)
-
-                #     # Compute gradient norm for adaptive decision
-                # grad_norm = norm(self.model_grad(np.zeros((1, self.problem.dim)),
-                # full_space=True))
-                #     new_d = self.compute_optimal_subspace_dimension(grad_norm)
-                #     if new_d != self.d:
-                #         self.d = new_d
-                #         # Re-initialize basis adapter for new dimension
-                #         self.set_basis(self.factors["polynomial basis"], self.problem)
 
                 """
                     If the trust-region is still large and the subspace dimension is
@@ -981,1056 +981,57 @@ class ASTROMORF(Solver):
 
     # === ADAPTIVE SUBSPACE DIMENSION ===
 
-    def record_iteration_performance(
-        self, trust_region: float, current_solution: Solution, success: bool
-    ) -> None:
-        """Record the performance of the current iteration to be used in deciding.
-
-        optimal subspace dimensions.
-
-
-        Record in the self.previous_model_information structure a dictionary of the
-        following format:
-        {
-            'model': a tuple of the model functions self.model and self.model_grad,
-            'trust_region_radius': a float of the iteration's trust-region radius,
-            'solution': a Solution object of the incumbent solution at the end of the
-            iteration,
-            'model_success': a bool indicating whether the iteration was successful,
-            'eigenvalue_spectrum': a list[float] of the eigenvalues of the gradient
-            outer product matrix of the model,
-            'recommended_dimension': an int of the posterior recommended subspace
-            dimension,.
-
-        }
-        """
-        current_iteration_info = {}
-        current_iteration_info["model"] = (self.model, self.model_grad)
-        current_iteration_info["trust_region_radius"] = trust_region
-        current_iteration_info["solution"] = current_solution
-        current_iteration_info["model_success"] = success
-
-        # compute eigenvalue spectrum
-        eigvals = self.compute_eigenvalue_spectrum_model(current_solution, trust_region)
-        current_iteration_info["eigenvalue_spectrum"] = eigvals
-
-        # compute recommended dimension based on variance explained
-        total_variance = np.sum(eigvals)
-        cumulative_variance = np.cumsum(eigvals)
-        variance_ratios = cumulative_variance / total_variance
-        recommended_dimension = (
-            np.searchsorted(variance_ratios, self.variance_explained_threshold) + 1
-        )
-        current_iteration_info["recommended_dimension"] = recommended_dimension
-
-        # Attach validation_by_d from the most recent fit(), if available
-        if hasattr(self, "last_validation_by_d") and isinstance(
-            self.last_validation_by_d, dict
-        ):
-            current_iteration_info["validation_by_d"] = self.last_validation_by_d.copy()
-            # clear it to avoid accidental reuse
-            with contextlib.suppress(Exception):
-                del self.last_validation_by_d
-
-        self.previous_model_information.append(current_iteration_info)
-
-    def compute_eigenvalue_spectrum_model(
-        self, current_solution: Solution, delta: float
-    ) -> list[float]:
-        """Compute the eigenvalue spectrum of the gradient outer product matrix.
-
-        for the given model and active subspace U.
-
-        Args:
-            current_solution (Solution): The current incumbent solution.
-            delta (float): The current trust-region radius.
-
-        Returns:
-            list[float]: The eigenvalues of the gradient outer product matrix.
-        """
-        # heuristic for number of points; ensure at least a few samples
-        no_pts = max(
-            self.problem.dim,
-            int(6 * np.log(max(self.problem.dim, 2)) * self.problem.dim),
-        )
-        x_k = np.array(current_solution.x).reshape(-1, 1)
-        # Ensure problem bounds are arrays shaped (n,1) to avoid unwanted broadcasting
-        lower_bounds_arr = np.array(self.problem.lower_bounds).reshape(x_k.shape)
-        upper_bounds_arr = np.array(self.problem.upper_bounds).reshape(x_k.shape)
-
-        bound_l = np.maximum(lower_bounds_arr, x_k - delta)
-        bound_u = np.minimum(upper_bounds_arr, x_k + delta)
-
-        lower = (bound_l - x_k).flatten()
-        upper = (bound_u - x_k).flatten()
-
-        directions = self.random_directions(num_pnts=no_pts, lower=lower, upper=upper)
-        shifts = directions[1:, :]  # use shifts (skip the first zero if desired)
-        if shifts.shape[0] == 0:
-            return [0.0] * self.problem.dim
-        X = np.array([x_k.flatten() + s for s in shifts])  # noqa: N806
-
-        # Safely compute gradients; fall back to zeros on failure
-        grads = []
-        for x in X:
-            try:
-                g = self.model_grad(x.reshape(1, -1), full_space=True).flatten()
-                if g.shape[0] != self.problem.dim:
-                    g = np.zeros(self.problem.dim)
-            except Exception:
-                g = np.zeros(self.problem.dim)
-            grads.append(g)
-        G = np.vstack(grads)  # shape (m, n)  # noqa: N806
-        C = (G.T @ G) / G.shape[0]  # shape (n, n)  # noqa: N806
-
-        eigvals, _eigvecs = np.linalg.eigh(C)
-        eigvals_desc = eigvals[::-1]  # descending
-        eigenvalues = np.maximum(eigvals_desc, 0)  # ensure non-negative
-        return eigenvalues.flatten().tolist()
-
-    def compute_plateau_window(self, budget_total: int | None) -> int:
-        """Compute a plateau detection window based on the total budget using.
-
-        a piecewise mapping. Smaller budgets get smaller windows so the
-        solver can trigger resets earlier; larger budgets use larger
-        windows to avoid spurious resets.
-
-        Mapping (example, clamped to [2,20]):
-          budget <= 50   -> 2
-          51 .. 100      -> 3
-          101 .. 200     -> 4
-          201 .. 500     -> 6
-          501 .. 1000    -> 8
-          1001 .. 5000   -> 12
-          > 5000         -> 16
-
-        Returns:
-            int: plateau window size (number of iterations)
-        """
-        if budget_total is None:
-            return 4
-
-        try:
-            b = int(max(0, int(budget_total)))
-        except Exception:
-            return 4
-
-        if b <= 50:
-            w = 2
-        elif b <= 100:
-            w = 3
-        elif b <= 200:
-            w = 4
-        elif b <= 500:
-            w = 6
-        elif b <= 1000:
-            w = 8
-        elif b <= 5000:
-            w = 12
-        else:
-            w = 16
-
-        return max(2, min(20, int(w)))
-
-    def check_intersecting_trust_regions(
-        self, centre_to_check: Solution, radius_to_check: float
-    ) -> bool:
-        """Check if the trust-region defined by centre_to_check and radius_to_check.
-
-        intersects with the current trust-region and solution.
-
-        Args:
-            centre_to_check (Solution): A previous iteration's solution (centre of
-            trust-region)
-            radius_to_check (float): A previous iteration's trust-region radius.
-
-        Returns:
-            bool: True if the trust-regions intersect, False otherwise
-        """
-        x_current = np.array(self.incumbent_x).reshape(-1, 1)
-        x_previous = np.array(centre_to_check.x).reshape(-1, 1)
-        distance = norm(x_current - x_previous)
-        tol = 0.2
-        # Trust-regions intersect if center distance <= sum of radii (+ small tolerance)
-        return bool(distance <= (radius_to_check + self.delta + tol))
-
-    def intersection_amount(self, model_info: dict) -> float:
-        """Compute the amount of intersection between the trust-region defined by.
-
-        model_info and the current trust-region.
-
-        Args:
-            model_info (dict): A previous iteration's model information dictionary.
-
-        Returns:
-            float: The amount of intersection between the two trust-regions
-        """
-        x_current = np.array(self.incumbent_x).reshape(-1, 1)
-        x_previous = np.array(model_info["solution"].x).reshape(-1, 1)
-        model_delta = model_info["trust_region_radius"]
-
-        d = np.linalg.norm(x_current - x_previous)
-
-        # No overlap
-        if d >= model_delta + self.delta:
-            return 0.0
-
-        # Full containment
-        if d <= abs(model_delta - self.delta):
-            return (
-                1.0
-                if self.delta <= model_delta
-                else (model_delta / self.delta) ** self.problem.dim
-            )
-
-        # Cap heights
-        h_r = (model_delta + self.delta - d) * (self.delta - model_delta + d) / (2 * d)
-        h_R = (model_delta + self.delta - d) * (model_delta - self.delta + d) / (2 * d)  # noqa: N806
-
-        # Regularized beta arguments
-        z_r = 1.0 - (1.0 - h_r / self.delta) ** 2
-        z_R = 1.0 - (1.0 - h_R / model_delta) ** 2  # noqa: N806
-
-        a = (self.problem.dim + 1) / 2
-        b = 0.5
-
-        # Normalized cap volumes
-        cap_r = 0.5 * betainc(a, b, z_r)
-        cap_R = (  # noqa: N806
-            0.5 * (model_delta / self.delta) ** self.problem.dim * betainc(a, b, z_R)
-        )
-
-        return cap_r + cap_R
-
-    def obtain_intersecting_models(
-        self, successful_models: list[dict]
-    ) -> tuple[list[dict], list[float]]:
-        """Obtain the list of previous models whose trust-regions intersect with the.
-
-        current trust-region.
-
-
-            and order the list by how much they intersect the current trust-region by
-            descending order
-        Args:
-            successful_models (list[dict]): A list of previous model information
-            dictionaries that were successful
-        Returns:
-            tuple[list[dict], list[float]]: A tuple containing a list of previous model
-            information dictionaries that intersect
-            with the current trust-region and a list of their corresponding intersection
-            amounts.
-        """
-        # Populate list of intersecting models
-        intersecting_models = []
-        for info in successful_models:
-            if self.check_intersecting_trust_regions(
-                info["solution"], info["trust_region_radius"]
-            ):
-                intersecting_models.append(info)
-
-        # Order intersecting models by how much they intersect the current trust-region
-        # by descending order
-        intersecting_models.sort(key=self.intersection_amount, reverse=True)
-
-        # get the intersection amounts
-        intersection_amounts = [
-            self.intersection_amount(info) for info in intersecting_models
-        ]
-
-        return intersecting_models, intersection_amounts
-
-    #! THIS LOGIC NEEDS TO BE FILLED IN
-    def infer_optimal_dimension_from_models(
-        self, intersecting_models: list[dict]
-    ) -> int:
-        """Infer the optimal subspace dimension based on intersecting models'.
-
-        recommended dimensions.
-
-        Args:
-            intersecting_models (list[dict]): A list of previous model information
-            dictionaries that intersect with the current trust-region.
-
-        Returns:
-            int: The inferred optimal subspace dimension
-        """
-        recent_eigenvalues = [
-            eigenvals
-            for model_info in intersecting_models
-            for eigenvals in [model_info["eigenvalue_spectrum"]]
-        ]
-
-        # average the eigenvalue spectra
-        max_length = max(len(eigvals) for eigvals in recent_eigenvalues)
-        avg_eigenvalues = np.zeros(max_length)
-        counts = np.zeros(max_length)
-
-        for eigvals in recent_eigenvalues:
-            avg_eigenvalues[: len(eigvals)] += np.array(eigvals)
-            counts[: len(eigvals)] += 1
-
-        avg_eigenvalues = avg_eigenvalues / np.maximum(counts, 1)
-
-        total_variance = np.sum(avg_eigenvalues)
-        if total_variance < 1e-10:
-            return 1  # All eigenvalues are zero, return minimum dimension
-
-        cumulative_variance = np.cumsum(avg_eigenvalues) / total_variance
-
-        # find the smallest dimension where cumulative variance exceeds threshold
-        optimal_d = (
-            np.searchsorted(cumulative_variance, self.variance_explained_threshold) + 1
-        )
-        return int(
-            min(optimal_d, self.problem.dim - 1)
-        )  # ensure not exceeding problem.dim -1
-
-    def evaluate_and_score_candidate_dimensions(self) -> dict:
-        """Evaluate candidate subspace dimensions using available validation metrics,.
-
-        eigen-spectrum (projection residual proxy) and historical success rates.
-
-        Returns:
-            dict: mapping d -> {"val_err":..., "proj_resid":..., "success_rate":...,
-            "score":...}
-        """
-        results = {}
-        # Determine candidate range
-        max_test_d = min(self.max_d, self.problem.dim - 1)
-        if max_test_d < 1:
-            return {1: {"score": 0.0}}
-
-        # Gather validation_by_d candidates from most recent model fits
-        # Prefer the most recent explicit validation (self.last_validation_by_d)
-        validation_by_d = getattr(self, "last_validation_by_d", None)
-        if validation_by_d is None:
-            # Try to average validation_by_d from previous_model_information entries
-            vals = {}
-            counts = {}
-            for info in self.previous_model_information:
-                vbd = info.get("validation_by_d")
-                if isinstance(vbd, dict):
-                    for k, v in vbd.items():
-                        k = int(k)
-                        vals[k] = vals.get(k, 0.0) + float(v)
-                        counts[k] = counts.get(k, 0) + 1
-            if counts:
-                validation_by_d = {k: vals[k] / counts[k] for k in vals}
-
-        # Build eigen-spectrum proxy for projection residuals
-        eig_source = None
-        if hasattr(self, "gradient_eigenvalues") and self.gradient_eigenvalues:
-            try:
-                eig_source = np.array(self.gradient_eigenvalues[-1], dtype=float)
-            except Exception:
-                eig_source = None
-
-        if eig_source is None:
-            # fallback: average eigenvalue_spectrum from previous_model_information
-            spectra = [
-                np.array(info.get("eigenvalue_spectrum", []), dtype=float)
-                for info in self.previous_model_information
-                if info.get("eigenvalue_spectrum")
-            ]
-            if spectra:
-                # pad to same length
-                maxlen = max(s.shape[0] for s in spectra)
-                padded = np.vstack(
-                    [
-                        np.pad(s, (0, maxlen - s.shape[0]), constant_values=0.0)
-                        for s in spectra
-                    ]
-                )
-                eig_source = np.mean(padded, axis=0)
-
-        # If still no eigenvalues, use a uniform tiny spectrum
-        if eig_source is None or eig_source.size == 0:
-            eig_source = np.ones(self.problem.dim) * 1e-6
-
-        total_var = max(1e-12, float(np.sum(eig_source)))
-
-        # Historical success rate per recommended dimension
-        success_counts = {}
-        total_counts = {}
-        for info in self.previous_model_information:
-            d_rec = int(info.get("recommended_dimension", 1))
-            total_counts[d_rec] = total_counts.get(d_rec, 0) + 1
-            if info.get("model_success"):
-                success_counts[d_rec] = success_counts.get(d_rec, 0) + 1
-
-        for d in range(1, max_test_d + 1):
-            # validation error (lower is better) -> convert to normalized [0,1] score
-            val_err = None
-            if validation_by_d and int(d) in validation_by_d:
-                try:
-                    val_err = float(validation_by_d[int(d)])
-                except Exception:
-                    val_err = None
-            # If absent, set neutral value later
-
-            # projection residual: fraction of variance NOT captured by top-d
-            captured = float(np.sum(eig_source[:d]))
-            proj_resid = max(0.0, 1.0 - (captured / total_var))
-
-            # success rate
-            succ = success_counts.get(d, 0)
-            tot = total_counts.get(d, 0)
-            success_rate = float(succ / tot) if tot > 0 else 0.0
-
-            results[d] = {
-                "val_err": val_err,
-                "proj_resid": proj_resid,
-                "success_rate": success_rate,
-            }
-
-        # Normalize and score
-        # Gather val_errs for normalization
-        vals = [v["val_err"] for v in results.values() if v["val_err"] is not None]
-        if vals:
-            max_val = max(vals)
-            min_val = min(vals)
-        else:
-            max_val = None
-            min_val = None
-
-        # Weights (can be tuned later)
-        w_val = 0.50
-        w_proj = 0.30
-        w_succ = 0.20
-        # cost weight applied as penalty inside score via normalized d
-
-        for d, metrics in results.items():
-            # normalized validation score in [0,1] where 1 is best
-            if metrics["val_err"] is None:
-                s_val = 0.5
-            else:
-                if max_val is None or max_val - min_val < 1e-12:
-                    s_val = 0.8
-                else:
-                    # smaller err -> larger score
-                    s_val = 1.0 - (metrics["val_err"] - min_val) / max(
-                        1e-12, (max_val - min_val)
-                    )
-
-            s_proj = 1.0 - metrics["proj_resid"]  # higher is better
-            s_succ = metrics["success_rate"]
-
-            # cost penalty (prefer smaller d). Use hard-coded budget-aware formula
-            # Cost shape and budget multiplier are fixed from tuning experiments.
-            cost_power = float(self.cost_power)
-            cp = float(self.cost_penalty)
-            budget_alpha = float(self.budget_alpha)
-
-            cost = (float(d) / max(1.0, max_test_d)) ** float(cost_power)
-
-            baseline_budget = float(self.baseline_budget)
-            budget = getattr(self.problem, "factors", {}).get("budget", baseline_budget)
-            try:
-                budget = float(budget)
-            except Exception:
-                budget = baseline_budget
-            mult = baseline_budget / max(1.0, budget)
-            cp_eff = float(cp) * (float(mult) ** float(budget_alpha))
-
-            raw_score = (
-                w_val * s_val + w_proj * s_proj + w_succ * s_succ - cp_eff * cost
-            )
-
-            # clamp score to [0,1]
-            score = max(0.0, min(1.0, raw_score))
-            metrics["score"] = float(score)
-            metrics["s_val"] = float(s_val)
-            metrics["s_proj"] = float(s_proj)
-            metrics["s_succ"] = float(s_succ)
-            metrics["cost"] = float(cost)
-
-        # Identify 'sufficient' candidate dimensions: those whose score is
-        # within a small relative tolerance of the best score. This allows
-        # selecting a smaller d that is effectively as good as the best one.
-        try:
-            max_score = max(v.get("score", 0.0) for v in results.values())
-        except Exception:
-            max_score = 0.0
-
-        tol = float(self.sufficient_score_tol)
-        if max_score > 0:
-            threshold = max_score * (1.0 - float(tol))
-        else:
-            threshold = max_score - float(tol)
-
-        sufficient = [
-            d for d, m in results.items() if float(m.get("score", 0.0)) >= threshold
-        ]
-        # store last-sufficient list on the solver for downstream use / inspection
-        try:
-            self._last_sufficient_candidates = sorted(int(d) for d in sufficient)
-        except Exception:
-            self._last_sufficient_candidates = []
-        # annotate individual metrics
-        for d in results:
-            results[d]["is_sufficient"] = d in self._last_sufficient_candidates
-        return results
-
     def compute_optimal_subspace_dimension(self) -> int | None:
-        """Compute the optimal subspace dimension for the current iteration based on.
+        """CABS dimension update: observe outcome of last iteration, then select d.
 
-        previous model information.
+        Uses the Decomposed Cost-Aware Bandit Selector (CABS) with the
+        optimistic-under-uncertainty (OFU) prior on ĝ for cold arms
+        always enabled.
 
-        Returns:
-            int: The optimal subspace dimension for the current iteration.
-        TODO: Complete the fallback logic for cases with no successful or intersecting
-        models
-        TODO: Add in logic to handle plateau detection and dimension resets
+        Workflow:
+            1. Determine acceptance from incumbent change vs. snapshot at iter start.
+            2. Feed (d_k, accepted, reward, rho_k) into CABS.update().
+            3. Query CABS.select() for the next d.
+            4. If d changes, reset the basis and refresh prev_U/prev_H.
         """
-        # Use scoring across candidate dimensions combining validation, projection
-        # residual and success history
-        # Plateau and reset logic preserved
-        # Conservative safety: require a minimum number of iterations between d-changes
-        min_iters_between_d_changes = 3
-
-        if self.in_dimension_reset:
-            optimal_d = self.reduce_dimension_in_plateau_reset()
-            if optimal_d == self.initial_subspace_dimension:
-                self.in_dimension_reset = False
-        elif self.detect_plateau():
-            optimal_d = self.problem.dim - 1
-            self.delta = max(self.delta_initial, 0.25 * self.delta_max)
-            self.in_dimension_reset = True
-            self.reset_start_iteration = self.iteration_count
-            self.reset_target_d = self.initial_subspace_dimension
-            self.dimension_reset_count += 1
-            self.consecutive_unsuccessful = 0
-            self.consecutive_successful = 0
-            self.recent_gradient_norms.clear()
-            self.recent_prediction_errors.clear()
-        else:
-            # If no history, keep current d
-            if not self.previous_model_information and not hasattr(
-                self, "last_validation_by_d"
-            ):
-                return self.d
-
-            scores = self.evaluate_and_score_candidate_dimensions()
-            if not scores:
-                return self.d
-
-            # choose best d by score
-            best_d = max(scores.items(), key=lambda kv: kv[1].get("score", 0.0))[0]
-            optimal_d = int(best_d)
-
-            # Prefer the smallest sufficient candidate when configured
-            prefer_small = bool(self.prefer_small_sufficient)
-            sufficient = getattr(self, "_last_sufficient_candidates", None)
-            if prefer_small and sufficient:
-                try:
-                    optimal_d = int(min(sufficient))
-                except Exception:
-                    optimal_d = int(best_d)
-
-            # Write diagnostic summary of candidate scores to diagnostics file (if
-            # enabled)
-            try:
-                if self.factors.get("Record Diagnostics", False) and hasattr(
-                    self, "diagnostics"
-                ):
-                    out = f"\nITER {self.iteration_count}: candidate-d scores and metrics:\n"  # noqa: E501
-                    for d, m in sorted(scores.items()):
-                        out += f"  d={d}: score={m.get('score', float('nan')):.4f}, s_val={m.get('s_val', float('nan')):.4f}, s_proj={m.get('s_proj', float('nan')):.4f}, s_succ={m.get('s_succ', float('nan')):.4f}, cost={m.get('cost', float('nan')):.4f}\n"  # noqa: E501
-                    out += f"  chosen_optimal_d={optimal_d} (current_d={self.d})\n"
-                    try:
-                        self.diagnostics.write_diagnostics_to_txt(out)
-                    except Exception:
-                        logging.debug("Failed to write adaptive-d diagnostics")
-            except Exception:
-                pass
-
-        # Prevent extreme oscillations: require a small cooldown before applying changes
-        if not self.in_dimension_reset:
-            time_since_change = self.iteration_count - getattr(
-                self, "last_d_change_iteration", 0
-            )
-            if time_since_change < min_iters_between_d_changes:
-                # Avoid changing d too frequently
-                return self.d
-
-            # Conservative step cap to avoid large jumps
-            max_step = 2
-
-            # If multiple consecutive unsuccessful iterations, be slightly more willing
-            # to increase d
-            if getattr(self, "consecutive_unsuccessful", 0) >= 3:
-                max_step = max(max_step, 3)
-
-            # Cap the step to a reasonable fraction of problem dimension
-            cap = max(1, int(0.5 * max(1, self.problem.dim)))
-            max_step = min(max_step, cap)
-
-            if abs(optimal_d - self.d) > max_step:
-                optimal_d = int(self.d + np.sign(optimal_d - self.d) * max_step)
-
-        # If optimal_d equals current dimension, optionally allow small forced
-        # exploration
-        if (
-            optimal_d == self.d
-            and (self.iteration_count - getattr(self, "last_d_change_iteration", 0)) > 5
-            and self.consecutive_unsuccessful >= 2
-        ):
-            optimal_d = min(self.problem.dim - 1, self.d + 1)
-
-        # Log dimension change and update history when it happens
-        if optimal_d != self.d:
-            print(
-                f"Iteration {self.iteration_count}: Adaptive subspace dimension change: {self.d} -> {optimal_d}"  # noqa: E501
-            )
-            logging.info(
-                f"Adaptive subspace: {'Increasing' if optimal_d > self.d else 'Decreasing'} "  # noqa: E501
-                f"d from {self.d} to {optimal_d} "
-            )
-            self.d = optimal_d
-            # Reset prev_U since dimension changed
-            self.prev_U = None
-            self.prev_H = np.eye(self.problem.dim)
-            # Track when the last change happened and record history
-            self.last_d_change_iteration = self.iteration_count
-            try:
-                self.d_history.append(self.d)
-            except Exception:
-                # ensure d_history exists
-                self.d_history = [self.d]
-        return None
-
-    # TODO: EXPAND THIS LOGIC TO INCLUDE PREDICTION ERRORS OF THE MODELS
-    def heuristic_for_no_successful_models(self) -> int:
-        """Heuristic to determine optimal subspace dimension when no successful models.
-
-        exist.
-
-            This is based on recent unsuccessful performance and prediction errors.
-
-        Returns:
-            int: The optimal subspace dimension based on heuristics.
-        """
-        # Start conservative: default to current dimension
-        target_d = int(self.d)
-
-        # Use exponential moving averages for stability
-        ema_alpha = 0.3
-        if hasattr(self, "ema_pred_error"):
-            self.ema_pred_error = (
-                ema_alpha
-                * (
-                    np.abs(self.recent_prediction_errors[-1])
-                    if self.recent_prediction_errors
-                    else 0.0
-                )
-                + (1 - ema_alpha) * self.ema_pred_error
-            )
-        else:
-            self.ema_pred_error = (
-                np.mean(self.recent_prediction_errors[-3:])
-                if len(self.recent_prediction_errors) >= 1
-                else 0.0
-            )
-
-        if self.consecutive_unsuccessful >= 3:
-            target_d = min(self.problem.dim - 1, self.d + 2)
-        elif self.consecutive_unsuccessful >= 2:
-            target_d = min(self.problem.dim - 1, self.d + 1)
-
-        # Adjust based on smoothed prediction error
-        if self.ema_pred_error > 0.5:
-            target_d = min(self.problem.dim - 1, target_d + 1)
-        elif self.ema_pred_error < 0.1:
-            target_d = max(1, target_d - 1)
-
-        # Bound and return
-        return max(1, min(self.problem.dim - 1, int(target_d)))
-
-    def heuristic_performance_with_successful_models(
-        self, successful_models: list[dict]
-    ) -> int:
-        """Heuristic to determine optimal subspace dimension based on successful.
-
-        models'.
-
-        performance.
-
-
-            This considers recent prediction errors and trust-region sizes.
-
-            We consider:
-            1. The smallest dimension that has been tried multiple times and led to
-            successful results
-            2. The dimension that led to the lowest average prediction error among
-            successful models
-            3. The dimension that aligns with the current trust-region size (smaller
-            dimensions for smaller trust-regions)
-            4. The dimension that has shown consistent improvement in recent iterations
-
-        Args:
-            successful_models (list[dict]): A list of previous model information
-            dictionaries that were successful
-
-        Returns:
-            int: The optimal subspace dimension based on heuristics.
-        """
-        candidate_dimensions = []
-
-        # 1. Find the smallest dimension if it has been tried multiple times and lead to
-        # successful results
-        # filter d_history for successful iterations
-        successful_d_history = [
-            self.d_history[i - 1]
-            for i in self.successful_iterations
-            if i - 1 < len(self.d_history)
-        ]
-        d_counts = Counter(successful_d_history)
-        smallest_successful_d = min(
-            (d for d, count in d_counts.items() if count >= 2), default=self.d
-        )
-        candidate_dimensions.append(smallest_successful_d)
-
-        # 2. The dimension that led to the lowest average prediction error among
-        # successful models
-        # Use per-model stored recommended_dimension when available; use global recent
-        # errors as fallback
-        d_pred_errors = {}
-        for info in successful_models:
-            d = info["recommended_dimension"]
-            # get the prediction error from the recent_prediction_errors list
-            # corresponding to this model
-            model_pred_error = (
-                np.mean(self.recent_prediction_errors[-5:])
-                if self.recent_prediction_errors
-                else 0.0
-            )
-            if d not in d_pred_errors:
-                d_pred_errors[d] = []
-            d_pred_errors[d].append(model_pred_error)
-
-        avg_d_pred_errors = {d: np.mean(errors) for d, errors in d_pred_errors.items()}
-        # select dimension with lowest average prediction error
-        if avg_d_pred_errors:
-            best_d = min(avg_d_pred_errors, key=lambda k: avg_d_pred_errors[k])
-            candidate_dimensions.append(best_d)
-
-        # 3. The dimension that aligns with the current trust-region size (smaller
-        # dimensions for smaller trust-regions)
-        if self.delta < self.delta_initial / 4:
-            smaller_d = max(1, self.d - 1)
-            candidate_dimensions.append(smaller_d)
-        elif self.delta > self.delta_initial / 2:
-            larger_d = min(self.problem.dim - 1, self.d + 1)
-            candidate_dimensions.append(larger_d)
-
-        # 4. The dimension that has shown consistent improvement in recent iterations
-        if len(self.successful_iterations) >= 3:
-            recent_successful_ds = [
-                self.d_history[i - 1]
-                for i in self.successful_iterations[-3:]
-                if i - 1 < len(self.d_history)
-            ]
-            if all(d == recent_successful_ds[0] for d in recent_successful_ds):
-                candidate_dimensions.append(recent_successful_ds[0])
-
-        # Out of the candidate dimensions, choose the most frequently occurring one
-        if not candidate_dimensions:
-            return self.d
-
-        dimension_counts = Counter(candidate_dimensions)
-        optimal_d, count = dimension_counts.most_common(1)[0]
-        # If all candidates are different, pick the median dimension
-        if count == 1:
-            optimal_d = int(np.median(candidate_dimensions))
-
-        return max(1, min(self.problem.dim - 1, int(optimal_d)))
-
-    def adaptive_dimension_successful_intersecting_models(
-        self, intersecting_models: list[dict], intersection_amounts: list[float]
-    ) -> int:
-        """Determine the optimal subspace dimension based on successful intersecting.
-
-        models.
-
-            We consider three strategies:
-            1. Infer optimal dimension from the intersecting models' average eigenvalue
-            spectra
-            2. Check for consensus among intersecting models' recommended dimensions
-            which significantly intersect the current trust-region
-            3. Look for patterns in dimension changes among intersecting models.
-
-            We see out of these three candidates which one is most agreed upon, and if
-            all are different, we use a scoring system to select the best candidate.
-            The scoring system rewards:
-            - Higher dimensions when trust-region is small and smaller dimensions when
-            trust-region is large
-            - Dimensions suggested by models with higher intersection amounts
-
-        Args:
-            intersecting_models (list[dict]): A list of previous model information
-            dictionaries that were successful
-            intersection_amounts (list[float]): A list of intersection amounts with the
-            current trust-region corresponding to the successful models
-
-        Returns:
-            int: The optimal subspace dimension based on successful intersecting models
-        """
-        candidates = []
-        # we infer what the subspace dimension of the current trust-region should be
-        # based on the known optimal subspace dimensions of intersecting models
-        candidates.append(self.infer_optimal_dimension_from_models(intersecting_models))
-
-        # obtain list of optimal dimensions from intersecting models sorted by how much
-        # they intersect the current trust-region
-        intersecting_optimal_ds = [
-            info.get("recommended_dimension", self.d) for info in intersecting_models
-        ]
-
-        # see if there is some consensus among intersecting models
-        # Consider only models with significant intersection (e.g., intersection amount
-        # >= 0.5)
-        significant_ds = [
-            d
-            for d, amt in zip(
-                intersecting_optimal_ds, intersection_amounts, strict=False
-            )
-            if amt >= 0.5
-        ]
-        if significant_ds:
-            dim_counts = Counter(significant_ds)
-            optimal_d_2, count = dim_counts.most_common(1)[0]
-            candidates.append(optimal_d_2)
-
-        # see if there is any pattern that can be extrapolated from the change in
-        # dimensions of intersecting models from smallest intersection
-        # amount to largest
-
-        # if there is a clear growth or decay pattern in the dimensions of intersecting
-        # models, follow that pattern
-        if len(intersecting_optimal_ds) >= 3:
-            diffs = np.diff(intersecting_optimal_ds)
-            if all(d > 0 for d in diffs):  # strictly increasing
-                optimal_d_3 = min(self.d + 1, self.problem.dim - 1)
-            elif all(d < 0 for d in diffs):  # strictly decreasing
-                optimal_d_3 = max(self.d - 1, 1)
+        try:
+            x_before = self._x_before_iter
+            if x_before is None:
+                accepted = False
             else:
-                optimal_d_3 = self.d
-            candidates.append(optimal_d_3)
+                accepted = tuple(self.incumbent_x) != tuple(x_before)
 
-        # out of the candidates, choose the one that occurs most frequently,
-        # if all candidates are different design a scoring option to select the best
-        # candidate
-        candidate_counts = Counter(candidates)
-        optimal_d, count = candidate_counts.most_common(1)[0]
+            reward = float(getattr(self, "_last_bandit_reward", 0.0))
+            rho_k = float(getattr(self, "_last_rho_k", 0.0))
 
-        # scoring system if all candidates are different
-        if count == 1:
-            scores = {}
-            for candidate in candidates:
-                score = 0
-                # Reward closeness to current dimension
-                # score -= abs(candidate - self.d)
-                # Reward higher dimensions when trust-region is small and smaller
-                # diimensions when trust-region is large
-                if self.delta < self.delta_initial / 4:
-                    score += candidate * 0.5
-                else:
-                    score -= candidate * 0.5
-                # Reward dimensions suggested by models with higher intersection amounts
-                for idx, info in enumerate(intersecting_models):
-                    try:
-                        if info.get("recommended_dimension", None) == candidate:
-                            score += intersection_amounts[idx] * 2.0
-                    except Exception:
-                        continue
-                scores[candidate] = score
-            # Select candidate with highest score
-            optimal_d = max(scores, key=lambda k: scores[k])
-        return optimal_d
+            self.cabs.update(
+                d_k=int(self.d), accepted=accepted, reward=reward, rho_k=rho_k
+            )
+            d_next = int(self.cabs.select(int(self.d)))
 
-    def record_gradient_eigenvalues(self, gradients: np.ndarray) -> None:
-        """Compute and store eigenvalues from gradient outer product for dimension.
+            self.cabs_log.append(
+                {
+                    "iteration": int(self.iteration_count),
+                    "d_prev": int(self.d),
+                    "d_next": int(d_next),
+                    "accepted": bool(accepted),
+                    "reward": reward,
+                    "rho_k": rho_k,
+                }
+            )
 
-        estimation.
-
-        Args:
-            gradients: Array of shape (M, n) containing M gradient samples in n
-            dimensions.
-        """
-        try:
-            if gradients is None:
-                return
-            G = np.asarray(gradients)  # noqa: N806
-            if G.ndim != 2 or G.shape[0] < 2:
-                return
-            M, _n = G.shape  # noqa: N806
-            C = G.T @ G / M  # noqa: N806
-            eigenvalues = np.linalg.eigvalsh(C)
-            eigenvalues = np.sort(eigenvalues)[::-1]
-            eigenvalues = np.maximum(eigenvalues, 0.0)
-            if not hasattr(self, "gradient_eigenvalues"):
-                self.gradient_eigenvalues = []
-            self.gradient_eigenvalues.append(eigenvalues)
+            if d_next != int(self.d):
+                print(f"[ADAPTIVE SUBSPACE]: Iteration {self.iteration_count}: {self.d} -> {d_next}")  # noqa: E501
+                self.d = int(d_next)
+                self.set_basis(self.factors["polynomial basis"], self.problem)
+                self.prev_U = None
+                self.prev_H = np.eye(self.problem.dim)
+                self.last_d_change_iteration = int(self.iteration_count)
+                self.d_history.append(int(self.d))
+                return int(self.d)
         except Exception as e:
-            logging.debug(f"record_gradient_eigenvalues failed: {e}")
-
-    # === PLATEAU DETECTION AND DIMENSION RESET METHODS ===
-    #!GO THROUGH THIS LOGIC CAREFULLY
-    def detect_plateau(self) -> bool:
-        """Detect if the solver is in a plateau based on recent performance.
-
-        and initiate a dimension reset if necessary.
-        A plateau is defined by a lack of significant improvement in the algorithm for
-        an extended perio.
-
-         A plateau is detected only when:
-        1. We have enough iteration history (plateau_window iterations)
-        2. We're not already in a dimension reset cycle
-        3. We haven't exceeded the maximum number of resets
-        4. The objective has shown virtually zero improvement over many iterations
-        5. Multiple consecutive unsuccessful iterations have occurred
-
-        Returns:
-            bool: True if a genuine plateau is detected, False otherwise.
-        """
-        # Need enough history to detect plateau
-        if len(self.recent_objective_values) < self.plateau_window:
-            return False
-
-        # Don't trigger another reset if we're already in one
-        if self.in_dimension_reset:
-            return False
-
-        # Limit the number of resets to avoid excessive dimension cycling
-        if self.dimension_reset_count >= self.max_dimension_resets:
-            return False
-
-        # Require a minimum number of iterations before considering plateau
-        # (relaxed to detect plateaus earlier in short runs)
-        min_iterations_before_plateau = max(8, self.plateau_window * 2)
-        if self.iteration_count < min_iterations_before_plateau:
-            return False
-
-        # Get recent objective values
-        recent = self.recent_objective_values[-self.plateau_window :]
-
-        # Compute relative improvement from start to end of window
-        # For maximization problems (minmax = (1,)), improvement means increase
-        # For minimization problems (minmax = (-1,)), improvement means decrease
-        is_maximization = self.problem.minmax[0] == 1
-
-        if is_maximization:
-            best_recent = max(recent)
-            worst_recent = min(recent)
-        else:
-            best_recent = min(recent)
-            worst_recent = max(recent)
-
-        # Compute relative improvement
-        baseline = abs(recent[0]) if abs(recent[0]) > 1e-10 else 1.0
-        relative_improvement = abs(best_recent - worst_recent) / baseline
-
-        # Check if we're completely stuck (no change at all)
-        no_improvement = all(
-            abs(recent[i] - recent[0]) < 1e-10 for i in range(1, len(recent))
-        )
-
-        # Additional check: require more consecutive unsuccessful iterations
-        # to declare a plateau (strengthened policy).
-        require_consecutive_failures = self.consecutive_unsuccessful >= 2
-
-        # Treat extreme stagnation conservatively: require both tiny improvement
-        # and at least a couple of failures.
-        extreme_stagnation = relative_improvement < (self.plateau_threshold * 0.05)
-
-        # Plateau detected only if:
-        # 1. Improvement is below threshold AND we have multiple consecutive failures
-        # 2. OR we're completely stuck with no improvement (need stronger evidence)
-        # 3. OR extreme stagnation combined with at least 2 failures
-        is_plateau = (
-            (
-                relative_improvement < self.plateau_threshold
-                and require_consecutive_failures
-            )
-            or (no_improvement and self.consecutive_unsuccessful >= 4)
-            or (extreme_stagnation and self.consecutive_unsuccessful >= 2)
-        )
-        if is_plateau:
-            logging.info(
-                f"Plateau detected at iteration {self.iteration_count}: "
-                f"relative_improvement={relative_improvement:.6f} < threshold={self.plateau_threshold}, "  # noqa: E501
-                f"consecutive_unsuccessful={self.consecutive_unsuccessful}, "
-                f"reset #{self.dimension_reset_count + 1}"
-            )
-
-        return is_plateau
-
-    def reduce_dimension_in_plateau_reset(self) -> int:
-        """A deterministic decay function to reduce the subspace dimension during a.
-
-        plateau reset cycle.
-
-            The dimension is reduced gradually back to the initial dimension over a set
-            number of iterations.
-
-             The decay follows: d(t) = d_max - (d_max - d_init) * log(1 + t) / log(1 +
-             T)
-             where t is the number of iterations since the reset started, and T is the
-             decay duration.
-
-        Returns:
-            int: The subspace dimension for the current iteration during the reset
-            cycle.
-        """
-        if not self.in_dimension_reset:
-            return self.d
-
-        full_d = self.max_d
-        target_d = self.reset_target_d
-
-        # Number of iterations since reset started
-        t = self.iteration_count - self.reset_start_iteration
-
-        # Decay duration: scale with dimension difference
-        # More iterations for larger dimension gaps
-        T = max(3, (full_d - target_d) * 2)  # noqa: N806
-
-        if t >= T:
-            # Decay complete - return to normal adaptive mode
-            self.in_dimension_reset = False
-            logging.info(
-                f"Dimension reset complete at iteration {self.iteration_count}: "
-                f"returning to d={target_d} and resuming adaptive mode"
-            )
-            return target_d
-        # Logarithmic decay: starts fast, slows down
-        # log(1+t)/log(1+T) goes from 0 to 1 as t goes from 0 to T
-        decay_fraction = np.log(1 + t) / np.log(1 + T)
-
-        # Dimension decays from full_d toward target_d
-        current_d = full_d - int((full_d - target_d) * decay_fraction)
-
-        # Ensure we stay within bounds
-        return max(target_d, min(self.max_d, current_d))
-
-    def record_objective_for_plateau_detection(self, objective_value: float) -> None:
-        """Append an objective value to the sliding window used by plateau detection.
-
-        Keeps the history bounded to avoid unbounded memory growth.
-        """
-        try:
-            if not hasattr(self, "recent_objective_values"):
-                self.recent_objective_values = []
-            self.recent_objective_values.append(float(objective_value))
-            # Keep a modest amount of history (twice the window) to smooth detection
-            max_history = max(10, self.plateau_window * 3)
-            if len(self.recent_objective_values) > max_history:
-                # pop oldest
-                self.recent_objective_values.pop(0)
-        except Exception:
-            # Don't let diagnostics recording break the solver
-            pass
+            logging.debug(f"CABS dimension update failed: {e}")
+        return None
 
     # === TRUST-REGION METHODS ===
 
@@ -2349,12 +1350,6 @@ class ASTROMORF(Solver):
                 tuple[Solution, float]: The updated current solution and trust-region
                 radius
         """
-
-        def current_iteration_performance(success):  # noqa: ANN001, ANN202
-            return self.record_iteration_performance(
-                self.delta, self.incumbent_solution, success
-            )
-
         # Adaptive trust region based on interpolation quality
         # Compute distance from candidate to nearest design point
         x_candidate = np.array(candidate_solution.x).reshape(-1, 1)
@@ -2387,10 +1382,6 @@ class ASTROMORF(Solver):
             self.successful_iterations.append(candidate_solution)
             self.intermediate_budgets.append(self.budget.used)
 
-            # Track for adaptive subspace dimension
-            # self.update_success_tracking(is_successful=True)
-            current_iteration_performance(success=True)
-
             # Keep delta unchanged (no increase or decrease)
             # Optionally: could apply modest shrinkage like: self.delta = max(0.9 *
             # self.delta, self.delta_min)
@@ -2409,10 +1400,6 @@ class ASTROMORF(Solver):
             self.recommended_solns.append(candidate_solution)
             self.successful_iterations.append(candidate_solution)
             self.intermediate_budgets.append(self.budget.used)
-
-            # Track for adaptive subspace dimension
-            # self.update_success_tracking(is_successful=True)
-            current_iteration_performance(success=True)
 
             old_delta = self.delta
 
@@ -2453,17 +1440,13 @@ class ASTROMORF(Solver):
                     ),
                     self.delta_min,
                 )
-                current_iteration_performance(success=False)
 
         else:
             old_delta = self.delta
             self.delta: float = max(self.gamma_3 * self.delta, self.delta_min)
 
             self.unsuccessful_iterations.append(self.incumbent_solution)
-            # Track for adaptive subspace dimension
-            # self.update_success_tracking(is_successful=False)
 
-    #! THIS NEEDS REWRITING
     def compute_ratio(self, candidate_solution: Solution, fval_tilde: float) -> float:
         """Compute the ratio of actual reduction to predicted reduction.
 
@@ -2494,6 +1477,17 @@ class ASTROMORF(Solver):
         candidate_m = self.model(np.array(candidate_solution.x).reshape(1, -1))
         predicted_improvement = current_m - candidate_m
         actual_improvement = current_f - fval_tilde
+
+        # CABS bandit reward: max(δF, 0) / Δ²
+        try:
+            delta_sq = float(self.delta) ** 2
+            self._last_bandit_reward = (
+                max(float(actual_improvement), 0.0) / delta_sq
+                if delta_sq > 0.0
+                else 0.0
+            )
+        except Exception:
+            self._last_bandit_reward = 0.0
 
         # Safeguard against very small predicted improvements
         abs_tolerance = 1e-10 * max(1.0, abs(current_m), abs(candidate_m))
@@ -3491,22 +2485,9 @@ class ASTROMORF(Solver):
                 interpolation set
 
         Returns:
-                tuple[np.ndarray, np.ndarray, list[Solution]]:
-                                                                                                                Updated
-                                                                                                                interpolation
-                                                                                                                points
-                                                                                                                of
-                                                                                                                shape
-                                                                                                                (M,
-                                                                                                                n),
-                                                                                                                function
-                                                                                                                values
-                                                                                                                of
-                                                                                                                shape
-                                                                                                                (M,
-                                                                                                                1),
-                                                                                                                interpolation
-                                                                                                                solutions
+                tuple[np.ndarray, np.ndarray, list[Solution]]: Updated 
+                interpolation points of shape (M,n), function 
+                values of shape (M, 1), interpolation solutions
         """
         epsilon_1 = 0.5
         d = U.shape[1]
@@ -3619,11 +2600,9 @@ class ASTROMORF(Solver):
 
         Returns:
                 tuple[np.ndarray, np.ndarray, list[Solution]]:
-                                                                Updated interpolation
-                                                                points of shape (M, n),
-                                                                function values of shape
-                                                                (M, 1),
-                                                                interpolation solutions,
+                    Updated interpolation points of shape (M, n),
+                    function values of shape (M, 1),
+                    interpolation solutions,
         """
         # Less aggressive pivot thresholds - prefer reusing good existing points
         psi_1 = 0.01  # Accept pivots >= 0.01
@@ -4373,6 +3352,9 @@ class ASTROMORF(Solver):
         U0, R = np.linalg.qr(U0, mode="reduced")  # noqa: N806
         U0 = np.dot(U0, np.diag(np.sign(np.diag(R))))  # noqa: N806
 
+        # Snapshot of initial U for VP-convergence gate rho_k computation
+        U0_snapshot = np.copy(U0)  # noqa: N806
+
         prev_U = np.zeros(U0.shape)  # noqa: N806
         U = np.copy(U0)  # noqa: N806
         model_delta = float(self.delta)
@@ -4428,70 +3410,15 @@ class ASTROMORF(Solver):
                 self.problem.dim, self.problem.dim
             )
 
-        # Record gradient eigenvalues for adaptive dimension selection
-        # Compute full-space gradients (M, n) by inflating reduced-space gradients
-        if self.factors.get("adaptive subspace dimension", False) and X.shape[0] >= 2:
-            try:
-                # If model_grad supports batch evaluation, use it; otherwise compute
-                # per-point
-                try:
-                    full_space_grads = self.model_grad(X, full_space=True)
-                except Exception:
-                    full_space_grads = np.vstack(
-                        [
-                            self.model_grad(x.reshape(1, -1), full_space=True).flatten()
-                            for x in X
-                        ]
-                    )
-                # Ensure shape
-                if full_space_grads.ndim == 1:
-                    full_space_grads = full_space_grads.reshape(1, -1)
-                self.record_gradient_eigenvalues(full_space_grads)
-            except Exception as e:
-                logging.debug(f"Could not record gradient eigenvalues: {e}")
-
-        # --- Per-dimension validation using existing design set (no extra sims) ---
-        # Compute validation errors for candidate subspace dimensions using X and fX
+        # CABS VP-convergence gate rho_k = ‖r_final‖² / ‖r_initial‖²
         try:
-            validation_by_d: dict[int, float] = {}
-            max_test_d = min(self.max_d, U.shape[1])
-            # Use modest cap to limit cost; test dims from 1..max_test_d
-            for test_d in range(1, max_test_d + 1):
-                U_cand = U[:, :test_d]  # noqa: N806
-                Y = X @ U_cand  # noqa: N806
-                Vmat = self.V(Y)  # noqa: N806
-                # Fit coefficients in reduced space for this candidate d
-                try:
-                    coef_cand = self.fit_coef(X, fX, U_cand)
-                except Exception:
-                    # fallback: try pseudo-inverse directly on Vmat
-                    try:
-                        coef_cand = pinv(Vmat) @ fX
-                    except Exception:
-                        coef_cand = None
-                if coef_cand is None:
-                    continue
-                preds = Vmat @ coef_cand
-                # compute normalized RMSE (relative to mean abs of fX)
-                err = np.sqrt(
-                    np.mean(
-                        (
-                            fX.reshape(
-                                -1,
-                            )
-                            - preds.reshape(
-                                -1,
-                            )
-                        )
-                        ** 2
-                    )
-                )
-                denom = max(1e-10, np.mean(np.abs(fX)))
-                validation_by_d[int(test_d)] = float(err / denom)
-            # store for use when recording iteration performance
-            self.last_validation_by_d = validation_by_d
-        except Exception as e:
-            logging.debug(f"Validation-by-d computation failed: {e}")
+            r_initial = self.residual(X, fX, U0_snapshot)
+            r_final = self.residual(X, fX, U)
+            num = float(np.sum(r_final**2))
+            den = float(np.sum(r_initial**2))
+            self._last_rho_k = num / den if den > 1e-30 else 0.0
+        except Exception:
+            self._last_rho_k = 0.0
 
         if self.delta != model_delta:
             self.delta = float(
