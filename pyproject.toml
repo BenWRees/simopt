@@ -8,6 +8,15 @@ include = ["simopt*"]
 # Ignore the build directory so we don't circularly include built distributions.
 exclude = ["build*"]
 
+[tool.pyrefly]
+project_excludes = [
+  "simopt/solvers/Equadratures/**",
+  "simopt/solvers/active_subspaces/**",
+  "simopt/solvers/TrustRegion/**",
+  "HPC_code/**",
+  "ASTROMoRF_Code/**",
+]
+
 [tool.setuptools.package-data]
 "simopt.data_farming" = ["*.npz"]
 
