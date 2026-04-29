@@ -179,48 +179,45 @@ class NelderMead(Solver):
         try:
             # Maximization problem is converted to minimization by using minmax.
             while True:
-                # Shrink towards best if out of bounds.
-                while True:
-                    # Reflect worst and update sort_sol.
-                    p_high = sort_sol[-1]  # Current worst point. # pyrefly: ignore
-                    p_high_x = np.array(p_high.x)
-                    p_cent = np.mean(
-                        [s.x for s in sort_sol[:-1]],  # pyrefly: ignore
-                        axis=0,
+                # Reflect worst and update sort_sol.
+                p_high = sort_sol[-1]  # Current worst point. # pyrefly: ignore
+                p_high_x = np.array(p_high.x)
+                p_cent = np.mean(
+                    [s.x for s in sort_sol[:-1]],  # pyrefly: ignore
+                    axis=0,
+                )
+                p_refl = np.array(
+                    (1 + self.factors["alpha"]) * p_cent
+                    - self.factors["alpha"] * p_high_x
+                )
+
+                # Check if reflection point is within bounds.
+                if np.equal(p_refl, self._check_const(p_refl, p_high_x)).all():
+                    break
+
+                sol_0_x = np.array(sort_sol[0].x)  # pyrefly: ignore
+                for i in range(1, len(sort_sol)):
+                    p_new = (
+                        self.factors["delta"] * np.array(sort_sol[i].x)  # pyrefly: ignore
+                        + (1 - self.factors["delta"]) * sol_0_x
                     )
-                    p_refl = np.array(
-                        (1 + self.factors["alpha"]) * p_cent
-                        - self.factors["alpha"] * p_high_x
+                    
+                    p_new = self._check_const(p_new, sol_0_x)
+                    p_new = Solution(p_new, problem)
+                    p_new.attach_rngs(
+                        rng_list=self.solution_progenitor_rngs, copy=True
                     )
+                    self.budget.request(r)
+                    problem.simulate(p_new, r)
 
-                    # Check if reflection point is within bounds.
-                    if np.equal(p_refl, self._check_const(p_refl, p_high_x)).all():
-                        break
+                    # Update sort_sol.
+                    sort_sol[i] = p_new  # p_new replaces pi.
 
-                    sol_0_x = np.array(sort_sol[0].x)  # pyrefly: ignore
-                    delta = self.factors["delta"]
-                    for i in range(1, len(sort_sol)):
-                        sort_sol_i = np.array(sort_sol[i].x)  # pyrefly: ignore
-                        p_new = (
-                            delta * sort_sol_i  # pyrefly: ignore
-                            + (1 - delta) * sol_0_x
-                        )
-                        p_new = self._check_const(p_new, sol_0_x)
-                        p_new = Solution(p_new, problem)
-                        p_new.attach_rngs(
-                            rng_list=self.solution_progenitor_rngs, copy=True
-                        )
-                        self.budget.request(r)
-                        problem.simulate(p_new, r)
-
-                        # Update sort_sol.
-                        sort_sol[i] = p_new  # p_new replaces pi.
-
-                    # Sort & end updating.
-                    sort_sol = self._sort_and_end_update(
-                        problem,
-                        sort_sol,  # pyrefly: ignore
-                    )
+                # Sort & end updating.
+                sort_sol = self._sort_and_end_update(
+                    problem,
+                    sort_sol,  # pyrefly: ignore
+                )
 
                 # Evaluate reflected point.
                 p_refl = tuple(p_refl.tolist())
