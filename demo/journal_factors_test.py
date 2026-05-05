@@ -138,6 +138,13 @@ class ExperimentConfig:
     )
     fixed_subspace_dim: int = 4
 
+    # ASTROMoRF subproblem regularisation factor.
+    # Swept in factor_type="full"; held at fixed_regularisation otherwise.
+    regularisation_values: list[float] = field(
+        default_factory=lambda: [0.0, 0.05, 0.15, 0.5]
+    )
+    fixed_regularisation: float = 0.15
+
     # HPC settings
     task_id: int | None = None  # For SLURM array jobs
     output_dir: Path = field(default_factory=lambda: Path("experiments"))
@@ -756,6 +763,7 @@ def run_subspace_dimension_experiments(
                 ).get("polynomial_degree", config.polynomial_degree),
                 "polynomial basis": config.fixed_basis,
                 "adaptive subspace dimension": False,  # Fixed subspace
+                "subproblem_regularisation": config.fixed_regularisation,
                 "crn_across_solns": config.crn_across_solns,
             }
             design_point_id = f"ASTROMORF_subspace_{dim}_on_{config.problem_name}"
@@ -815,6 +823,7 @@ def run_polynomial_basis_experiments(config: ExperimentConfig) -> list[dict[str,
             "polynomial degree": config.polynomial_degree,
             "polynomial basis": basis_type,
             "adaptive subspace dimension": False,  # Fixed subspace for fair comparison
+            "subproblem_regularisation": config.fixed_regularisation,
             "crn_across_solns": config.crn_across_solns,
         }
         basis_name = POLY_BASIS_NAMES.get(basis_type, basis_type.value)
@@ -862,24 +871,29 @@ def run_full_factorial_experiment(config: ExperimentConfig) -> list[dict[str, An
 
     results = []
 
-    # Generate all combinations
+    # Generate all combinations: subspace x basis x subproblem_regularisation
     design_points = []
     for dim in config.subspace_dims:
         if dim > config.problem_dim:
             continue
         for basis_type in config.basis_types:
-            solver_factors = {
-                "initial subspace dimension": dim,
-                "polynomial degree": config.polynomial_degree,
-                "polynomial basis": basis_type,
-                "adaptive subspace dimension": False,
-                "crn_across_solns": config.crn_across_solns,
-            }
-            basis_name = POLY_BASIS_NAMES.get(basis_type, basis_type.value)
-            design_point_id = (
-                f"ASTROMORF_d{dim}_basis_{basis_name}_on_{config.problem_name}"
-            )
-            design_points.append((design_point_id, solver_factors))
+            for reg in config.regularisation_values:
+                solver_factors = {
+                    "initial subspace dimension": dim,
+                    "polynomial degree": config.polynomial_degree,
+                    "polynomial basis": basis_type,
+                    "adaptive subspace dimension": False,
+                    "subproblem_regularisation": reg,
+                    "crn_across_solns": config.crn_across_solns,
+                }
+                basis_name = POLY_BASIS_NAMES.get(basis_type, basis_type.value)
+                # reg encoded with fixed precision so design-point IDs are stable
+                reg_tag = f"{reg:.4g}".replace(".", "p")
+                design_point_id = (
+                    f"ASTROMORF_d{dim}_basis_{basis_name}_reg{reg_tag}"
+                    f"_on_{config.problem_name}"
+                )
+                design_points.append((design_point_id, solver_factors))
 
     logger.info(f"Total design points: {len(design_points)}")
 
@@ -912,6 +926,251 @@ def run_full_factorial_experiment(config: ExperimentConfig) -> list[dict[str, An
 
 
 # ============================================================================
+# SENSITIVITY AGGREGATION
+# ============================================================================
+#
+# Aggregates per-design-point pickles written by run_single_design_point into
+# main-effects and pairwise-interaction summaries across the three factors:
+#     subspace dimension, polynomial basis, subproblem_regularisation.
+#
+# Reads existing pickles only — does not change how they are written.
+
+
+def _basis_to_str(value: Any) -> str:
+    """Stringify a polynomial basis factor (enum or str) for grouping."""
+    if isinstance(value, PolyBasisType):
+        return POLY_BASIS_NAMES.get(value, value.value)
+    return str(value)
+
+
+def _final_objective_stats(
+    experiment: Any,
+) -> tuple[float | None, float | None, int]:
+    """Extract the mean and std of the final-budget objective across macroreps.
+
+    Uses post-replicated objectives when available (preferred — these are the
+    quantities used for performance comparison), and falls back to the
+    in-run estimated objectives otherwise.
+    """
+    macro_finals: list[float] = []
+
+    # Preferred: post-replicated objective curves on each macroreplicate.
+    objective_curves = getattr(experiment, "objective_curves", None)
+    if objective_curves:
+        for curve in objective_curves:
+            y_vals = getattr(curve, "y_vals", None)
+            if y_vals is not None and len(y_vals) > 0:
+                macro_finals.append(float(y_vals[-1]))
+
+    # Fallback: raw per-macrorep estimated objectives produced during run().
+    if not macro_finals:
+        all_est = getattr(experiment, "all_est_objectives", None) or []
+        for mrep_vals in all_est:
+            if mrep_vals is not None and len(mrep_vals) > 0:
+                macro_finals.append(float(mrep_vals[-1]))
+
+    if not macro_finals:
+        return None, None, 0
+
+    arr = np.asarray(macro_finals, dtype=float)
+    mean_val = float(arr.mean())
+    std_val = float(arr.std(ddof=1)) if arr.size > 1 else 0.0
+    return mean_val, std_val, arr.size
+
+
+def _extract_design_point_record(
+    pickle_path: Path,
+) -> dict[str, Any] | None:
+    """Load one design-point pickle and return a flat record of factors+metrics.
+
+    Returns None if the pickle cannot be read or does not contain the
+    factors needed for sensitivity grouping.
+    """
+    import pickle  # local import: only needed during aggregation
+
+    try:
+        with pickle_path.open("rb") as f:
+            experiment = pickle.load(f)  # noqa: S301 — trusted internal artifact
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning(
+            f"Skipping unreadable pickle {pickle_path.name}: {e}"
+        )
+        return None
+
+    solver = getattr(experiment, "solver", None)
+    problem = getattr(experiment, "problem", None)
+    if solver is None or problem is None:
+        return None
+
+    factors = getattr(solver, "factors", {}) or {}
+    subspace_dim = factors.get("initial subspace dimension")
+    basis = factors.get("polynomial basis")
+    regularisation = factors.get("subproblem_regularisation")
+
+    if subspace_dim is None or basis is None or regularisation is None:
+        # Older pickles (pre-regularisation) — flag with NaN so they are
+        # excluded from grouping rather than corrupting summaries.
+        return None
+
+    mean_obj, std_obj, n_macro = _final_objective_stats(experiment)
+    if mean_obj is None:
+        return None
+
+    return {
+        "pickle_file": pickle_path.name,
+        "problem_name": getattr(problem, "name", ""),
+        "subspace_dim": int(subspace_dim),
+        "basis": _basis_to_str(basis),
+        "regularisation": float(regularisation),
+        "polynomial_degree": factors.get("polynomial degree"),
+        "n_macroreps": n_macro,
+        "mean_obj": mean_obj,
+        "std_obj": std_obj if std_obj is not None else float("nan"),
+    }
+
+
+def _group_mean_std(
+    rows: list[dict[str, Any]], keys: tuple[str, ...]
+) -> list[dict[str, Any]]:
+    """Group rows by the given factor keys and aggregate mean_obj across them.
+
+    Each design-point row contributes its mean_obj as a single observation,
+    so the std reported here is the dispersion of design-point means within
+    each group (i.e. variation explained by factor levels not in `keys`).
+    """
+    buckets: dict[tuple, list[float]] = {}
+    for row in rows:
+        bucket_key = tuple(row[k] for k in keys)
+        buckets.setdefault(bucket_key, []).append(row["mean_obj"])
+
+    out: list[dict[str, Any]] = []
+    for bucket_key, values in buckets.items():
+        arr = np.asarray(values, dtype=float)
+        record: dict[str, Any] = dict(zip(keys, bucket_key))
+        record["n_design_points"] = int(arr.size)
+        record["mean_obj"] = float(arr.mean())
+        record["std_obj"] = float(arr.std(ddof=1)) if arr.size > 1 else 0.0
+        record["min_obj"] = float(arr.min())
+        record["max_obj"] = float(arr.max())
+        out.append(record)
+    return out
+
+
+def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    """Write a list of homogeneous-keyed dict rows as a CSV file."""
+    if not rows:
+        # Always create the file so downstream pipelines do not see a missing
+        # path on HPC; but leave it empty + header-less.
+        path.write_text("")
+        return
+    fieldnames = list(rows[0].keys())
+    with path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def aggregate_sensitivity_results(
+    output_dir: Path, config: ExperimentConfig
+) -> Path | None:
+    """Aggregate per-design-point pickles into main-effects + interaction CSVs.
+
+    Scans `output_dir` for the POSTREPS pickles emitted by
+    `run_single_design_point`, extracts factor levels and final-budget
+    objective statistics, and writes:
+
+        - design_points_summary.csv : one row per design point
+        - summary_main_effects.csv  : main effect of each factor
+        - summary_interactions.csv  : pairwise grouped means
+
+    Returns the output directory on success, or None if no pickles were
+    found (e.g. SLURM array workers running in isolation).
+    """
+    logger = logging.getLogger(__name__)
+
+    # POSTREPS pickles are the canonical post-processed artifacts.
+    candidates = sorted(output_dir.glob("*_POSTREPS.pickle"))
+
+    # Fall back to all design-point pickles if POSTREPS are absent (older runs).
+    if not candidates:
+        candidates = sorted(
+            p
+            for p in output_dir.glob("*.pickle")
+            if "_POSTREPS" not in p.name and "hpc_config" not in p.name
+        )
+
+    if not candidates:
+        logger.info(
+            f"No design-point pickles found in {output_dir}; "
+            "skipping sensitivity aggregation."
+        )
+        return None
+
+    logger.info(
+        f"Aggregating sensitivity summaries over {len(candidates)} design points"
+    )
+
+    rows: list[dict[str, Any]] = []
+    for pkl in candidates:
+        rec = _extract_design_point_record(pkl)
+        if rec is not None:
+            rows.append(rec)
+
+    if not rows:
+        logger.warning(
+            "No usable design-point records extracted; "
+            "summaries not written."
+        )
+        return None
+
+    # Per-design-point flat table.
+    design_points_path = output_dir / "design_points_summary.csv"
+    _write_csv(design_points_path, rows)
+
+    # Main effects: average mean_obj across all other factors.
+    main_effects: list[dict[str, Any]] = []
+    for factor_key in ("subspace_dim", "basis", "regularisation"):
+        for grp in _group_mean_std(rows, (factor_key,)):
+            main_effects.append({"factor": factor_key, "level": grp[factor_key],
+                                 "n_design_points": grp["n_design_points"],
+                                 "mean_obj": grp["mean_obj"],
+                                 "std_obj": grp["std_obj"],
+                                 "min_obj": grp["min_obj"],
+                                 "max_obj": grp["max_obj"]})
+    _write_csv(output_dir / "summary_main_effects.csv", main_effects)
+
+    # Pairwise interactions: grouped means over each factor pair.
+    pairwise: list[dict[str, Any]] = []
+    pair_keys: tuple[tuple[str, str], ...] = (
+        ("subspace_dim", "basis"),
+        ("subspace_dim", "regularisation"),
+        ("basis", "regularisation"),
+    )
+    for keys in pair_keys:
+        for grp in _group_mean_std(rows, keys):
+            pairwise.append({
+                "factor_a": keys[0],
+                "level_a": grp[keys[0]],
+                "factor_b": keys[1],
+                "level_b": grp[keys[1]],
+                "n_design_points": grp["n_design_points"],
+                "mean_obj": grp["mean_obj"],
+                "std_obj": grp["std_obj"],
+                "min_obj": grp["min_obj"],
+                "max_obj": grp["max_obj"],
+            })
+    _write_csv(output_dir / "summary_interactions.csv", pairwise)
+
+    logger.info(
+        f"Sensitivity summaries written: "
+        f"{design_points_path.name}, summary_main_effects.csv, "
+        f"summary_interactions.csv "
+        f"(problem={config.problem_name}, factor_type={config.factor_type})"
+    )
+    return output_dir
+
+
+# ============================================================================
 # HPC UTILITIES
 # ============================================================================
 
@@ -934,10 +1193,12 @@ def generate_hpc_config(config: ExperimentConfig, output_path: Path) -> Path:
     elif config.factor_type == "basis":
         n_design_points = len(config.basis_types)
     else:
-        # Full factorial
-        n_design_points = len(
-            [d for d in config.subspace_dims if d <= config.problem_dim]
-        ) * len(config.basis_types)
+        # Full factorial: subspace x basis x subproblem_regularisation
+        n_design_points = (
+            len([d for d in config.subspace_dims if d <= config.problem_dim])
+            * len(config.basis_types)
+            * len(config.regularisation_values)
+        )
 
     hpc_config = {
         "experiment_type": config.factor_type,
@@ -954,6 +1215,11 @@ def generate_hpc_config(config: ExperimentConfig, output_path: Path) -> Path:
         if config.factor_type in ("basis", "full")
         else [config.fixed_basis.value],
         "polynomial_degree": config.polynomial_degree,
+        "regularisation_values": (
+            list(config.regularisation_values)
+            if config.factor_type == "full"
+            else [config.fixed_regularisation]
+        ),
         "output_dir": str(config.output_dir),
     }
 
@@ -991,9 +1257,11 @@ def generate_slurm_array_script(
     elif config.factor_type == "basis":
         n_tasks = len(config.basis_types)
     else:
-        n_tasks = len(
-            [d for d in config.subspace_dims if d <= config.problem_dim]
-        ) * len(config.basis_types)
+        n_tasks = (
+            len([d for d in config.subspace_dims if d <= config.problem_dim])
+            * len(config.basis_types)
+            * len(config.regularisation_values)
+        )
 
     # Get the path to this script
     script_path = Path(__file__).resolve()
@@ -1067,6 +1335,7 @@ def generate_csv_design_matrix(config: ExperimentConfig, output_path: Path) -> P
                         "subspace_dim": dim,
                         "polynomial_basis": config.fixed_basis.value,
                         "polynomial_degree": config.polynomial_degree,
+                        "subproblem_regularisation": config.fixed_regularisation,
                         "problem_name": config.problem_name,
                         "problem_dim": config.problem_dim,
                         "budget": config.budget,
@@ -1084,6 +1353,7 @@ def generate_csv_design_matrix(config: ExperimentConfig, output_path: Path) -> P
                     "subspace_dim": config.fixed_subspace_dim,
                     "polynomial_basis": basis_type.value,
                     "polynomial_degree": config.polynomial_degree,
+                    "subproblem_regularisation": config.fixed_regularisation,
                     "problem_name": config.problem_name,
                     "problem_dim": config.problem_dim,
                     "budget": config.budget,
@@ -1091,25 +1361,28 @@ def generate_csv_design_matrix(config: ExperimentConfig, output_path: Path) -> P
             )
             task_id += 1
 
-    else:  # Full factorial
+    else:  # Full factorial: subspace x basis x subproblem_regularisation
         for dim in config.subspace_dims:
             if dim > config.problem_dim:
                 continue
             for basis_type in config.basis_types:
-                basis_name = POLY_BASIS_NAMES.get(basis_type, basis_type.value)
-                rows.append(
-                    {
-                        "task_id": task_id,
-                        "design_point_id": f"ASTROMORF_d{dim}_basis_{basis_name}_on_{config.problem_name}",  # noqa: E501
-                        "subspace_dim": dim,
-                        "polynomial_basis": basis_type.value,
-                        "polynomial_degree": config.polynomial_degree,
-                        "problem_name": config.problem_name,
-                        "problem_dim": config.problem_dim,
-                        "budget": config.budget,
-                    }
-                )
-                task_id += 1
+                for reg in config.regularisation_values:
+                    basis_name = POLY_BASIS_NAMES.get(basis_type, basis_type.value)
+                    reg_tag = f"{reg:.4g}".replace(".", "p")
+                    rows.append(
+                        {
+                            "task_id": task_id,
+                            "design_point_id": f"ASTROMORF_d{dim}_basis_{basis_name}_reg{reg_tag}_on_{config.problem_name}",  # noqa: E501
+                            "subspace_dim": dim,
+                            "polynomial_basis": basis_type.value,
+                            "polynomial_degree": config.polynomial_degree,
+                            "subproblem_regularisation": reg,
+                            "problem_name": config.problem_name,
+                            "problem_dim": config.problem_dim,
+                            "budget": config.budget,
+                        }
+                    )
+                    task_id += 1
 
     csv_file = (
         output_path / f"design_matrix_{config.factor_type}_{config.problem_name}.csv"
@@ -1140,6 +1413,7 @@ def run_experiment_with_create_design(
     n_postreps_init_opt: int = 200,
     subspace_dims: list[int] | None = None,
     basis_types: list[PolyBasisType] | None = None,
+    regularisation_values: list[float] | None = None,
 ) -> None:
     """Run experiment using SimOpt's create_design function for NOLHS design generation.
 
@@ -1160,8 +1434,12 @@ def run_experiment_with_create_design(
 
     solver_abbr_name = "ASTROMORF"
 
+    if regularisation_values is None:
+        regularisation_values = [0.0, 0.05, 0.15, 0.5]
+
     if factor_type == "subspace":
         # Use cross_design_factors for subspace dimensions (discrete levels)
+        # alongside subproblem_regularisation as a co-swept factor.
         if subspace_dims is None:
             subspace_dims = list(range(1, min(problem_dim + 1, 9)))
 
@@ -1171,14 +1449,15 @@ def run_experiment_with_create_design(
             "adaptive subspace dimension": False,
             "polynomial degree": 2,
         }
-        # Use cross_design_factors for the discrete subspace dimensions
         solver_cross_design_factors = {
             "crn_across_solns": [False],
             "initial subspace dimension": subspace_dims,
+            "subproblem_regularisation": regularisation_values,
         }
 
     elif factor_type == "basis":
         # Use cross_design_factors for polynomial basis types
+        # alongside subproblem_regularisation as a co-swept factor.
         if basis_types is None:
             basis_types = list(PolyBasisType)
 
@@ -1192,6 +1471,7 @@ def run_experiment_with_create_design(
         solver_cross_design_factors = {
             "crn_across_solns": [False],
             "polynomial basis": basis_types,
+            "subproblem_regularisation": regularisation_values,
         }
 
     else:
@@ -1343,6 +1623,20 @@ Examples:
         default=2,
         help="Polynomial degree (default: 2)",
     )
+    parser.add_argument(
+        "--regularisation-values",
+        type=str,
+        default=None,
+        help="Comma-separated list of subproblem regularisation values to "
+        "sweep in --factor full (default: 0.0,0.05,0.15,0.5)",
+    )
+    parser.add_argument(
+        "--fixed-regularisation",
+        type=float,
+        default=0.15,
+        help="Fixed subproblem regularisation when not sweeping it "
+        "(default: 0.15)",
+    )
 
     # HPC settings
     parser.add_argument(
@@ -1366,6 +1660,12 @@ Examples:
         "--generate-csv",
         action="store_true",
         help="Generate CSV design matrix",
+    )
+    parser.add_argument(
+        "--aggregate-only",
+        action="store_true",
+        help="Skip running design points; only aggregate existing pickles in "
+        "--output-dir into sensitivity summary CSVs",
     )
 
     # Logging
@@ -1407,6 +1707,14 @@ def main() -> None:
     else:
         basis_types = list(PolyBasisType)
 
+    # Parse subproblem regularisation values
+    if args.regularisation_values:
+        regularisation_values = [
+            float(x.strip()) for x in args.regularisation_values.split(",")
+        ]
+    else:
+        regularisation_values = [0.0, 0.05, 0.15, 0.5]
+
     # Create experiment configuration
     config = ExperimentConfig(
         factor_type=args.factor,
@@ -1419,6 +1727,8 @@ def main() -> None:
         basis_types=basis_types,
         fixed_subspace_dim=args.fixed_subspace_dim,
         polynomial_degree=args.polynomial_degree,
+        regularisation_values=regularisation_values,
+        fixed_regularisation=args.fixed_regularisation,
         task_id=args.task_id,
         output_dir=Path(args.output_dir),
     )
@@ -1444,6 +1754,10 @@ def main() -> None:
         logger.info(f"Generated design matrix: {csv_file}")
         return
 
+    if args.aggregate_only:
+        aggregate_sensitivity_results(config.output_dir, config)
+        return
+
     # Run experiments
     logger.info(f"Starting {args.factor} factor experiments on {args.problem}")
 
@@ -1458,6 +1772,13 @@ def main() -> None:
     logger.info(f"\nCompleted {len(results)} design points")
     for result in results:
         logger.info(f"  - {result['design_point_id']}: {result['output_file']}")
+
+    # Sensitivity aggregation: only when the full design has been run in this
+    # process (i.e. not a single SLURM array worker). On HPC, schedule a
+    # follow-up job that re-invokes this script with --aggregate-only after
+    # the array completes; that path also uses this same function.
+    if config.task_id is None:
+        aggregate_sensitivity_results(config.output_dir, config)
 
 
 if __name__ == "__main__":
