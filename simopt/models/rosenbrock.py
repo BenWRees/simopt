@@ -163,11 +163,42 @@ class RosenbrockFunctionProblem(Problem):
     def check_deterministic_constraints(self, x: tuple) -> bool:  # noqa: D102
         return super().check_deterministic_constraints(x)
 
+
     def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:  # noqa: D102
-        return tuple(
-            rand_sol_rng.mvnormalvariate(
-                mean_vec=np.zeros(self.dim).tolist(),
-                cov=np.eye(self.dim),
-                factorized=False,
+        return tuple(rand_sol_rng.normalvariate() for _ in range(self.dim))
+
+    @classmethod
+    def scale_to(cls, new_dim: int, budget: int) -> Problem:
+        """Scale to *new_dim* dimensions.
+
+        The chained Rosenbrock function ``sum_{i=1}^{n-1} 100*(x[i] - x[i-1]**2)**2
+        + (1 - x[i-1])**2`` is well-defined for any ``n >= 2`` and the model's
+        :meth:`replicate` already handles arbitrary ``len(x)``.  We simply set
+        ``initial_solution`` and the model's ``x`` factor to the right length.
+        """
+        from simopt.experiment_base import instantiate_problem
+
+        if new_dim < 2:
+            raise ValueError(
+                f"Rosenbrock requires new_dim >= 2 (chain needs ≥ 1 link), "
+                f"got {new_dim}."
             )
+        return instantiate_problem(
+            "ROSENBROCK-1",
+            problem_fixed_factors={
+                "budget": budget,
+                "initial_solution": (2.0,) * new_dim,
+            },
+            model_fixed_factors={"x": (2.0,) * new_dim},
         )
+
+    def validate_scaled(self, expected_dim: int) -> None:
+        """Structural sanity checks consumed by ``scale_dimension``."""
+        if expected_dim < 2:
+            raise ValueError(
+                "ROSENBROCK-1: dim must be >= 2 (chained form needs at least one link)."
+            )
+        if len(self.factors["initial_solution"]) != expected_dim:
+            raise ValueError("ROSENBROCK-1: initial_solution length mismatch.")
+        if len(self.model.factors["x"]) != expected_dim:
+            raise ValueError("ROSENBROCK-1: model factor x length mismatch.")

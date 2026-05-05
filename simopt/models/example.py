@@ -175,6 +175,35 @@ class ExampleProblem(Problem):
             )
         )
 
+    @classmethod
+    def scale_to(cls, new_dim: int, budget: int) -> Problem:
+        """Scale to *new_dim* dimensions.
+
+        The objective ``f(x) = ||x||^2 + N(0,1)`` is invariant in form across
+        dimensions: the unique minimum stays at the origin and every
+        coordinate has nonzero gradient ``2*x_i``.  No structural choice
+        beyond the vector length is required.
+        """
+        from simopt.experiment_base import instantiate_problem
+
+        if new_dim < 1:
+            raise ValueError(f"EXAMPLE-1 requires new_dim >= 1, got {new_dim}.")
+        return instantiate_problem(
+            "EXAMPLE-1",
+            problem_fixed_factors={
+                "budget": budget,
+                "initial_solution": (2.0,) * new_dim,
+            },
+            model_fixed_factors={"x": (2.0,) * new_dim},
+        )
+
+    def validate_scaled(self, expected_dim: int) -> None:
+        """Structural sanity checks consumed by ``scale_dimension``."""
+        if len(self.factors["initial_solution"]) != expected_dim:
+            raise ValueError("EXAMPLE-1: initial_solution length mismatch.")
+        if len(self.model.factors["x"]) != expected_dim:
+            raise ValueError("EXAMPLE-1: model factor x length mismatch.")
+
 
 class Example2ModelConfig(BaseModel):
     """Configuration model for Example-2 simulation.

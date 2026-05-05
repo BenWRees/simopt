@@ -423,3 +423,83 @@ class NetworkMinTotalCost(Problem):
             exact_sum=True,
         )
         return tuple(x)
+
+    @classmethod
+    def scale_to(cls, new_dim: int, budget: int) -> Problem:
+        """Build NETWORK-1 at *new_dim* networks, extending native parameter laws.
+
+        The native parameters follow algebraic laws over network index ``i``
+        (0-indexed): cost decays as ``0.1/(i+1)``, mode transit grows as
+        ``i+1``, lower/upper triangular bounds are ``mode -+ 0.5``.  We
+        extend those laws to ``new_dim`` networks.  Two consequences this
+        avoids:
+          * **No replication.** Every network has unique parameters, so
+            there is no flat-ridge / non-unique-optimum degeneracy.
+          * **Stable SNR.** ``n_messages`` is scaled to keep ~100 messages
+            per network (the native ratio), so per-direction noise does not
+            blow up with dimension.
+        """
+        from simopt.experiment_base import instantiate_problem
+
+        if new_dim <= 0:
+            raise ValueError(f"new_dim must be positive, got {new_dim!r}")
+
+        process_prob = [1.0 / new_dim] * new_dim
+        cost_process = [0.1 / (i + 1) for i in range(new_dim)]
+        cost_time = [0.005] * new_dim
+        mode_transit_time = [float(i + 1) for i in range(new_dim)]
+        lower_limits_transit_time = [0.5 + i for i in range(new_dim)]
+        upper_limits_transit_time = [1.5 + i for i in range(new_dim)]
+
+        # Preserve native messages-per-network density (1000/10 = 100).
+        n_messages = max(100 * new_dim, 1000)
+
+        initial_solution = tuple(process_prob)
+
+        return instantiate_problem(
+            "NETWORK-1",
+            problem_fixed_factors={
+                "budget": budget,
+                "initial_solution": initial_solution,
+            },
+            model_fixed_factors={
+                "n_networks": new_dim,
+                "n_messages": n_messages,
+                "process_prob": process_prob,
+                "cost_process": cost_process,
+                "cost_time": cost_time,
+                "mode_transit_time": mode_transit_time,
+                "lower_limits_transit_time": lower_limits_transit_time,
+                "upper_limits_transit_time": upper_limits_transit_time,
+            },
+        )
+
+    def validate_scaled(self, expected_dim: int) -> None:
+        """Structural checks: no replicated networks, consistent lengths."""
+        m = self.model.factors
+        for key in (
+            "process_prob",
+            "cost_process",
+            "cost_time",
+            "mode_transit_time",
+            "lower_limits_transit_time",
+            "upper_limits_transit_time",
+        ):
+            if len(m[key]) != expected_dim:
+                raise ValueError(
+                    f"NETWORK-1: {key} has length {len(m[key])}, "
+                    f"expected {expected_dim}."
+                )
+        if m["n_networks"] != expected_dim:
+            raise ValueError(
+                f"NETWORK-1: n_networks={m['n_networks']}, expected {expected_dim}."
+            )
+        # Reject duplicate (cost_process, mode_transit_time) tuples -- the
+        # signature that the old cycling scaler left behind.
+        signatures = list(zip(m["cost_process"], m["mode_transit_time"], strict=True))
+        if len(set(signatures)) != len(signatures):
+            raise ValueError(
+                "NETWORK-1: scaled networks contain duplicate "
+                "(cost_process, mode_transit_time) signatures, which produces "
+                "a non-unique optimum and rank-deficient Hessian."
+            )

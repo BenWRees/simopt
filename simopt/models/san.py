@@ -139,13 +139,10 @@ class SANLongestPathConfig(BaseModel):
     ]
 
     def _check_arc_costs(self) -> None:
-        if len(self.arc_costs) != NUM_ARCS:
-            raise ValueError(f"arc_costs must be of length {NUM_ARCS}.")
-
-        positive = True
-        for x in list(self.arc_costs):
-            positive = positive and (x > 0)
-        if not positive:
+        # Length consistency with `arcs` is enforced at the Problem level
+        # (see SANLongestPath.validate_scaled). Hardcoded NUM_ARCS check
+        # removed so the problem can be constructed at non-default dimensions.
+        if any(x <= 0 for x in self.arc_costs):
             raise ValueError("All elements in arc_costs must be greater than 0.")
 
     @model_validator(mode="after")
@@ -351,6 +348,61 @@ class SANLongestPath(Problem):
         return tuple(
             [rand_sol_rng.lognormalvariate(lq=0.1, uq=10) for _ in range(self.dim)]
         )
+
+    @classmethod
+    def scale_to(cls, new_dim: int, budget: int) -> Problem:
+        """Build SAN-1 at a target arc count using a chain DAG topology.
+
+        Why a chain (1 -> 2 -> 3 -> ... -> new_dim+1):
+          * Every arc lies on the unique source-sink path, so every decision
+            variable has nonzero gradient on the longest-path objective.
+          * No duplicated arcs and no nodes whose outputs collapse via dict
+            deduplication in :meth:`SAN.replicate`.
+          * The graph is provably connected from node 1 to the sink.
+        Mean / cost / initial values are propagated uniformly from the native
+        defaults (8.0 mean, 1.0 cost, 8.0 initial), preserving per-arc scale.
+        """
+        from simopt.experiment_base import instantiate_problem
+
+        if new_dim <= 0:
+            raise ValueError(f"new_dim must be positive, got {new_dim!r}")
+
+        arcs = [(i, i + 1) for i in range(1, new_dim + 1)]
+        arc_means = (8.0,) * new_dim
+        arc_costs = (1.0,) * new_dim
+        initial_solution = (8.0,) * new_dim
+
+        return instantiate_problem(
+            "SAN-1",
+            problem_fixed_factors={
+                "budget": budget,
+                "initial_solution": initial_solution,
+                "arc_costs": arc_costs,
+            },
+            model_fixed_factors={
+                "num_nodes": new_dim + 1,
+                "arcs": arcs,
+                "arc_means": arc_means,
+            },
+        )
+
+    def validate_scaled(self, expected_dim: int) -> None:
+        """Structural sanity checks consumed by ``scale_dimension``."""
+        arcs = self.model.factors["arcs"]
+        if len(arcs) != expected_dim:
+            raise ValueError(
+                f"SAN-1: arcs has length {len(arcs)}, expected {expected_dim}."
+            )
+        if len(set(arcs)) != len(arcs):
+            raise ValueError(
+                "SAN-1: scaled `arcs` contains duplicate edges -- the longest-path "
+                "computation deduplicates via dict keys, which yields zero-gradient "
+                "decision variables."
+            )
+        if len(self.model.factors["arc_means"]) != expected_dim:
+            raise ValueError("SAN-1: arc_means length mismatch with arcs.")
+        if len(self.factors["arc_costs"]) != expected_dim:
+            raise ValueError("SAN-1: arc_costs length mismatch with arcs.")
 
 
 class SANLongestPathStochasticConfig(BaseModel):

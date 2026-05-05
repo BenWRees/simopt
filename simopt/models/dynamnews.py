@@ -342,3 +342,66 @@ class DynamNewsMaxProfit(Problem):
 
     def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:  # noqa: D102
         return tuple([rand_sol_rng.uniform(0, 10) for _ in range(self.dim)])
+
+    @classmethod
+    def scale_to(cls, new_dim: int, budget: int) -> Problem:
+        """Scale to *new_dim* products.
+
+        Design choices:
+          * ``c_utility[j] = 6 + j`` extends the native rule -- every product
+            has a distinct utility constant so customer preferences stay
+            asymmetric.  This avoids the permutation-symmetry / non-unique
+            optimum that uniform utilities would produce.
+          * ``num_customer = 3 * new_dim`` preserves the native ratio
+            (30 customers / 10 products) so per-product expected demand and
+            therefore signal-to-noise stay comparable across dimensions.
+          * ``init_level``, ``price``, and ``cost`` stay uniform; the only
+            source of asymmetry is ``c_utility``, which is enough to make
+            every decision variable matter (different products attract
+            different fractions of demand).
+        """
+        from simopt.experiment_base import instantiate_problem
+
+        if new_dim < 1:
+            raise ValueError(f"DYNAMNEWS-1 requires new_dim >= 1, got {new_dim}.")
+        c_utility = [6 + j for j in range(new_dim)]
+        init_level = [3] * new_dim
+        price = [9] * new_dim
+        cost = [5] * new_dim
+        num_customer = max(3 * new_dim, 30)
+
+        return instantiate_problem(
+            "DYNAMNEWS-1",
+            problem_fixed_factors={
+                "budget": budget,
+                "initial_solution": tuple(init_level),
+            },
+            model_fixed_factors={
+                "num_prod": new_dim,
+                "num_customer": num_customer,
+                "c_utility": c_utility,
+                "init_level": init_level,
+                "price": price,
+                "cost": cost,
+            },
+        )
+
+    def validate_scaled(self, expected_dim: int) -> None:
+        """Structural sanity checks consumed by ``scale_dimension``."""
+        m = self.model.factors
+        if m["num_prod"] != expected_dim:
+            raise ValueError(
+                f"DYNAMNEWS-1: num_prod={m['num_prod']}, expected {expected_dim}."
+            )
+        for key in ("c_utility", "init_level", "price", "cost"):
+            if len(m[key]) != expected_dim:
+                raise ValueError(
+                    f"DYNAMNEWS-1: {key} length {len(m[key])}, expected {expected_dim}."
+                )
+        # Distinct utilities keep the optimum unique; uniform utilities create
+        # a permutation symmetry that causes flat ridges in the objective.
+        if len(set(m["c_utility"])) != expected_dim:
+            raise ValueError(
+                "DYNAMNEWS-1: c_utility contains duplicates, which yields "
+                "permutation-symmetric (non-unique) optima."
+            )

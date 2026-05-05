@@ -156,10 +156,35 @@ class ZakharovFunctionProblem(Problem):
         return super().check_deterministic_constraints(x)
 
     def get_random_solution(self, rand_sol_rng: MRG32k3a) -> tuple:  # noqa: D102
-        return tuple(
-            rand_sol_rng.mvnormalvariate(
-                mean_vec=np.zeros(self.dim).tolist(),
-                cov=np.eye(self.dim),
-                factorized=False,
-            )
+        return tuple(rand_sol_rng.normalvariate() for _ in range(self.dim))
+
+    @classmethod
+    def scale_to(cls, new_dim: int, budget: int) -> Problem:
+        """Scale to *new_dim* dimensions.
+
+        The Zakharov function ``sum(x_i^2) + S^2 + S^4`` with
+        ``S = sum_i 0.5*(i+1)*x_i`` is defined for any ``n >= 1``; the model
+        already handles arbitrary ``len(x)``.  Note: the function value at
+        the canonical start ``x = (2,...,2)`` grows as ``n^8`` because of the
+        quartic-of-sum term.  This is a property of Zakharov, not a scaling
+        bug -- the optimum at ``0`` is unchanged and the gradient is exact.
+        """
+        from simopt.experiment_base import instantiate_problem
+
+        if new_dim < 1:
+            raise ValueError(f"ZAKHAROV-1 requires new_dim >= 1, got {new_dim}.")
+        return instantiate_problem(
+            "ZAKHAROV-1",
+            problem_fixed_factors={
+                "budget": budget,
+                "initial_solution": (2.0,) * new_dim,
+            },
+            model_fixed_factors={"x": (2.0,) * new_dim},
         )
+
+    def validate_scaled(self, expected_dim: int) -> None:
+        """Structural sanity checks consumed by ``scale_dimension``."""
+        if len(self.factors["initial_solution"]) != expected_dim:
+            raise ValueError("ZAKHAROV-1: initial_solution length mismatch.")
+        if len(self.model.factors["x"]) != expected_dim:
+            raise ValueError("ZAKHAROV-1: model factor x length mismatch.")

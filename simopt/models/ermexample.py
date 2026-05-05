@@ -6,6 +6,7 @@ evaluated with noise.
 
 from __future__ import annotations
 
+from random import Random
 from typing import Annotated, ClassVar
 
 import numpy as np
@@ -65,14 +66,14 @@ class ERMExampleProblemConfig(BaseModel):
 class FileInputModel(InputModel):  # noqa: D101
     def __init__(self, filename) -> None:  # noqa: ANN001, D107
         self.data = np.load(filename)
-
-    def set_rng(self, rng: random.Random) -> None:  # noqa: D102
+        
+    def set_rng(self, rng: Random) -> None:  # noqa: D102
         self.rng = rng
 
     def unset_rng(self) -> None:  # noqa: D102
         self.rng = None
 
-    def random(self) -> float:  # noqa: D102
+    def random(self) -> tuple[float, float]:  # noqa: D102
         n_rows = np.shape(self.data)[0]
         resample_idx = np.random.choice(n_rows, size=1, replace=True)
         resample_x = self.data[resample_idx, 0].item()
