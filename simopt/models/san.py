@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import deque
 from typing import Annotated, ClassVar, Final, Self
 
@@ -22,6 +23,85 @@ from simopt.input_models import Exp
 
 NUM_ARCS: Final[int] = 13
 CONST_NODES: Final[list[int]] = [6, 8]
+
+
+def _build_layered_dag(new_dim: int) -> tuple[list[tuple[int, int]], int]:
+    """Construct a layered DAG with exactly ``new_dim`` distinct forward arcs.
+
+    Layout: ``source = 1`` -> ``L`` middle layers of width ``W`` -> ``sink``.
+    Arcs only go between consecutive layers (or source->layer-1 / layer-L->sink),
+    so the result is acyclic by construction. We emit arcs in two passes:
+
+      1. **Skeleton** (size ``W*(L+1)``) -- source-to-layer-1, one "rail" per
+         layer transition (i-th node -> i-th node), and last-layer-to-sink.
+         These guarantee every node has at least one in- and one out-arc and
+         that every node sits on a source-sink path.
+      2. **Diagonals** -- for each transition and offset ``o = 1..W-1``,
+         emit ``(layer_k[i] -> layer_{k+1}[(i+o) mod W])``. These give the
+         multiple competing paths that distinguish a true SAN longest-path
+         problem from a single chain.
+
+    Skeleton then diagonals are concatenated and truncated to ``new_dim``.
+    Width is chosen so the skeleton always fits: ``W=3`` for ``dim>=9``,
+    ``W=2`` for ``6<=dim<=8``, otherwise a chain (``W=1``).
+
+    Returns:
+        ``(arcs, num_nodes)`` -- ``arcs`` is the ordered list of decision
+        variables; ``arcs[i]`` is uniquely the i-th decision variable.
+    """
+    if new_dim < 2:
+        raise ValueError(f"new_dim must be >= 2 for SAN-1, got {new_dim!r}.")
+
+    # Pick the largest width whose skeleton fits inside `new_dim` and whose
+    # candidate-arc count covers `new_dim`. Falls through to chain if neither
+    # W=3 nor W=2 fits (this only happens for new_dim in {2, 3, 5}).
+    width = 0
+    chosen_layers = 0
+    for w in (3, 2):
+        if new_dim < 2 * w:
+            continue
+        layers = max(1, math.ceil((new_dim - 2 * w) / (w * w)) + 1)
+        skeleton_size = w * (layers + 1)
+        total_size = 2 * w + (layers - 1) * w * w
+        if skeleton_size <= new_dim <= total_size:
+            width = w
+            chosen_layers = layers
+            break
+
+    if width == 0:
+        # Chain: 1 -> 2 -> ... -> new_dim+1.  No multi-path structure, but
+        # this branch only fires for very small dimensions where a layered
+        # construction can't accommodate the skeleton.
+        arcs = [(i, i + 1) for i in range(1, new_dim + 1)]
+        return arcs, new_dim + 1
+
+    source = 1
+    next_id = 2
+    layer_nodes: list[list[int]] = []
+    for _ in range(chosen_layers):
+        layer_nodes.append(list(range(next_id, next_id + width)))
+        next_id += width
+    sink = next_id
+    num_nodes = sink
+
+    skeleton: list[tuple[int, int]] = []
+    skeleton.extend((source, v) for v in layer_nodes[0])
+    for k in range(chosen_layers - 1):
+        skeleton.extend(
+            (layer_nodes[k][i], layer_nodes[k + 1][i]) for i in range(width)
+        )
+    skeleton.extend((v, sink) for v in layer_nodes[-1])
+
+    extras: list[tuple[int, int]] = []
+    for k in range(chosen_layers - 1):
+        for offset in range(1, width):
+            for i in range(width):
+                extras.append(
+                    (layer_nodes[k][i], layer_nodes[k + 1][(i + offset) % width])
+                )
+
+    arcs = (skeleton + extras)[:new_dim]
+    return arcs, num_nodes
 
 
 class SANConfig(BaseModel):
@@ -351,23 +431,29 @@ class SANLongestPath(Problem):
 
     @classmethod
     def scale_to(cls, new_dim: int, budget: int) -> Problem:
-        """Build SAN-1 at a target arc count using a chain DAG topology.
+        """Build SAN-1 at a target arc count using a layered DAG topology.
 
-        Why a chain (1 -> 2 -> 3 -> ... -> new_dim+1):
-          * Every arc lies on the unique source-sink path, so every decision
-            variable has nonzero gradient on the longest-path objective.
-          * No duplicated arcs and no nodes whose outputs collapse via dict
-            deduplication in :meth:`SAN.replicate`.
-          * The graph is provably connected from node 1 to the sink.
-        Mean / cost / initial values are propagated uniformly from the native
-        defaults (8.0 mean, 1.0 cost, 8.0 initial), preserving per-arc scale.
+        Why a layered DAG (source -> L layers of width W -> sink):
+          * Produces ``new_dim`` *distinct* arcs (no dict collisions in
+            :meth:`SAN.replicate`); each arc is one decision variable.
+          * Multiple parallel source-sink paths -- the longest-path
+            competition that defines the SAN problem -- so every arc has
+            positive probability of being on the realized longest path and
+            therefore positive expected IPA gradient.
+          * Bounded depth (``L = O(new_dim / W^2)`` with ``W=3``), so the
+            longest-path objective stays of reasonable magnitude as
+            ``new_dim`` grows; the noise level scales like ``sqrt(L)``.
+
+        See :func:`_build_layered_dag` for the construction.  Mean / cost /
+        initial values are propagated uniformly from the native defaults
+        (8.0 mean, 1.0 cost, 8.0 initial), preserving per-arc scale.
         """
         from simopt.experiment_base import instantiate_problem
 
         if new_dim <= 0:
             raise ValueError(f"new_dim must be positive, got {new_dim!r}")
 
-        arcs = [(i, i + 1) for i in range(1, new_dim + 1)]
+        arcs, num_nodes = _build_layered_dag(new_dim)
         arc_means = (8.0,) * new_dim
         arc_costs = (1.0,) * new_dim
         initial_solution = (8.0,) * new_dim
@@ -380,7 +466,7 @@ class SANLongestPath(Problem):
                 "arc_costs": arc_costs,
             },
             model_fixed_factors={
-                "num_nodes": new_dim + 1,
+                "num_nodes": num_nodes,
                 "arcs": arcs,
                 "arc_means": arc_means,
             },
@@ -389,6 +475,7 @@ class SANLongestPath(Problem):
     def validate_scaled(self, expected_dim: int) -> None:
         """Structural sanity checks consumed by ``scale_dimension``."""
         arcs = self.model.factors["arcs"]
+        num_nodes = self.model.factors["num_nodes"]
         if len(arcs) != expected_dim:
             raise ValueError(
                 f"SAN-1: arcs has length {len(arcs)}, expected {expected_dim}."
@@ -403,6 +490,44 @@ class SANLongestPath(Problem):
             raise ValueError("SAN-1: arc_means length mismatch with arcs.")
         if len(self.factors["arc_costs"]) != expected_dim:
             raise ValueError("SAN-1: arc_costs length mismatch with arcs.")
+
+        # Every arc must lie on at least one source(1) -> sink(num_nodes) path,
+        # otherwise its decision variable cannot influence the longest path.
+        forward: dict[int, set[int]] = {n: set() for n in range(1, num_nodes + 1)}
+        backward: dict[int, set[int]] = {n: set() for n in range(1, num_nodes + 1)}
+        for u, v in arcs:
+            forward[u].add(v)
+            backward[v].add(u)
+
+        reachable_from_source: set[int] = set()
+        stack = [1]
+        while stack:
+            u = stack.pop()
+            if u in reachable_from_source:
+                continue
+            reachable_from_source.add(u)
+            stack.extend(forward[u])
+
+        reaches_sink: set[int] = set()
+        stack = [num_nodes]
+        while stack:
+            u = stack.pop()
+            if u in reaches_sink:
+                continue
+            reaches_sink.add(u)
+            stack.extend(backward[u])
+
+        dead_arcs = [
+            (u, v)
+            for (u, v) in arcs
+            if u not in reachable_from_source or v not in reaches_sink
+        ]
+        if dead_arcs:
+            raise ValueError(
+                f"SAN-1: {len(dead_arcs)} arc(s) lie outside any source->sink "
+                f"path, e.g. {dead_arcs[:3]}; these would have zero stochastic "
+                f"gradient."
+            )
 
 
 class SANLongestPathStochasticConfig(BaseModel):
