@@ -21,7 +21,7 @@ class InputModel(Protocol[P, R]):
         """Attach a Python RNG to the input model.
 
         Args:
-            rng (random.Random): Random number generator to use for sampling.
+            rng (Random): Random number generator to use for sampling.
         """
         self.rng = rng
 
