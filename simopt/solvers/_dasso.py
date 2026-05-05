@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from pydoe import lhs
+from pyDOE import lhs
 
 from mrg32k3a.mrg32k3a import MRG32k3a
 
