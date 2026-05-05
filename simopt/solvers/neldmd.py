@@ -191,33 +191,41 @@ class NelderMead(Solver):
                     - self.factors["alpha"] * p_high_x
                 )
 
-                # Check if reflection point is within bounds.
-                if np.equal(p_refl, self._check_const(p_refl, p_high_x)).all():
-                    break
+                # Clip reflection point to box bounds before simulating.
+                p_refl = np.array(self._check_const(p_refl, p_high_x))
+                
+                # p_refl = np.array(
+                #     (1 + self.factors["alpha"]) * p_cent
+                #     - self.factors["alpha"] * p_high_x
+                # )
 
-                sol_0_x = np.array(sort_sol[0].x)  # pyrefly: ignore
-                for i in range(1, len(sort_sol)):
-                    p_new = (
-                        self.factors["delta"] * np.array(sort_sol[i].x)  # pyrefly: ignore
-                        + (1 - self.factors["delta"]) * sol_0_x
-                    )
+                # # Check if reflection point is within bounds.
+                # if np.equal(p_refl, self._check_const(p_refl, p_high_x)).all():
+                #     break
+
+                # sol_0_x = np.array(sort_sol[0].x)  
+                # for i in range(1, len(sort_sol)):
+                #     p_new = (
+                #         self.factors["delta"] * np.array(sort_sol[i].x)  
+                #         + (1 - self.factors["delta"]) * sol_0_x
+                #     )
                     
-                    p_new = self._check_const(p_new, sol_0_x)
-                    p_new = Solution(p_new, problem)
-                    p_new.attach_rngs(
-                        rng_list=self.solution_progenitor_rngs, copy=True
-                    )
-                    self.budget.request(r)
-                    problem.simulate(p_new, r)
+                #     p_new = self._check_const(p_new, sol_0_x)
+                #     p_new = Solution(p_new, problem)
+                #     p_new.attach_rngs(
+                #         rng_list=self.solution_progenitor_rngs, copy=True
+                #     )
+                #     self.budget.request(r)
+                #     problem.simulate(p_new, r)
 
-                    # Update sort_sol.
-                    sort_sol[i] = p_new  # p_new replaces pi.
+                #     # Update sort_sol.
+                #     sort_sol[i] = p_new  # p_new replaces pi.
 
-                # Sort & end updating.
-                sort_sol = self._sort_and_end_update(
-                    problem,
-                    sort_sol,  # pyrefly: ignore
-                )
+                # # Sort & end updating.
+                # sort_sol = self._sort_and_end_update(
+                #     problem,
+                #     sort_sol,  
+                # )
 
                 # Evaluate reflected point.
                 p_refl = tuple(p_refl.tolist())
