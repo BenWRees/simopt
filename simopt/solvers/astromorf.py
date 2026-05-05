@@ -7,6 +7,10 @@ Subspace reduction allows for a reduced number of interpolation points to be eva
 in the model construction. This solver is particularly well-suited for high-dimensional
 stochastic optimization problems where function evaluations are expensive.
 
+Rees, Benjamin, Christine SM Currie, and Phan Tu Vuong. 
+"ASTROMoRF: Adaptive Sampling Trust-Region Optimization with Dimensionality Reduction." 
+2025 Winter Simulation Conference (WSC). IEEE, 2025.
+
 UPDATES
 -------
 - Added adaptive subspace dimension adjustment based on solver progress and model
@@ -50,6 +54,7 @@ from numpy.polynomial.legendre import legder, legvander
 from numpy.polynomial.polynomial import polyder, polyvander
 from pydantic import Field, model_validator
 from scipy.optimize import NonlinearConstraint, minimize
+from scipy.sparse.linalg import LinearOperator
 from scipy.special import factorial
 
 from simopt.base import (
@@ -71,6 +76,90 @@ from simopt.solvers.active_subspaces.basis import (
 )
 
 warnings.filterwarnings("ignore")
+
+
+#! === LAZY IDENTITY OPERATOR ===
+def _identity_operator(n: int) -> LinearOperator:
+    """Creates Identity Matrix LinearOperator.
+
+    Creates a (n,n) LinearOperator that behaves like the identity 
+    matrix for matvec, rmatvec, and matmat operations, but does not
+    allocate memory for the full matrix. This is useful for cases where 
+    we need an identity operator but want to avoid the memory overhead 
+    of creating a dense identity matrix.
+
+    Args:
+        n (int): The rank of the square identity matrix
+
+    Returns:
+        LinearOperator: The lazy identity operator that behaves 
+        like np.eye(n) for matvec, rmatvec, and matmat, but does 
+        not allocate memory for the full matrix.
+    """
+    def matvec(x: np.ndarray) -> np.ndarray :
+        return np.asarray(x)
+
+    def rmatvec(x: np.ndarray) -> np.ndarray:
+        return np.asarray(x)
+
+    def matmat(x: np.ndarray) -> np.ndarray:
+        return np.asarray(x)
+    
+    op = LinearOperator( 
+        shape=(n, n),
+        dtype=float,
+        matvec=matvec, # ty: ignore[unknown-argument]
+        rmatvec=rmatvec, # ty: ignore[unknown-argument]
+        matmat=matmat # ty: ignore[unknown-argument]
+    ) 
+    op._is_identity = True  # type: ignore
+    return op
+
+
+def _is_identity(m: np.ndarray | LinearOperator | None) -> bool:
+    """Checks if m is the identity operator.
+
+    Checks for the presence of the _is_identity attribute, 
+    which is set to True for the lazy identity operator created 
+    by _identity_operator. This allows us to identify the lazy 
+    identity operator without having to check its structure or
+    perform expensive operations.
+
+    Args:
+        m (np.ndarray | LinearOperator | None): The matrix to check.
+
+    Returns:
+        bool: _description_
+    """
+    if m is None : 
+        raise ValueError("Matrix m cannot be None")
+    return getattr(m, "_is_identity", False)
+
+
+def _materialise_dense(m: np.ndarray | LinearOperator | None, n: int) -> np.ndarray:
+    """Return m as a dense (n, n) ndarray.
+
+    If m is already a dense ndarray, return it as-is.  If m is the lazy identity
+    operator, return np.eye(n).  If m is a LinearOperator, apply it to np.eye(n) 
+    to get a dense matrix.  Otherwise, try to convert m to an ndarray
+
+    Args:
+        m (np.ndarray | LinearOperator | None): The matrix to materialise.
+        n (int): The dimension of the identity matrix if 
+        m is the lazy identity operator.
+
+    Returns:
+        np.ndarray: The materialised dense matrix.
+    """
+    if m is None:
+        raise ValueError("Matrix m cannot be None")
+    if isinstance(m, np.ndarray):
+        return m
+    if _is_identity(m):
+        return np.eye(n)
+    if isinstance(m, LinearOperator):
+        return m @ np.eye(n)
+    return np.asarray(m)
 
 
 #! === POLYNOMIAL BASIS ADAPTERS ===
@@ -651,13 +740,21 @@ class ASTROMORF(Solver):
         self._prev_U = value
 
     @property
-    def prev_H(self) -> np.ndarray | None:  # noqa: N802
-        """Get the previous model Hessian."""
+    def prev_H(self) -> np.ndarray | LinearOperator | None:  # noqa: N802
+        """Get the previous model Hessian.
+
+        Either a dense ndarray (when the elliptical-trust-region option is on
+        and a real Hessian has been computed) or a lazy
+        :class:`LinearOperator` returned by ``_identity_operator`` (during
+        initialisation, after subspace-dim resets, or when the elliptical
+        option is off).  Consumers that need a dense matrix call
+        ``_materialise_dense`` at the point of use.
+        """
         return self._prev_H
 
     @prev_H.setter
-    def prev_H(self, value: np.ndarray | None) -> None:  # noqa: N802
-        """Set the previous model Hessian."""
+    def prev_H(self, value: np.ndarray | LinearOperator | None) -> None:  # noqa: N802
+        """Set the previous model Hessian (ndarray or LinearOperator)."""
         self._prev_H = value
 
     @property
@@ -762,7 +859,7 @@ class ASTROMORF(Solver):
         # For creating all the class members needed for the run of the algorithm
         self.d: int = int(
             max(
-                1, min(self.factors["initial subspace dimension"], self.problem.dim - 1)
+                1, min(self.factors["initial subspace dimension"], self.problem.dim)
             )
         )
 
@@ -845,8 +942,10 @@ class ASTROMORF(Solver):
         # Warm starting: store the active subspace from previous iteration
         self.prev_U = None
 
-        # Store previous Hessian for ellipsoidal trust-region construction
-        self.prev_H = np.eye(self.problem.dim)
+        # Store previous Hessian for ellipsoidal trust-region construction.
+        # Start as a lazy identity -- materialised only at consumer sites that
+        # cannot avoid a dense matrix (eigh, etc.).
+        self.prev_H = _identity_operator(self.problem.dim)
 
         # Track last iteration when `d` changed (used by d_history bookkeeping).
         self.last_d_change_iteration: int = 0
@@ -1025,7 +1124,7 @@ class ASTROMORF(Solver):
                 self.d = int(d_next)
                 self.set_basis(self.factors["polynomial basis"], self.problem)
                 self.prev_U = None
-                self.prev_H = np.eye(self.problem.dim)
+                self.prev_H = _identity_operator(self.problem.dim)
                 self.last_d_change_iteration = int(self.iteration_count)
                 self.d_history.append(int(self.d))
                 return int(self.d)
@@ -1038,7 +1137,7 @@ class ASTROMORF(Solver):
     def compute_trust_region(
         self,
         U: np.ndarray,  # noqa: N803
-    ) -> tuple[Callable[..., float], np.ndarray]:
+    ) -> tuple[Callable[[np.ndarray], float], np.ndarray | LinearOperator]:
         """Constructs the ellipsoidal trust-region based on the Hessian of the previous.
 
         model.
@@ -1049,35 +1148,51 @@ class ASTROMORF(Solver):
         Args:
             U (np.ndarray): The (n,d) active subspace matrix
         Returns:
-            tuple[callable, np.ndarray]:
+            tuple[callable, np.ndarray | LinearOperator]:
                 - The trust-region constraint function
                 - The regularized Hessian matrix H used for the ellipsoid
 
         """
-        if (
+        n = self.problem.dim
+        use_real_hess = (
             hasattr(self, "prev_H")
             and self.prev_H is not None
             and self.factors["elliptical trust region"]
-        ):
-            hess_matrix = self.prev_H.copy()  #! Project to full space
-        else:
-            hess_matrix = np.eye(self.problem.dim)
+            and not _is_identity(self.prev_H)
+        )
 
-        hess_matrix = 0.5 * (hess_matrix + hess_matrix.T)  # Ensure symmetry
+        if use_real_hess:
+            # Dense path: regularise prev_H via symmetric eigh.
+            hess_matrix = _materialise_dense(self.prev_H, n).copy()
+            hess_matrix = 0.5 * (hess_matrix + hess_matrix.T)  # symmetrise
+            eigvals, eigvecs = np.linalg.eigh(hess_matrix)
+            eig_floor = 1e-8
+            eigvals = np.maximum(eigvals, eig_floor)
+            H_full = eigvecs @ np.diag(eigvals) @ eigvecs.T  # noqa: N806
 
-        eigvals, eigvecs = np.linalg.eigh(hess_matrix)
-        eig_floor = 1e-8
-        eigvals = np.maximum(eigvals, eig_floor)
-        H_full = eigvecs @ np.diag(eigvals) @ eigvecs.T  # noqa: N806
+            def trust_region_constraint(x):  # noqa: ANN001, ANN202
+                x = np.asarray(x).reshape(-1, 1)
+                if x.shape[0] == U.shape[1]:
+                    H_reduced = U.T @ H_full @ U  # noqa: N806
+                    H = 0.5 * (H_reduced + H_reduced.T)  # noqa: N806
+                else:
+                    H = H_full  # noqa: N806
+                return (x.T @ H @ x).item()
+
+            return trust_region_constraint, H_full
+
+        # Identity short-circuit: eigh(I) = (1, I); regularised result is I.
+        # H_full stays a LinearOperator so downstream consumers can detect
+        # the identity case and avoid further O(n^2)/O(n^3) work.  The
+        # constraint reduces to ||x||^2 (full space) or ||U @ x||^2 (reduced).
+        H_full = _identity_operator(n)  # noqa: N806
 
         def trust_region_constraint(x):  # noqa: ANN001, ANN202
             x = np.asarray(x).reshape(-1, 1)
             if x.shape[0] == U.shape[1]:
-                H_reduced = U.T @ H_full @ U  # noqa: N806
-                H = 0.5 * (H_reduced + H_reduced.T)  # noqa: N806
-            else:
-                H = H_full  # noqa: N806
-            return (x.T @ H @ x).item()
+                Ux = U @ x  # noqa: N806
+                return float(np.dot(Ux.ravel(), Ux.ravel()))
+            return float(np.dot(x.ravel(), x.ravel()))
 
         return trust_region_constraint, H_full
 
@@ -1099,21 +1214,13 @@ class ASTROMORF(Solver):
             self.recent_prediction_errors.pop(0)  # Keep only last 5
 
     def solve_subproblem(self, U: np.ndarray) -> Solution:  # noqa: N803
-        """Solves the trust-region subproblem within the reduced subspace with.
+        """Solves the trust-region subproblem.
 
-        regularization.
+        Solves the subproblem of minimizing the surrogate model 
+        within the trust region defined by the current active 
+        subspace and trust-region radius. It applies regularization 
+        to prevent null-space drift. 
 
-                Objective: min m_k(U@z) + lambda * ||U@z||^2 / ||z||^2
-                Constraint: ||x_k + U@z - x_k|| <= delta (full-space trust region).
-
-                The regularization term penalizes small full-space steps for given
-                reduced-space steps,
-                encouraging solutions that make substantial progress in full space.
-
-                NEW APPROACH: Penalize based on ratio of norms ||U·s|| / ||s|| to
-                encourage large full-space steps
-                while keeping the optimization stable. The norm is L-1 for better
-                numerical behavior.
 
 
         Args:
@@ -1141,16 +1248,22 @@ class ASTROMORF(Solver):
         lambda_reg = min(lambda_reg, lambda_cap)
 
         # Build reduced-space Hessian for TR geometry
-        _tr_cons, H_full = self.compute_trust_region(U)  # noqa: N806
-        if not np.all(np.isfinite(H_full)):
-            H_full = np.eye(self.problem.dim)  # noqa: N806
-        H = U.T @ H_full @ U  # Project Hessian to reduced space  # noqa: N806
-        H = 0.5 * (H + H.T)  # Ensure symmetry  # noqa: N806
-        if not np.all(np.isfinite(H)):
-            H = np.eye(U.shape[1])  # noqa: N806
-        eigvals, eigvecs = np.linalg.eigh(H)
+        _tr_cons, h_full = self.compute_trust_region(U) 
+        if _is_identity(h_full):
+            hess = U.T @ U  
+        else:
+            h_full_arr = np.asarray(h_full, dtype=np.float64)
+            if not np.all(np.isfinite(h_full_arr)):
+                h_full_arr = np.eye(self.problem.dim)  
+            # if not np.all(np.isfinite(H_full)):
+            #     H_full = np.eye(self.problem.dim)  
+            hess = U.T @ h_full_arr @ U  
+        hess = 0.5 * (hess + hess.T)  # Ensure symmetry  
+        if not np.all(np.isfinite(hess)):
+            hess = np.eye(U.shape[1])  
+        eigvals, eigvecs = np.linalg.eigh(hess)
         eigvals = np.maximum(eigvals, 1e-8)
-        H_reduced = eigvecs @ np.diag(eigvals) @ eigvecs.T  # noqa: N806
+        h_reduced = eigvecs @ np.diag(eigvals) @ eigvecs.T 
 
         def obj_fn(z):  # noqa: ANN001, ANN202
             z_col = np.array(z).reshape(1, -1)  # shape (1, d)
@@ -1179,7 +1292,7 @@ class ASTROMORF(Solver):
 
         def ellipsoid_constraint_fn(z):  # noqa: ANN001, ANN202
             z = np.array(z).reshape(-1, 1)
-            val = (z.T @ H_reduced @ z).flatten().item()
+            val = (z.T @ h_reduced @ z).flatten().item()
             # The step is z, as we are optimizing from the origin in the reduced space
             if not np.isfinite(val):
                 # If constraint blows up, fall back to spherical TR
@@ -1776,31 +1889,29 @@ class ASTROMORF(Solver):
         return solution
 
     #! === PRELIMINARY FUNCTIONS ===
-    # delta = 10 ** (ceil(log(self.delta_max * 2, 10) - 1) / problem.dim)
     def calculate_max_radius(self) -> float:
-        """Calculate the maximum trust-region radius based on the problem's variable.
-
-        bounds and random sampling.
+        """Calculate the maximum trust-region radius.
+        
+        Calculates the maximum trust-region radius based on the 
+        problem's variable bounds and random sampling. This method 
+        generates a number of random solutions within the problem's 
+        bounds, computes the range of values for each variable across 
+        these samples, and then determines the maximum range while 
+        ensuring it does not exceed the overall variable bounds.
 
         Returns:
                 float: The calculated maximum trust-region radius
         """
-        find_next_soln_rng = self.rng_list[1]
+        rng = self.rng_list[1]
+        n_samples = 256 + 32 * int(np.log2(max(self.problem.dim, 2)))
 
-        dummy_solns: list[tuple[int, ...]] = []
-        for _ in range(1000 * self.problem.dim):
-            random_soln = self.problem.get_random_solution(find_next_soln_rng)
-            dummy_solns.append(random_soln)
-        delta_max_arr: list[float | int] = []
-        for i in range(self.problem.dim):
-            delta_max_arr += [
-                min(
-                    max([sol[i] for sol in dummy_solns])
-                    - min([sol[i] for sol in dummy_solns]),
-                    self.problem.upper_bounds[0] - self.problem.lower_bounds[0],
-                )
-            ]
-        return max(delta_max_arr)
+        samples = np.empty((n_samples, self.problem.dim), dtype=float)
+        for k in range(n_samples):
+            samples[k, :] = self.problem.get_random_solution(rng)
+
+        coord_range = samples.max(axis=0) - samples.min(axis=0)  
+        bound_span = self.problem.upper_bounds[0] - self.problem.lower_bounds[0]
+        return float(np.minimum(coord_range, bound_span).max())
 
     #! === DESIGN SET CONSTRUCTION ===
 
@@ -1836,13 +1947,20 @@ class ASTROMORF(Solver):
 
         eps = 1e-8
         diag_tol = 1e-10
+        n = self.problem.dim
 
-        H = (  # noqa: N806
+        hess_source = (
             self.prev_H
             if self.factors["elliptical trust region"] and self.prev_H is not None
-            else np.eye(self.problem.dim)
+            else _identity_operator(n)
         )
 
+        if _is_identity(hess_source):
+            # Identity short-circuit: eigenvalues are all 1, so the per-axis
+            # semi-axis length is just self.delta -- no eigh, no symmetrise.
+            return [self.delta] * n
+
+        H = _materialise_dense(hess_source, n)  # noqa: N806
         H = 0.5 * (H + H.T)  # noqa: N806
         # --- Check if Hessian is already (numerically) diagonal ---
         off_diag_norm = np.linalg.norm(H - np.diag(np.diag(H)), ord="fro")
@@ -2185,13 +2303,21 @@ class ASTROMORF(Solver):
 
         candidates = []  # List of (index, full_space_dist, projected_dist)
 
-        # Use ellipsoidal or spherical trust region in full space
-        H_full = (  # noqa: N806
+        # Use ellipsoidal or spherical trust region in full space.
+        # Short-circuit when prev_H is the lazy identity: the per-point
+        # quadratic-form ``diff.T @ I @ diff`` collapses to ``||diff||^2``,
+        # so we skip the symmetrise and the matrix product entirely.
+        hess_source = (
             self.prev_H
             if self.factors["elliptical trust region"] and self.prev_H is not None
-            else np.eye(self.problem.dim).reshape(self.problem.dim, self.problem.dim)
+            else _identity_operator(self.problem.dim)
         )
-        H_full = 0.5 * (H_full + H_full.T)  # Ensure symmetry  # noqa: N806
+        identity_tr = _is_identity(hess_source)
+        if identity_tr:
+            H_full = None  # noqa: N806  (unused on the fast path)
+        else:
+            H_full = _materialise_dense(hess_source, self.problem.dim)  # noqa: N806
+            H_full = 0.5 * (H_full + H_full.T)  # noqa: N806
 
         # Minimum projected distance threshold to avoid near-center points
         # (which would give poor poisedness). Using 0.45*delta balances:
@@ -2208,7 +2334,10 @@ class ASTROMORF(Solver):
 
             # FULL-SPACE trust region check (key change from original)
             # This allows reusing points regardless of previous subspace orientation
-            full_space_dist_sq = (diff_full.T @ H_full @ diff_full).item()
+            if identity_tr:
+                full_space_dist_sq = float(np.dot(diff_full.ravel(), diff_full.ravel()))
+            else:
+                full_space_dist_sq = (diff_full.T @ H_full @ diff_full).item()
 
             if full_space_dist_sq > self.delta**2:
                 continue  # Point outside full-space trust region
@@ -3406,9 +3535,9 @@ class ASTROMORF(Solver):
                 self.problem.dim, self.problem.dim
             )
         else:
-            self.prev_H = np.eye(self.problem.dim).reshape(
-                self.problem.dim, self.problem.dim
-            )
+            # Lazy identity -- consumers materialise via _materialise_dense
+            # only when an op actually requires a dense matrix.
+            self.prev_H = _identity_operator(self.problem.dim)
 
         # CABS VP-convergence gate rho_k = ‖r_final‖² / ‖r_initial‖²
         try:
@@ -4370,6 +4499,31 @@ class ASTROMORF(Solver):
 
         return Dmat
 
+    def build_Dmat2(self) -> np.ndarray:  # noqa: N802
+        """Second-derivative coefficient matrix for the polynomial basis.
+
+        Row ``j`` is ``polyder(polyder(e_j))`` -- the monomial-basis
+        coefficients of ``v''_j`` for the j-th basis polynomial.  The result
+        has shape ``(degree+1, max(degree-1, 1))``.
+
+        Used **only** in :meth:`DDV` to compute second derivatives correctly
+        for the elliptical trust-region Hessian; the prior implementation
+        attempted a clever-but-wrong reuse of :meth:`build_Dmat` that both
+        produced incorrect values and an off-by-one shape mismatch (V2 was
+        ``(M, degree)`` instead of ``(M, degree+1)``, causing
+        ``IndexError`` whenever ``alpha_k = degree`` appeared in the
+        multi-index set).
+        """
+        cols = max(self.degree - 1, 1)
+        Dmat2 = np.zeros((self.degree + 1, cols))  # noqa: N806
+        I = np.eye(self.degree + 1)  # noqa: E741, N806
+        for j in range(self.degree + 1):
+            d2 = self.polyder(self.polyder(I[:, j]))
+            length = min(len(d2), cols)
+            if length > 0:
+                Dmat2[j, :length] = d2[:length]
+        return Dmat2
+
     def DDV(self, X: np.ndarray) -> np.ndarray:  # noqa: N802, N803
         """Column-wise second derivative of the Vandermonde matrix.
 
@@ -4377,8 +4531,8 @@ class ASTROMORF(Solver):
         correspond to the second derivatives (Hessian) of each basis element.
 
         Args:
-                X (np.ndarray): The design set of shape (M,d) where d is the subspace
-                dimension.
+            X (np.ndarray): The design set of shape (M,d) where d is the subspace
+            dimension.
 
         Returns:
                 np.ndarray: Second derivative of Vandermonde matrix of shape (M,q,d,d)
@@ -4407,18 +4561,28 @@ class ASTROMORF(Solver):
         Dmat = self.build_Dmat()  # noqa: N806
         dscale = self.dscale(d)
 
-        # 1d first-and second-derivative matrices per dimension
+        # 1-D first-derivative Vandermonde per coordinate.
+        # V1[k] has shape (M, degree+1); column j is v'_j evaluated at x_k.
         V1 = [V_coordinate[k][:, 0:-1] @ Dmat.T for k in range(d)]  # noqa: N806
-        V2 = []  # noqa: N806
-        # Build second derivative matrices
-        for k in range(d):
-            V1_full = np.hstack(  # noqa: N806
-                [V1[k], np.zeros((M, 1), dtype=V1[k].dtype)]
-            )  # shape (M,degree+1)
-            V2_k = V1_full[:, 0:-1].dot(  # noqa: N806
-                Dmat
-            )  # second derivative shape (M,degree)
-            V2.append(V2_k)
+
+        # 1-D second-derivative Vandermonde per coordinate.
+        # V2[k] must have shape (M, degree+1); column j is v''_j(x_k).
+        # The previous implementation produced (M, degree) AND computed the
+        # wrong quantity; see :meth:`build_Dmat2` for the diagnosis.
+        if self.degree < 2:
+            # All second derivatives of a degree<2 polynomial are zero.
+            V2 = [  # noqa: N806
+                np.zeros((M, self.degree + 1), dtype=Xs.dtype) for _ in range(d)
+            ]
+        else:
+            Dmat2 = self.build_Dmat2()  # shape (degree+1, degree-1)  # noqa: N806
+            cols = Dmat2.shape[1]
+            # V2_k[m, j] = sum_l V_coord[k][m, l] * Dmat2[j, l]
+            #           = (V_coord[k][:, :cols] @ Dmat2.T)[m, j]
+            # which is exactly v''_j(x_k) for j in 0..degree.
+            V2 = [  # noqa: N806
+                V_coordinate[k][:, :cols] @ Dmat2.T for k in range(d)
+            ]
 
         base = np.ones((M, q), dtype=Xs.dtype)
         for m in range(d):
@@ -4453,32 +4617,6 @@ class ASTROMORF(Solver):
                 DDV[:, :, k, l] = (
                     base * ratio1 * ratio_l * dscale[k] * dscale[l]
                 )  # off-diagonal terms
-
-        # for k in range(d):
-        #     for ell in range(k, d):
-        #         for j, alpha in enumerate(indices):
-        #             for q in range(d):
-        #                 if q == k == ell:
-        #                     # Diagonal case: need second derivative w.r.t. x_k
-        # # Use polyder with argument 2 to get second derivative directly
-        #                     eq = np.zeros(self.degree + 1)
-        #                     eq[alpha[q]] = 1.0
-        #                     der2 = self.polyder(eq, 2)
-        # DDV[:, j, k, ell] *= V_coordinate[q][:, 0:len(der2)].dot(der2)
-        #                 elif q == k or q == ell:
-        #                     # Off-diagonal: first derivative w.r.t. x_q
-        #                     DDV[:, j, k, ell] *= np.dot(
-        #                         V_coordinate[q][:, 0:-1], Dmat[alpha[q], :]
-        #                     )
-        #                 else:
-        #                     # No derivative w.r.t. x_q
-        #                     DDV[:, j, k, ell] *= V_coordinate[q][:, alpha[q]]
-
-        #         # Apply scaling factors for both derivatives
-        #         DDV[:, :, k, ell] *= dscale[k] * dscale[ell]
-        #         # Exploit symmetry: Hessian is symmetric
-        #         DDV[:, :, ell, k] = DDV[:, :, k, ell]
-
         return DDV
 
     # Module-level caches for index sets (class-level to persist across instances)
