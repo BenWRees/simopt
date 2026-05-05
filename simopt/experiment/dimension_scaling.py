@@ -1,43 +1,108 @@
-"""Generic dimension scaling for simulation optimization problems.
+"""Explicit, structure-preserving dimension scaling for SimOpt problems.
 
-Provides a single ``scale_dimension`` function that works for **any** Problem
-subclass by introspecting the default factor structure and automatically
-scaling dimension-dependent factors.
+The previous implementation tried to scale arbitrary problems with type-based
+heuristics (cycling lists, regenerating diagonals, post-construction factor
+patching).  That produced mathematically degenerate instances:
 
-Dimension-dependent factors are detected by comparing each factor's value
-against the problem's default dimension:
+* SAN-1 at dim=100 ended up with 100 arc references but only the original
+  13 unique arcs on 9 nodes, leaving 87 decision variables with zero
+  stochastic gradient.
+* NETWORK-1 at dim=100 became 10 replicated copies of the same 10 networks,
+  giving a rank-deficient objective with a non-unique optimum.
 
-* **Scalar ints** equal to the default dimension are treated as "dimension
-  keys" (e.g. ``num_prod``, ``n_fac``, ``num_arcs``).
-* **1-D sequences** (list / tuple) whose length equals the default dimension
-  are resized by cycling existing values (or truncating).
-* **2-D structures** are scaled in whichever dimension(s) match.
-* **Probability distributions** (sequences summing to |approx| 1.0) are
-  re-normalised after resizing.
-* **Diagonal matrices** are regenerated at the new size, preserving the
-  average diagonal value.
+This module replaces those heuristics with an explicit, fail-loud system:
+
+  1. **Problem-native scaling (preferred).**  If the Problem class defines a
+     ``scale_to(new_dim, budget)`` classmethod, dispatch to it.
+  2. **Registry fallback.**  Otherwise look up ``problem_name`` in the
+     ``SCALERS`` registry (populated via ``@register_scaler``).
+  3. **Fail loudly.**  If neither exists, raise ``UnsupportedScalingError``.
+     There is no heuristic fallback.
+
+After construction the result passes through a validation layer that checks
+dimension consistency and (where applicable) a problem-supplied
+``validate_scaled`` hook.  Any failure raises ``InvalidScaledProblemError``.
 """
 
 from __future__ import annotations
 
-import contextlib
 from collections.abc import Callable
-from typing import TYPE_CHECKING
-
-import numpy as np
-from pydantic import ValidationError
+from typing import TYPE_CHECKING, TypeAlias
 
 if TYPE_CHECKING:
     from simopt.base import Problem
 
-__all__ = ["scale_dimension"]
+__all__ = [
+    "SCALABLE_PROBLEMS",
+    "SCALERS",
+    "InvalidScaledProblemError",
+    "Scaler",
+    "UnsupportedScalingError",
+    "is_scalable",
+    "register_scaler",
+    "scale_dimension",
+]
 
 
-def _get_instantiate_problem() -> Callable:
-    """Lazy import to avoid circular dependency with experiment_base."""
-    from simopt.experiment_base import instantiate_problem
+# Hand-maintained manifest of problems with explicit scaling support.
+# Kept here (rather than discovered at import time) so callers can predicate
+# on it without paying the module-walk cost, and so adding a problem to the
+# list is a deliberate, reviewable change.
+SCALABLE_PROBLEMS: frozenset[str] = frozenset(
+    {
+        "DYNAMNEWS-1",
+        "EXAMPLE-1",
+        "NETWORK-1",
+        "ROSENBROCK-1",
+        "SAN-1",
+        "ZAKHAROV-1",
+    }
+)
 
-    return instantiate_problem
+
+def is_scalable(problem_name: str) -> bool:
+    """Return True iff *problem_name* has an explicit scaler available.
+
+    Convenience for callers that want to avoid catching
+    :class:`UnsupportedScalingError`.
+    """
+    return problem_name in SCALABLE_PROBLEMS or problem_name in SCALERS
+
+
+# ── error types ───────────────────────────────────────────────────────────────
+
+
+class UnsupportedScalingError(NotImplementedError):
+    """Raised when no explicit scaler exists for the requested problem."""
+
+
+class InvalidScaledProblemError(ValueError):
+    """Raised when a scaled problem fails post-construction validation."""
+
+
+# ── registry ──────────────────────────────────────────────────────────────────
+
+
+Scaler: TypeAlias = Callable[[int, int], "Problem"]
+"""A scaler is ``(new_dim, budget) -> Problem``."""
+
+SCALERS: dict[str, Scaler] = {}
+
+
+def register_scaler(name: str) -> Callable[[Scaler], Scaler]:
+    """Register an explicit scaler for *name* (e.g. ``"SAN-1"``).
+
+    Raises if a scaler is already registered for that name; explicit overrides
+    must remove the old entry first.  This prevents accidental shadowing.
+    """
+
+    def decorator(fn: Scaler) -> Scaler:
+        if name in SCALERS:
+            raise ValueError(f"Scaler for {name!r} is already registered.")
+        SCALERS[name] = fn
+        return fn
+
+    return decorator
 
 
 # ── public API ────────────────────────────────────────────────────────────────
@@ -48,227 +113,150 @@ def scale_dimension(
     budget: int,
     dimension: int | None = None,
 ) -> Problem:
-    """Instantiate *any* problem scaled to the requested *dimension*.
-
-    The function creates a default instance of the problem, inspects its
-    factor values and default dimension, then builds new model and problem
-    factor dicts whose dimension-dependent entries have been resized to
-    *dimension*.  The result is validated through the normal Pydantic
-    ``_validate_model`` path.
-
-    If the problem-factor validators reject the scaled values (this happens
-    when a config checks list lengths against a **hardcoded module constant**
-    such as ``NUM_FACILITIES``), the function falls back to constructing with
-    default problem factors and patching the scaled values onto the instance
-    after construction.
+    """Instantiate *problem_name* at the requested decision-vector *dimension*.
 
     Args:
-        problem_name: Abbreviated problem name (e.g. ``"FACSIZE-2"``).
+        problem_name: Abbreviated problem name (e.g. ``"SAN-1"``).
         budget: Maximum number of replications for a solver to take.
-        dimension: Target number of decision variables.  When *None* the
-            problem's default dimension is used.
+        dimension: Target number of decision variables.  When ``None`` the
+            problem is constructed at its native dimension via the normal
+            instantiation path; no scaling logic runs.
 
     Returns:
-        A fully initialised :class:`Problem` instance.
-    """
-    make = _get_instantiate_problem()
+        A fully initialised :class:`Problem` instance whose ``dim`` equals
+        *dimension*.
 
+    Raises:
+        UnsupportedScalingError: No ``scale_to`` and no registered scaler.
+        InvalidScaledProblemError: The constructed problem failed validation.
+        ValueError: ``dimension`` is non-positive, or ``budget`` is non-positive.
+    """
+    if budget <= 0:
+        raise ValueError(f"budget must be positive, got {budget!r}")
     if dimension is None:
-        return make(problem_name, {"budget": budget})
+        return _instantiate_native(problem_name, budget)
+    if dimension <= 0:
+        raise ValueError(f"dimension must be positive, got {dimension!r}")
 
-    # 1. Discover the baseline structure from a default instance.
-    default_problem = make(problem_name)
-    default_dim = default_problem.dim
+    problem_cls = _get_problem_class(problem_name)
+    try :
+        scaler = _resolve_scaler(problem_cls, problem_name)
+    except UnsupportedScalingError as e:
+        print(f"WARNING: {e} Returning unscaled problem instance.")
+        return _instantiate_native(problem_name, budget) 
+    
+    problem = scaler(dimension, budget)
 
-    if dimension == default_dim:
-        return make(problem_name, {"budget": budget})
-
-    # 2. Scale model and problem factors.
-    scaled_model = _scale_factors(
-        dict(default_problem.model.factors), default_dim, dimension
-    )
-    scaled_problem = _scale_factors(
-        dict(default_problem.factors), default_dim, dimension
-    )
-    scaled_problem["budget"] = budget
-
-    # 3. Attempt full construction; fall back to post-init patching when
-    #    problem-factor validators use hardcoded constants.
-    problem = _instantiate_with_fallback(
-        make, problem_name, scaled_problem, scaled_model, budget
-    )
-
-    # 4. Set an explicit dim override when the subclass supports it.
-    try:
-        problem.dim = dimension
-    except (NotImplementedError, AttributeError):
-        contextlib.suppress(NotImplementedError, AttributeError)
-
+    _validate_scaled(problem, expected_dim=dimension, expected_budget=budget)
     return problem
 
 
-# ── factor scaling ────────────────────────────────────────────────────────────
+# ── dispatch ──────────────────────────────────────────────────────────────────
 
 
-def _scale_factors(factors: dict, old_dim: int, new_dim: int) -> dict:
-    """Return a copy of *factors* with dimension-dependent values rescaled.
+def _resolve_scaler(problem_cls: type, problem_name: str) -> Scaler:
+    """Return the scaler to use, preferring problem-native ``scale_to``.
 
-    Scalar ints are only promoted to dimension keys when there is at least
-    one list/tuple factor of matching length -- this avoids false positives
-    (e.g. ``budget`` accidentally equalling the dimension).
+    A class-level ``scale_to`` always wins over the registry; this lets a
+    problem own its scaling logic without anyone having to import the
+    registry.
     """
-    has_dim_lists = any(
-        isinstance(v, list | tuple) and len(v) == old_dim for v in factors.values()
+    native = getattr(problem_cls, "scale_to", None)
+    if callable(native):
+        return native  # bound classmethod -> (new_dim, budget) -> Problem
+
+    if problem_name in SCALERS:
+        return SCALERS[problem_name]
+
+
+    raise UnsupportedScalingError(
+        f"No scaler available for {problem_name!r}. Define a "
+        f"`scale_to(cls, new_dim, budget)` classmethod on the problem, or "
+        f"register one with @register_scaler({problem_name!r})."
     )
 
-    return {
-        key: (
-            value
-            if key == "budget"
-            else _scale_value(value, old_dim, new_dim, scale_scalars=has_dim_lists)
-        )
-        for key, value in factors.items()
-    }
 
+def _get_problem_class(problem_name: str) -> type:
+    """Look up the Problem subclass corresponding to *problem_name*.
 
-def _scale_value(
-    value: bool | int | float | list | tuple,
-    old_dim: int,
-    new_dim: int,
-    *,
-    scale_scalars: bool = True,
-) -> bool | int | float | list | tuple:
-    """Scale a single factor value when it appears dimension-dependent."""
-    # Booleans are a subclass of int -- never touch them.
-    if isinstance(value, bool):
-        return value
+    Uses the same module-walking lookup as :func:`instantiate_problem` so
+    any class registered there is also visible here.
+    """
+    import importlib
+    import inspect
+    import pkgutil
 
-    # Scalar int that equals the old dimension -> replace with new dimension.
-    if scale_scalars and isinstance(value, int | np.integer) and value == old_dim:
-        return int(new_dim)
+    module_path = "simopt.models"
+    base_module = importlib.import_module(module_path)
 
-    # 1-D sequence whose length matches the old dimension.
-    if isinstance(value, list | tuple) and len(value) == old_dim and old_dim > 0:
-        if value and isinstance(value[0], list | tuple):
-            return _scale_2d(value, old_dim, new_dim)
-        scaled = _resize(value, new_dim)
-        if _is_probability_distribution(value):
-            total = sum(scaled)
-            if total > 0:
-                scaled = [v / total for v in scaled]
-        return _as_type(scaled, value)
-
-    # 2-D where only the inner dimension matches.
-    if (
-        isinstance(value, list | tuple)
-        and value
-        and isinstance(value[0], list | tuple)
-        and all(len(row) == old_dim for row in value)
+    for _finder, name, _ispkg in pkgutil.walk_packages(
+        base_module.__path__, prefix=module_path + "."
     ):
-        return _as_type([_as_type(_resize(row, new_dim), row) for row in value], value)
+        try:
+            submodule = importlib.import_module(name)
+        except ModuleNotFoundError:
+            continue
+        for _, cls in inspect.getmembers(submodule, inspect.isclass):
+            if (
+                cls.__module__ == name
+                and hasattr(cls, "class_name_abbr")
+                and cls.class_name_abbr == problem_name
+            ):
+                return cls
 
-    return value
-
-
-def _scale_2d(value: list | tuple, old_dim: int, new_dim: int) -> list | tuple:
-    """Scale a 2-D factor (list-of-lists / tuple-of-tuples)."""
-    inner_match = all(len(row) == old_dim for row in value)
-
-    if inner_match and len(value) == old_dim:
-        # Square matrix -- use a diagonal matrix to guarantee validity
-        # (e.g. positive definiteness for covariance matrices).
-        diag = [value[i][i] for i in range(old_dim)]
-        avg = sum(diag) / len(diag) if diag else 1.0
-        result = [
-            [avg if i == j else 0.0 for j in range(new_dim)] for i in range(new_dim)
-        ]
-        return _as_type([_as_type(row, value[0]) for row in result], value)
-
-    if inner_match:
-        # Rectangular -- only inner dimension matches.
-        return _as_type([_as_type(_resize(row, new_dim), row) for row in value], value)
-
-    # Only outer dimension matches.
-    return _as_type(_resize(value, new_dim), value)
+    raise KeyError(f"Unknown problem name: {problem_name!r}")
 
 
-# ── instantiation with fallback ──────────────────────────────────────────────
+def _instantiate_native(problem_name: str, budget: int) -> Problem:
+    """Construct the problem at its native dimension."""
+    from simopt.experiment_base import instantiate_problem
+
+    return instantiate_problem(problem_name, {"budget": budget})
 
 
-def _instantiate_with_fallback(
-    make: Callable,
-    problem_name: str,
-    scaled_problem: dict,
-    scaled_model: dict,
-    budget: int,
-) -> Problem:
-    """Try progressively looser construction strategies.
+# ── validation layer ──────────────────────────────────────────────────────────
 
-    1. Full construction with all scaled factors.
-    2. Scaled model + default problem factors (patched post-init).
-    3. Default model + default problem factors (patched post-init).
+
+def _validate_scaled(
+    problem: Problem, *, expected_dim: int, expected_budget: int
+) -> None:
+    """Sanity-check a scaled problem before returning it to the caller.
+
+    The checks here are *generic* (dimension match, budget match, factor
+    length consistency).  Problem-specific structural checks live in the
+    optional ``validate_scaled`` hook on the problem instance.
     """
-    # --- attempt 1: everything scaled ---
-    try:
-        return make(
-            problem_name,
-            problem_fixed_factors=scaled_problem,
-            model_fixed_factors=scaled_model,
+    if problem.dim != expected_dim:
+        raise InvalidScaledProblemError(
+            f"Scaled problem reports dim={problem.dim}, expected {expected_dim}."
         )
-    except (ValueError, ValidationError):
-        pass
-
-    # --- attempt 2: scaled model, default problem factors ---
-    # Problem-factor validators may use hardcoded constants; patch after.
-    try:
-        problem = make(
-            problem_name,
-            problem_fixed_factors={"budget": budget},
-            model_fixed_factors=scaled_model,
+    actual_budget = problem.factors.get("budget")
+    if actual_budget != expected_budget:
+        raise InvalidScaledProblemError(
+            f"Scaled problem has budget={actual_budget}, expected {expected_budget}."
         )
-        for key, value in scaled_problem.items():
-            problem._factors[key] = value
-        return problem
-    except (ValueError, ValidationError):
-        pass
 
-    # --- attempt 3: default model, patch everything ---
-    # Model-factor validators rejected the scaled values (e.g. graph
-    # connectivity).  Build with defaults and patch both sides.
-    problem = make(
-        problem_name,
-        problem_fixed_factors={"budget": budget},
-    )
-    for key, value in scaled_model.items():
-        problem.model._factors[key] = value
-    for key, value in scaled_problem.items():
-        problem._factors[key] = value
-    return problem
-
-
-# ── helpers ──────────────────────────────────────────────────────────────────
-
-
-def _resize(seq: list | tuple, new_len: int) -> list:
-    """Resize *seq* to *new_len* by cycling or truncating."""
-    n = len(seq)
-    if n == 0:
-        return []
-    if new_len <= n:
-        return list(seq[:new_len])
-    return [seq[i % n] for i in range(new_len)]
-
-
-def _as_type(scaled: list, original: list | tuple) -> list | tuple:
-    """Convert *scaled* back to the container type of *original*."""
-    return tuple(scaled) if isinstance(original, tuple) else scaled
-
-
-def _is_probability_distribution(seq: list | tuple) -> bool:
-    """True when *seq* looks like a probability distribution (sums to ~1)."""
-    try:
-        return (
-            all(isinstance(v, int | float) for v in seq) and abs(sum(seq) - 1.0) < 1e-6
+    initial = problem.factors.get("initial_solution")
+    if initial is not None and len(initial) != expected_dim:
+        raise InvalidScaledProblemError(
+            f"initial_solution has length {len(initial)}, expected {expected_dim}."
         )
-    except (TypeError, ValueError):
-        return False
+
+    hook = getattr(problem, "validate_scaled", None)
+    if callable(hook):
+        hook(expected_dim)
+
+
+# ── eager scaler imports ──────────────────────────────────────────────────────
+#
+# Importing problem modules here ensures their @register_scaler decorators run
+# (or, in the preferred path, that their `scale_to` classmethods are reachable
+# via _get_problem_class).  Scalers that live in problem files don't need an
+# explicit import, but any registry-only scalers should be added below.
+
+import simopt.models.dynamnews  # noqa: E402  (exposes scale_to)
+import simopt.models.example  # noqa: E402  (exposes scale_to)
+import simopt.models.network  # noqa: E402  (exposes scale_to)
+import simopt.models.rosenbrock  # noqa: E402  (exposes scale_to)
+import simopt.models.san  # noqa: E402  (exposes scale_to)
+import simopt.models.zakharov  # noqa: E402, F401  (exposes scale_to)
