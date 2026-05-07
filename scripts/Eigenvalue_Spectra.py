@@ -223,7 +223,7 @@ def main() -> None:
     # We'll compute aggregate eigenvalues for each problem and store plotting info
     for pname in problem_names:
         print(f"Instantiating problem {pname} dim={args.dim} budget={args.budget}")
-        problem = scale_dimension(pname, args.dim, args.budget)
+        problem = scale_dimension(pname, budget=args.budget, dimension=args.dim)
         rng_list = [MRG32k3a() for _ in range(problem.model.n_rngs)]
         problem.attach_rngs(rng_list)
 
