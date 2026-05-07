@@ -25,7 +25,7 @@ def analyze_problem_eigenvalues(
     # Create problem
     budget = 2000  # Just enough for a few iterations
     if problem_name in SCALABLE_PROBLEMS:
-        problem = scale_dimension(problem_name, dimension, budget)
+        problem = scale_dimension(problem_name, budget=budget, dimension=dimension)
     else:
         problem = problem_directory[problem_name](fixed_factors={"budget": budget})
 
