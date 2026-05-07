@@ -51,20 +51,86 @@ sys.path.append(str(Path.cwd().parent))
 
 from simopt.experiment_base import (
     Problem,
-    ProblemSolver,
-    ProblemsSolvers,
     create_design,
     instantiate_problem,
     instantiate_solver,
 )
+from simopt.experiment import (
+    scale_dimension, 
+    ProblemSolver, 
+    ProblemsSolvers
+)
 from simopt.solvers.astromorf import PolyBasisType
 
 problems_optimal_hyper: dict = {
-    "DYNAMNEWS-1": {"subspace_dimension": 20, "polynomial_degree": 4},  # Optimal
-    "SAN-1": {"subspace_dimension": 40, "polynomial_degree": 4},  # Optimal
-    "ROSENBROCK-1": {"subspace_dimension": 5, "polynomial_degree": 4},  # Optimal
-    "NETWORK-1": {"subspace_dimension": 20, "polynomial_degree": 4},  # optimal
-    "SSCONT-1": {"subspace_dimension": 1, "polynomial_degree": 2},  # Optimal
+    "DYNAMNEWS-1": {"subspace_dimension": 5, "polynomial_degree": 2, "subproblem_regularisation": 0.41555633606245307, "ps_sufficient_reduction": 0.15328431662449404},  # Optimal
+    "SAN-1": {"subspace_dimension": 20, "polynomial_degree": 3, "subproblem_regularisation": 0.3672349090967656, "ps_sufficient_reduction": 0.0},  # Optimal
+    "ROSENBROCK-1": {"subspace_dimension": 20, "polynomial_degree": 2, "subproblem_regularisation": 0.20519775542894717, "ps_sufficient_reduction": 0.4542256535063405},  # Optimal
+    "NETWORK-1": {"subspace_dimension": 14, "polynomial_degree": 4, "subproblem_regularisation": 0.13066366948000724, "ps_sufficient_reduction": 0.04598983542928581},  # optimal
+    "PARAMESTI-1": {"subspace_dimension": 2, "polynomial_degree": 4, "subproblem_regularisation": 0.007341421780035384, "ps_sufficient_reduction": 0.8271734245206864},  # optimal
+}
+
+cabs_factors = {
+    "SAN-1": {
+        "gamma": 0.8828659814241923,
+        "c_p": 0.05,
+        "c_g": 0.8276721063224712,
+        "eps_n": 0.075446911280005,
+        "eps_a": 0.019727959607387935,
+        "rho_max": 0.7,
+        "w_safe": 9,
+        "eta_safe": 0.012820503556735807,
+        "c2_est": 2.932949582570289,
+        "delta_inc_cap": 6
+    },
+    "NETWORK-1": {
+        "gamma": 0.8647739721818226,
+        "c_p": 0.5403447406081348,
+        "c_g": 0.6186382309199568,
+        "eps_n": 0.3569033022334193,
+        "eps_a": 0.28876757267132447,
+        "rho_max": 0.8396378178805266,
+        "w_safe": 27,
+        "eta_safe": 0.18097364726133436,
+        "c2_est": 1.6545417830400007,
+        "delta_inc_cap": 10
+    },
+    "DYNAMNEWS-1": {
+        "gamma": 0.8750975631420834,
+        "c_p": 0.49953709364063265,
+        "c_g": 1.0620182449212108,
+        "eps_n": 0.10625298620014088,
+        "eps_a": 0.16205859972104644,
+        "rho_max": 0.9176733547075296,
+        "w_safe": 13,
+        "eta_safe": 0.10514082537844505,
+        "c2_est": 0.8597437563781269,
+        "delta_inc_cap": 10
+      },
+    "ROSENBROCK-1": {
+        "gamma": 0.9063311271815354,
+        "c_p": 0.2822516618558208,
+        "c_g": 0.20336157033204208,
+        "eps_n": 0.1826008507019749,
+        "eps_a": 0.06585786198277199,
+        "rho_max": 0.8086197817978706,
+        "w_safe": 28,
+        "eta_safe": 0.15908771092198087,
+        "c2_est": 1.6397546858971714,
+        "delta_inc_cap": 6
+    },
+    "PARAMESTI-1": {
+        "gamma": 0.9699167233004381,
+        "c_p": 0.3291961798936611,
+        "c_g": 0.2689741889666983,
+        "eps_n": 0.30441179989308964,
+        "eps_a": 0.06863955237379822,
+        "rho_max": 0.8021774211019107,
+        "w_safe": 18,
+        "eta_safe": 0.19913824979089106,
+        "c2_est": 2.430262228386464,
+        "delta_inc_cap": 10
+     },
 }
 
 SCALABLE_PROBLEMS = [
@@ -196,446 +262,6 @@ def poly_basis_from_string(name: str) -> PolyBasisType:
                 return pbt
         raise ValueError(f"Unknown polynomial basis type: {name}")  # noqa: B904
 
-
-# ============================================================================
-# PROBLEM SCALING UTILITIES
-# ============================================================================
-
-
-def scale_dimension(problem_name: str, dimension: int, budget: int) -> Problem:  # noqa: D417
-    """Instantiate a problem with a scaled dimension.
-
-    All model and problem factors that depend on the dimension are updated
-    before instantiation to ensure consistency.
-
-    Args:
-            problem_name: The abbreviated name of the problem (e.g., "FACSIZE-2")
-            dimension: The desired dimension for the problem
-
-    Returns:
-            A Problem instance configured for the specified dimension
-    """
-    if problem_name not in SCALABLE_PROBLEMS:
-        # For non-scalable problems, just instantiate with defaults
-        return instantiate_problem(problem_name, {"budget": budget})
-
-    # Build the factors for the new dimension
-    model_factors = get_scaled_model_factors(problem_name, dimension)
-    problem_factors = get_scaled_problem_factors(problem_name, dimension)
-    problem_factors["budget"] = budget
-
-    # Instantiate the problem with the scaled factors
-    problem = instantiate_problem(
-        problem_name,
-        problem_fixed_factors=problem_factors,
-        model_fixed_factors=model_factors,
-    )
-
-    # Set the problem dimension explicitly
-    problem.dim = dimension
-
-    # Post-initialization updates for factors that can't be validated during
-    # construction
-    post_init_updates(problem, problem_name, dimension)
-
-    return problem
-
-
-def get_scaled_model_factors(problem_name: str, dimension: int) -> dict:
-    """Generate model factors scaled to the specified dimension.
-
-    Args:
-            problem_name: The abbreviated name of the problem
-            dimension: The target dimension
-
-    Returns:
-            Dictionary of model factors appropriate for the dimension
-    """
-    # Deterministic RNGs based on problem name + dimension
-    seed = int(
-        hashlib.sha256(f"{problem_name}:{dimension}".encode()).hexdigest(), 16
-    ) % (2**32)
-    rng_py = random.Random(seed)
-    np.random.default_rng(seed)
-
-    if problem_name == "DYNAMNEWS-1":
-        return {
-            "num_prod": dimension,
-            "c_utility": [float(6 + j) for j in range(dimension)],
-            "init_level": [3] * dimension,
-            "price": [9.0] * dimension,
-            "cost": [5.0] * dimension,
-        }
-
-    if problem_name in ("FACSIZE-1", "FACSIZE-2"):
-        # Use diagonal covariance to avoid expensive Cholesky and reduce rejection rate
-        # With mean=500 and std=50 (variance=2500), P(X<0) ≈ 0 for each dimension
-        # This makes rejection sampling nearly instant
-        variance = 2500.0  # std = 50, mean = 500, so P(X<0) is negligible
-        cov_matrix = np.eye(dimension) * variance
-        return {
-            "mean_vec": [500.0] * dimension,
-            "cov": cov_matrix.tolist(),
-            "capacity": [float(rng_py.randint(100, 900)) for _ in range(dimension)],
-            "n_fac": dimension,
-        }
-
-    if problem_name == "SAN-1":
-        # Calculate appropriate num_nodes for the number of edges (dimension)
-        # For a DAG: we need num_nodes such that we can have 'dimension' edges
-        # with a path from node 1 to num_nodes
-        num_nodes = compute_num_nodes_for_dag(dimension)
-        arcs = build_san_dag(num_nodes, dimension, rng=rng_py)
-        return {
-            "num_arcs": dimension,
-            "num_nodes": num_nodes,
-            "arcs": arcs,
-            "arc_means": tuple(
-                round(rng_py.uniform(1, 10), 2) for _ in range(dimension)
-            ),
-        }
-
-    if problem_name == "FIXEDSAN-1":
-        num_nodes = max(2, rng_py.randint(2, max(2, dimension)))
-        return {
-            "num_arcs": dimension,
-            "num_nodes": num_nodes,
-            "arc_means": tuple(float(rng_py.randint(1, 10)) for _ in range(dimension)),
-        }
-
-    if problem_name == "ROSENBROCK-1":
-        return {
-            "x": (2.0,) * dimension,
-            "variance": 0.4,
-        }
-    if problem_name == "ZAKHAROV-1":
-        return {
-            "x": (2.0,) * dimension,
-            "variance": 0.1,
-        }
-
-    if problem_name == "NETWORK-1":
-        process_prob_elem = 1.0 / dimension
-        mode_transit_time = [
-            round(rng_py.uniform(0.01, 5), 3) for _ in range(dimension)
-        ]
-        return {
-            "process_prob": [process_prob_elem] * dimension,
-            "cost_process": [0.1 / (x + 1) for x in range(dimension)],
-            "cost_time": [round(rng_py.uniform(0.01, 1), 3) for _ in range(dimension)],
-            "mode_transit_time": mode_transit_time,
-            "lower_limits_transit_time": [x / 2 for x in mode_transit_time],
-            "upper_limits_transit_time": [2 * x for x in mode_transit_time],
-            "n_networks": dimension,
-        }
-
-    if problem_name == "CONTAM-2":
-        return {
-            "stages": dimension,
-            "prev_decision": (0.0,) * dimension,
-        }
-
-    return {}
-
-
-def get_scaled_problem_factors(problem_name: str, dimension: int) -> dict:
-    """Generate problem factors scaled to the specified dimension.
-
-    Only includes factors that will pass validation during construction.
-    Factors that depend on model state are updated post-initialization.
-
-    Args:
-            problem_name: The abbreviated name of the problem
-            dimension: The target dimension
-
-    Returns:
-            Dictionary of problem factors appropriate for the dimension
-    """
-    if problem_name == "DYNAMNEWS-1":
-        return {
-            "initial_solution": (3.0,) * dimension,
-        }
-
-    if problem_name in ("FACSIZE-1", "FACSIZE-2"):
-        # NOTE: installation_costs is validated against NUM_FACILITIES constant (=3)
-        # So we can't pass it here - it will be updated post-initialization
-        return {
-            "initial_solution": (100.0,) * dimension,
-            "installation_budget": 500.0
-            * (dimension / 3),  # Scale budget with dimension
-        }
-
-    if problem_name in ("SAN-1", "FIXEDSAN-1"):
-        # NOTE: arc_costs is validated against NUM_ARCS constant (=13)
-        # So we can't pass it here - it will be updated post-initialization
-        return {
-            "initial_solution": (1.0,) * dimension,
-        }
-
-    if problem_name == "ROSENBROCK-1" or problem_name == "ZAKHAROV-1":
-        return {
-            "initial_solution": (2.0,) * dimension,
-        }
-
-    if problem_name == "NETWORK-1":
-        return {
-            "initial_solution": (1.0 / dimension,) * dimension,
-        }
-
-    if problem_name == "CONTAM-2":
-        return {
-            "initial_solution": (0.0,) * dimension,
-        }
-
-    return {}
-
-
-def post_init_updates(problem: ProblemLike, problem_name: str, dimension: int) -> None:
-    """Update problem factors after initialization for factors that couldn't be set.
-
-    during construction.
-
-    Some factors are validated against hardcoded constants during construction,
-    so they need to be updated after the problem is instantiated.
-
-    Args:
-            problem: The problem instance to update
-            problem_name: The abbreviated name of the problem
-            dimension: The target dimension
-    """
-    if problem_name in ("FACSIZE-1", "FACSIZE-2"):
-        # Update installation_costs after construction to match the new dimension
-        problem.factors["installation_costs"] = (1.0,) * dimension
-
-    elif problem_name in ("SAN-1", "FIXEDSAN-1"):
-        # Update arc_costs after construction to match the new dimension
-        # arc_costs is used in replicate(): np.sum(arc_costs / x)
-        problem.factors["arc_costs"] = (1.0,) * dimension
-
-
-def compute_num_nodes_for_dag(num_edges: int) -> int:
-    """Compute an appropriate number of nodes for a DAG with the given number of edges.
-
-    For a DAG with n nodes where we need a path from 1 to n:
-    - Minimum edges needed: n-1 (a simple path)
-    - Maximum edges possible: n*(n-1)/2 (complete DAG)
-
-    We want to find the smallest n such that n*(n-1)/2 >= num_edges
-    and n-1 <= num_edges (so we have enough edges for connectivity).
-
-    Args:
-            num_edges: Desired number of edges
-
-    Returns:
-            Number of nodes to use
-    """
-    # We need at least num_edges + 1 nodes in the worst case (simple path),
-    # but we want fewer nodes with more edges between them.
-    # Solve: n*(n-1)/2 >= num_edges => n^2 - n - 2*num_edges >= 0
-    # n >= (1 + sqrt(1 + 8*num_edges)) / 2
-
-    import math
-
-    min_nodes = math.ceil((1 + math.sqrt(1 + 8 * num_edges)) / 2)
-
-    # Ensure we have at least 2 nodes and the path is possible
-    min_nodes = max(2, min_nodes)
-
-    # Also ensure num_edges >= min_nodes - 1 (need at least a spanning path)
-    # If not, we need more nodes
-    while min_nodes - 1 > num_edges:
-        min_nodes -= 1
-
-    return min_nodes
-
-
-def build_san_dag(  # noqa: D417
-    num_nodes: int,
-    num_edges: int,
-    rng: _SupportsShuffleRandInt | None = None,
-) -> list[tuple[int, int]]:
-    """Build a directed acyclic graph (DAG) suitable for the SAN model.
-
-    The SAN model requires:
-    1. Directed edges (arcs) from lower-numbered to higher-numbered nodes
-    2. A path must exist from node 1 to node num_nodes
-    3. Every node must be reachable from node 1 (for backtracking to work)
-
-    This function first creates a simple sequential path from 1 to num_nodes
-    (1→2→3→...→n), then adds additional random forward edges until reaching num_edges.
-
-    Args:
-            num_nodes: Number of nodes (numbered 1 to num_nodes)
-            num_edges: Desired number of directed edges
-
-    Returns:
-            List of (source, target) tuples representing directed edges
-
-    Raises:
-            ValueError: If the requested configuration is impossible
-    """
-    min_edges = num_nodes - 1  # Simple path from 1 to num_nodes
-    max_edges = num_nodes * (num_nodes - 1) // 2  # Complete DAG
-
-    if num_edges < min_edges:
-        raise ValueError(
-            f"Cannot create DAG with path 1→{num_nodes}: need at least {min_edges} edges, "  # noqa: E501
-            f"but only {num_edges} requested"
-        )
-
-    if num_edges > max_edges:
-        raise ValueError(
-            f"Cannot create DAG with {num_edges} edges: maximum possible is {max_edges} "  # noqa: E501
-            f"for {num_nodes} nodes"
-        )
-
-    edges = set()
-
-    # Step 1: Create a guaranteed SEQUENTIAL path from node 1 to node num_nodes
-    # This ensures every node has a predecessor reachable from node 1
-    # Path: 1 → 2 → 3 → ... → num_nodes
-    for i in range(1, num_nodes):
-        edges.add((i, i + 1))
-
-    # Step 2: Add additional random forward edges until we reach num_edges
-    if len(edges) < num_edges:
-        if rng is None:
-            rng = cast(_SupportsShuffleRandInt, random)
-        # Generate all possible forward edges not yet in the graph
-        all_possible_edges = []
-        for i in range(1, num_nodes):
-            for j in range(i + 1, num_nodes + 1):
-                edge = (i, j)
-                if edge not in edges:
-                    all_possible_edges.append(edge)
-
-        # Shuffle and add as many as needed
-        rng.shuffle(all_possible_edges)
-        edges_needed = num_edges - len(edges)
-
-        for edge in all_possible_edges[:edges_needed]:
-            edges.add(edge)
-
-    return list(edges)
-
-
-def validate_solver_and_problem_names(solver_name: str, problem_name: str) -> None:
-    """Pre-flight validation for clearer errors before heavy work."""
-    try:
-        _ = instantiate_solver(
-            solver_name=solver_name,
-            fixed_factors={},
-            solver_rename=solver_renames.get(solver_name, solver_name),
-        )
-    except Exception as e:
-        raise ValueError(
-            f"Unknown or invalid solver code '{solver_name}'. Original error: {e}"
-        ) from e
-
-    try:
-        _ = instantiate_problem(
-            problem_name, problem_fixed_factors=None, model_fixed_factors=None
-        )
-    except Exception as e:
-        raise ValueError(
-            f"Unknown problem code '{problem_name}'. Original error: {e}"
-        ) from e
-
-
-def build_connected_graph(  # noqa: D417
-    num_nodes: int,
-    num_edges: int,
-    rng: _SupportsShuffleRandInt | None = None,
-) -> list[tuple[int, int]]:
-    """Build a connected graph with the specified number of nodes and edges.
-
-    Starts with a spanning tree to ensure connectivity, then adds random edges
-    until the desired number is reached.
-
-    Args:
-            num_nodes: Number of nodes in the graph
-            num_edges: Desired number of edges
-
-    Returns:
-            List of (node1, node2) tuples representing edges
-    """
-    if num_edges < num_nodes - 1:
-        raise ValueError(
-            f"Cannot create connected graph: need at least {num_nodes - 1} edges for {num_nodes} nodes"  # noqa: E501
-        )
-
-    edges = set()
-
-    if rng is None:
-        rng = cast(_SupportsShuffleRandInt, random)
-
-    # Create a spanning tree first to ensure connectivity
-    nodes = list(range(num_nodes))
-    rng.shuffle(nodes)
-    for i in range(1, num_nodes):
-        a = nodes[i]
-        b = nodes[rng.randint(0, i - 1)]
-        edges.add((min(a, b), max(a, b)))
-
-    # Add random edges until we reach the desired number
-    max_possible_edges = num_nodes * (num_nodes - 1) // 2
-    target_edges = min(num_edges, max_possible_edges)
-
-    attempts = 0
-    max_attempts = target_edges * 10  # Prevent infinite loop
-    while len(edges) < target_edges and attempts < max_attempts:
-        a = rng.randint(0, num_nodes - 1)
-        b = rng.randint(0, num_nodes - 1)
-        if a != b:
-            edges.add((min(a, b), max(a, b)))
-        attempts += 1
-
-    return list(edges)
-
-
-# Default problem dimensions and model factor mappings
-PROBLEM_DIM_FACTORS = {
-    "FACSIZE-1": ("num_prod",),
-    "FACSIZE-2": ("num_prod",),
-    "DYNAMNEWS-1": ("num_prod",),
-    "CONTAM-2": ("n_sources",),
-    "NETWORK-1": ("num_nodes",),
-    "ROSENBROCK-1": ("dim",),
-    "ZAKHAROV-1": ("dim",),
-    "FIXEDSAN-1": ("num_arcs",),
-    "SAN-1": ("num_arcs",),
-    "SSCONT-1": ("num_retailers",),
-    "IRONORECONT-1": ("num_prod",),
-}
-
-
-def get_problem_fixed_factors(
-    problem_name: str, dim: int, budget: int
-) -> dict[str, Any]:
-    """Get problem fixed factors based on problem name and desired dimension."""
-    factors = {"budget": budget}
-
-    # Handle problem-specific dimension factors
-    if problem_name in PROBLEM_DIM_FACTORS:
-        for factor_name in PROBLEM_DIM_FACTORS[problem_name]:
-            factors[factor_name] = dim
-
-    return factors
-
-
-def get_model_fixed_factors(problem_name: str, dim: int) -> dict[str, Any]:
-    """Get model fixed factors for problems that require them."""
-    model_factors = {}
-
-    # Some problems need model-level dimension specifications
-    if problem_name in ("CONTAM-2",):
-        model_factors["n_sources"] = dim
-    elif problem_name in ("NETWORK-1",):
-        model_factors["num_nodes"] = dim
-
-    return model_factors
-
-
 # ============================================================================
 # EXPERIMENT RUNNERS
 # ============================================================================
@@ -763,7 +389,13 @@ def run_subspace_dimension_experiments(
                 ).get("polynomial_degree", config.polynomial_degree),
                 "polynomial basis": config.fixed_basis,
                 "adaptive subspace dimension": False,  # Fixed subspace
-                "subproblem_regularisation": config.fixed_regularisation,
+                "subproblem_regularisation": problems_optimal_hyper.get(
+                    config.problem_name, {}
+                ).get("subproblem_regularisation", config.fixed_regularisation),
+                "ps_sufficient_reduction": problems_optimal_hyper.get(
+                    config.problem_name, {}
+                ).get("ps_sufficient_reduction", 0.0),
+                "CABS factors": cabs_factors.get(config.problem_name, {}),
                 "crn_across_solns": config.crn_across_solns,
             }
             design_point_id = f"ASTROMORF_subspace_{dim}_on_{config.problem_name}"
@@ -819,11 +451,19 @@ def run_polynomial_basis_experiments(config: ExperimentConfig) -> list[dict[str,
     design_points = []
     for basis_type in config.basis_types:
         solver_factors = {
-            "initial subspace dimension": config.fixed_subspace_dim,
+            "initial subspace dimension": problems_optimal_hyper.get(
+                config.problem_name, {}
+            ).get("initial subspace dimension", config.fixed_subspace_dim),
             "polynomial degree": config.polynomial_degree,
             "polynomial basis": basis_type,
-            "adaptive subspace dimension": False,  # Fixed subspace for fair comparison
-            "subproblem_regularisation": config.fixed_regularisation,
+            "adaptive subspace dimension": True, 
+            "subproblem_regularisation": problems_optimal_hyper.get(
+                config.problem_name, {}
+            ).get("subproblem_regularisation", config.fixed_regularisation),
+            "ps_sufficient_reduction": problems_optimal_hyper.get(
+                config.problem_name, {}
+            ).get("ps_sufficient_reduction", config.fixed_sufficient_reduction),
+            "CABS factors": cabs_factors.get(config.problem_name, {}),
             "crn_across_solns": config.crn_across_solns,
         }
         basis_name = POLY_BASIS_NAMES.get(basis_type, basis_type.value)
@@ -885,6 +525,7 @@ def run_full_factorial_experiment(config: ExperimentConfig) -> list[dict[str, An
                     "adaptive subspace dimension": False,
                     "subproblem_regularisation": reg,
                     "crn_across_solns": config.crn_across_solns,
+                    "CABS factors": cabs_factors.get(config.problem_name, {}),
                 }
                 basis_name = POLY_BASIS_NAMES.get(basis_type, basis_type.value)
                 # reg encoded with fixed precision so design-point IDs are stable
