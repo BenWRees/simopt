@@ -11,24 +11,6 @@ Rees, Benjamin, Christine SM Currie, and Phan Tu Vuong.
 "ASTROMoRF: Adaptive Sampling Trust-Region Optimization with Dimensionality Reduction." 
 2025 Winter Simulation Conference (WSC). IEEE, 2025.
 
-UPDATES
--------
-- Added adaptive subspace dimension adjustment based on solver progress and model
-quality.
-- Implemented plateau detection mechanism to reset subspace dimension when solver
-progress stalls.
-- Enhanced tracking of model quality metrics to inform dimension adjustment decisions.
-    **The adaptive dimension logic monitors the solver's progress and adjusts the
-    subspace
-    dimension accordingly. If the solver experiences multiple consecutive unsuccessful
-    iterations or detects a plateau in objective function values, it increases the
-    subspace dimension to explore a larger portion of the search space. Conversely,
-    if the solver is making good progress, it may decrease the subspace dimension to
-    focus on a more promising subspace. This adaptive strategy aims to balance
-    exploration
-    and exploitation, improving convergence rates and solution quality.**
-- Vectorized polynomial basis adapters for efficient model construction.
-
 """
 
 from __future__ import annotations
@@ -504,8 +486,11 @@ class CABSSelector:
             beta_p = self.c_p * math.sqrt(n_log / n_d)
             beta_g = self.c_g * math.sqrt(n_log / a_d)
 
+            # cost_pen = 2.0 * d + 1.0
+            # idx = (p_hat * g_hat + p_hat * beta_g + g_hat * beta_p) / cost_pen
             cost_pen = 2.0 * d + 1.0
-            idx = (p_hat * g_hat + p_hat * beta_g + g_hat * beta_p) / cost_pen
+            exploit = (p_hat * g_hat) / cost_pen
+            idx = exploit + p_hat * beta_g + g_hat * beta_p
             scores[d] = idx
             if idx > best_idx:
                 best_idx = idx
@@ -641,6 +626,14 @@ class ASTROMoRFConfig(SolverConfig):
             default=True,
             description="adaptively adjust subspace dimension via the CABS selector",
             alias="adaptive subspace dimension",
+        ),
+    ]
+    cabs_factors: Annotated[
+        dict,
+        Field(
+            default=CABS_DEFAULTS,
+            description="configuration factors for the CABS selector (if adaptive_subspace_dimension is True)",
+            alias="CABS factors",
         ),
     ]
 
@@ -936,7 +929,8 @@ class ASTROMORF(Solver):
         self._x_before_iter: tuple[float, ...] | None = None
 
         # CABS selector (single adaptive-dimension rule).
-        self.cabs = CABSSelector(d_min=1, d_cap=self.max_d)
+        self.cabs_factors = self.factors["CABS factors"]
+        self.cabs = CABSSelector(d_min=1, d_cap=self.max_d, **self.cabs_factors)
         self.cabs_log: list[dict] = []
 
         # Warm starting: store the active subspace from previous iteration
