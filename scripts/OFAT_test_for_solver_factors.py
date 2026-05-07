@@ -186,7 +186,7 @@ def evaluate_solution(problem: Problem, x: tuple, eval_reps: int = 10) -> float:
 def _make_problem(problem_name: str, dim: int | None, budget: int) -> Problem:
     """Create a problem instance, optionally scaling dimensions."""
     if dim is not None:
-        return scale_dimension(problem_name, dim, budget)
+        return scale_dimension(problem_name, budget=budget, dimension=dim)
     return instantiate_problem(problem_name)
 
 
