@@ -1,6 +1,6 @@
-"""OMoRF Solver.  # noqa: N999.
+"""OMORF (Optimisation by Moving Ridge Functions) solver.
 
-The OMoRF (Optimisation by Moving Ridge Functions) solver by Gross and Parks
+The OMORF (Optimisation by Moving Ridge Functions) solver by Gross and Parks
 progressively builds local models using interpolation on a reduced subspace
 constructed through Active Subspace dimensionality reduction.
 """
@@ -27,17 +27,17 @@ from simopt.base import (
     Solution,
     Solver,
     SolverConfig,
-VariableType,
+    VariableType,
 )
-from simopt.solvers.utils import finite_diff
 from simopt.solver import BudgetExhaustedError
 from simopt.solvers.active_subspaces.index_set import CARD_LIMIT_HARD, IndexSet
+from simopt.solvers.utils import finite_diff
 
 warnings.filterwarnings("ignore")
 
 
-class OMoRFConfig(SolverConfig):
-    """Configuration for OMoRF solver."""
+class OMORFConfig(SolverConfig):
+    """Configuration for OMORF solver."""
 
     crn_across_solns: Annotated[
         bool,
@@ -194,13 +194,13 @@ class OMoRFConfig(SolverConfig):
         return self
 
 
-class OMoRF(Solver):
-    """The OMoRF solver (Optimisation by Moving Ridge Functions)."""
+class OMORF(Solver):
+    """The OMORF solver (Optimisation by Moving Ridge Functions)."""
 
-    name: str = "OMoRF"
-    config_class: ClassVar[type[SolverConfig]] = OMoRFConfig
-    class_name_abbr: ClassVar[str] = "OMoRF"
-    class_name: ClassVar[str] = "OMoRF"
+    name: str = "OMORF"
+    config_class: ClassVar[type[SolverConfig]] = OMORFConfig
+    class_name_abbr: ClassVar[str] = "OMORF"
+    class_name: ClassVar[str] = "OMORF"
     objective_type: ClassVar[ObjectiveType] = ObjectiveType.SINGLE
     constraint_type: ClassVar[ConstraintType] = ConstraintType.BOX
     variable_type: ClassVar[VariableType] = VariableType.CONTINUOUS
@@ -859,12 +859,12 @@ class OMoRF(Solver):
                 self.budget_history.append(self.budget.used)
                 self.fn_estimates.append(self.f_old)
         except BudgetExhaustedError:
-            print("Budget exhausted during OMoRF iterations.")
+            print("Budget exhausted during OMORF iterations.")
             self.recommended_solns.append(self.current_solution)
             self.intermediate_budgets.append(self.budget.used)
 
         finally:
-            print("finished OMoRF solver")
+            print("finished OMORF solver")
 
     def solve_subproblem(  # noqa: ANN201
         self,
@@ -874,7 +874,7 @@ class OMoRF(Solver):
         f_full: float,
         f_red: float,
     ):
-        """Solves the trust-region subproblem for ``trust-region`` or ``omorf``.
+        """Solves the trust-region subproblem for ``trust-region`` or ``OMORF``.
 
         methods.
         """
