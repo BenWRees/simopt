@@ -1966,7 +1966,7 @@ def run_single_macroreplication(
     try:
         # Create problem (with optional dimension scaling)
         if dimension is not None and problem_name in SCALABLE_PROBLEMS:
-            problem = scale_dimension(problem_name, dimension, budget)
+            problem = scale_dimension(problem_name, budget=budget, dimension=dimension)
         else:
             problem = problem_directory[problem_name](fixed_factors={"budget": budget})
 
