@@ -1,9 +1,9 @@
 """Optimize ASTROMoRF factors for selected problems.
 
-Searches over initial subspace dimension, polynomial degree, ASTROMoRF safety
-factors, and CABS factors for the specified problems. Uses an adaptive random
-search (global sampling followed by local perturbations) to balance
-exploration and exploitation.
+Searches over initial subspace dimension, polynomial degree, polynomial basis,
+lambda_min, ASTROMoRF safety factors, and CABS factors for the specified
+problems. Uses an adaptive random search (global sampling followed by local
+perturbations) to balance exploration and exploitation.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import logging
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast, Sequence
 
 import numpy as np
 
@@ -26,6 +26,7 @@ from simopt.experiment_base import (
     instantiate_problem,
     instantiate_solver,
 )
+from simopt.solvers.astromorf import PolyBasisType
 
 log = logging.getLogger(__name__)
 
@@ -49,6 +50,9 @@ ASTROMORF_RANGES: dict[str, tuple[float, float]] = {
     "ps_sufficient_reduction": (0.0, 1.0),
 }
 
+LAMBDA_MIN_RANGE: tuple[int, int] = (3, 30)
+DEFAULT_BASIS_TYPES = ",".join(p.value for p in PolyBasisType)
+
 
 @dataclass(frozen=True)
 class AstromorfConfig:
@@ -56,6 +60,8 @@ class AstromorfConfig:
 
     subspace_dim: int
     degree: int
+    polynomial_basis: PolyBasisType
+    lambda_min: int
     subproblem_regularisation: float
     ps_sufficient_reduction: float
     cabs_factors: dict[str, float | int]
@@ -127,11 +133,16 @@ def _sample_config(
     min_subspace: int,
     max_subspace: int,
     degrees: list[int],
+    basis_types: list[PolyBasisType],
+    min_lambda_min: int,
+    max_lambda_min: int,
     base: AstromorfConfig | None = None,
 ) -> AstromorfConfig:
     if base is None:
         subspace_dim = int(rng.integers(min_subspace, max_subspace + 1))
         degree = int(rng.choice(degrees))
+        polynomial_basis = cast(Sequence[PolyBasisType], rng.choice(basis_types))
+        lambda_min = int(rng.integers(min_lambda_min, max_lambda_min + 1))
         astromorf_factors = _sample_astromorf_factors(rng)
         cabs_factors = _sample_cabs_factors(rng)
     else:
@@ -143,6 +154,18 @@ def _sample_config(
             )
         )
         degree = base.degree if rng.random() > 0.3 else int(rng.choice(degrees))
+        polynomial_basis = (
+            base.polynomial_basis
+            if rng.random() > 0.3
+            else cast(Sequence[PolyBasisType], rng.choice(basis_types))
+        )
+        lambda_min = int(
+            _clamp(
+                base.lambda_min + int(rng.integers(-2, 3)),
+                min_lambda_min,
+                max_lambda_min,
+            )
+        )
         astromorf_factors = _perturb_astromorf_factors(
             {
                 "subproblem_regularisation": base.subproblem_regularisation,
@@ -154,6 +177,8 @@ def _sample_config(
     return AstromorfConfig(
         subspace_dim=subspace_dim,
         degree=degree,
+        polynomial_basis=polynomial_basis,
+        lambda_min=lambda_min,
         subproblem_regularisation=astromorf_factors["subproblem_regularisation"],
         ps_sufficient_reduction=astromorf_factors["ps_sufficient_reduction"],
         cabs_factors=cabs_factors,
@@ -191,6 +216,8 @@ def _evaluate_config(
     solver_factors = {
         "initial subspace dimension": config.subspace_dim,
         "polynomial degree": config.degree,
+        "polynomial basis": config.polynomial_basis,
+        "lambda_min": config.lambda_min,
         "adaptive subspace dimension": True,
         "subproblem_regularisation": config.subproblem_regularisation,
         "ps_sufficient_reduction": config.ps_sufficient_reduction,
@@ -252,6 +279,9 @@ def _run_search(
     min_subspace: int,
     max_subspace: int,
     degrees: list[int],
+    basis_types: list[PolyBasisType],
+    min_lambda_min: int,
+    max_lambda_min: int,
     seed: int,
 ) -> dict[str, Any]:
     rng = np.random.default_rng(seed)
@@ -262,7 +292,15 @@ def _run_search(
 
     log.info("%s: global search (%s configs)", problem_name, n_global)
     for idx in range(n_global):
-        config = _sample_config(rng, min_subspace, max_subspace, degrees)
+        config = _sample_config(
+            rng,
+            min_subspace,
+            max_subspace,
+            degrees,
+            basis_types,
+            min_lambda_min,
+            max_lambda_min,
+        )
         log.info("%s: evaluating global config %s/%s", problem_name, idx + 1, n_global)
         try:
             result = _evaluate_config(
@@ -301,7 +339,14 @@ def _run_search(
     for idx in range(n_local):
         base = elite[idx % len(elite)].config
         config = _sample_config(
-            rng, min_subspace, max_subspace, degrees, base=base
+            rng,
+            min_subspace,
+            max_subspace,
+            degrees,
+            basis_types,
+            min_lambda_min,
+            max_lambda_min,
+            base=base,
         )
         log.info("%s: evaluating local config %s/%s", problem_name, idx + 1, n_local)
         try:
@@ -327,8 +372,25 @@ def _run_search(
         "n_macroreps": n_macroreps,
         "n_postreps": n_postreps,
         "budget": budget,
-        "best": asdict(best) if best else None,
-        "results": [asdict(r) for r in results],
+        "best": _result_to_dict(best) if best else None,
+        "results": [_result_to_dict(r) for r in results],
+    }
+
+
+def _config_to_dict(config: AstromorfConfig) -> dict[str, Any]:
+    data = asdict(config)
+    data["polynomial_basis"] = config.polynomial_basis.value
+    return data
+
+
+def _result_to_dict(result: EvalResult) -> dict[str, Any]:
+    return {
+        "config": _config_to_dict(result.config),
+        "mean_objective": result.mean_objective,
+        "best_objective": result.best_objective,
+        "mean_score": result.mean_score,
+        "std_score": result.std_score,
+        "objectives": result.objectives,
     }
 
 
@@ -387,6 +449,24 @@ def _parse_args() -> argparse.Namespace:
         help="Comma-separated polynomial degrees to try.",
     )
     parser.add_argument(
+        "--basis-types",
+        type=str,
+        default=DEFAULT_BASIS_TYPES,
+        help="Comma-separated polynomial basis types to try.",
+    )
+    parser.add_argument(
+        "--lambda-min-min",
+        type=int,
+        default=LAMBDA_MIN_RANGE[0],
+        help="Minimum lambda_min to sample.",
+    )
+    parser.add_argument(
+        "--lambda-min-max",
+        type=int,
+        default=LAMBDA_MIN_RANGE[1],
+        help="Maximum lambda_min to sample.",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=42,
@@ -401,6 +481,27 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _parse_basis_list(raw: str) -> list[PolyBasisType]:
+    basis_types: list[PolyBasisType] = []
+    for token in raw.split(","):
+        entry = token.strip()
+        if not entry:
+            continue
+        key = entry.upper().replace("-", "_").replace(" ", "_")
+        try:
+            basis_types.append(PolyBasisType[key])
+            continue
+        except KeyError:
+            pass
+        for basis in PolyBasisType:
+            if basis.value.upper() == key:
+                basis_types.append(basis)
+                break
+        else:
+            raise ValueError(f"Unknown polynomial basis type: {entry!r}")
+    return basis_types
+
+
 def main() -> None:
     """Main entry point for the optimization script."""
     args = _parse_args()
@@ -411,6 +512,14 @@ def main() -> None:
 
     problems = [p.strip() for p in args.problems.split(",") if p.strip()]
     degrees = [int(d.strip()) for d in args.degrees.split(",") if d.strip()]
+    basis_types = _parse_basis_list(args.basis_types)
+    min_lambda_min = args.lambda_min_min
+    max_lambda_min = args.lambda_min_max
+
+    if min_lambda_min > max_lambda_min:
+        raise ValueError("lambda-min-min cannot exceed lambda-min-max")
+    if not basis_types:
+        raise ValueError("No polynomial basis types provided")
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -444,6 +553,9 @@ def main() -> None:
             min_subspace=args.min_subspace,
             max_subspace=max_subspace,
             degrees=degrees,
+            basis_types=basis_types,
+            min_lambda_min=min_lambda_min,
+            max_lambda_min=max_lambda_min,
             seed=args.seed,
         )
 
