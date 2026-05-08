@@ -76,15 +76,13 @@ if str(REPO_ROOT) not in sys.path:
 import joblib  # noqa: E402
 
 from simopt.base import Problem, Solver  # noqa: E402
-from simopt.experiment_base import ( # noqa: E402
-    instantiate_problem, 
-    instantiate_solver
-    )  
 from simopt.experiment import (  # noqa: E402
     ProblemSolver,
     ProblemsSolvers,
     scale_dimension,
 )
+from simopt.experiment_base import instantiate_problem, instantiate_solver  # noqa: E402
+from simopt.solvers.astromorf import PolyBasisType  # noqa: E402
 
 BASE_SEED: int = 20250428
 DIMENSION: int = 100
@@ -116,11 +114,46 @@ SCALABLE_PROBLEMS: set[str] = {
 }
 
 DIMENSION_FACTORS: dict[str, dict[str, Any]] = {
-    "DYNAMNEWS-1": {"subspace_dimension": 5, "polynomial_degree": 2, "subproblem_regularisation": 0.41555633606245307, "ps_sufficient_reduction": 0.15328431662449404},  # Optimal
-    "SAN-1": {"subspace_dimension": 20, "polynomial_degree": 3, "subproblem_regularisation": 0.3672349090967656, "ps_sufficient_reduction": 0.0},  # Optimal
-    "ROSENBROCK-1": {"subspace_dimension": 20, "polynomial_degree": 2, "subproblem_regularisation": 0.20519775542894717, "ps_sufficient_reduction": 0.4542256535063405},  # Optimal
-    "NETWORK-1": {"subspace_dimension": 14, "polynomial_degree": 4, "subproblem_regularisation": 0.13066366948000724, "ps_sufficient_reduction": 0.04598983542928581},  # optimal
-    "PARAMESTI-1": {"subspace_dimension": 2, "polynomial_degree": 4, "subproblem_regularisation": 0.007341421780035384, "ps_sufficient_reduction": 0.8271734245206864},  # optimal
+    "DYNAMNEWS-1": {
+        "subspace_dimension": 5,
+        "polynomial_degree": 2,
+        "subproblem_regularisation": 0.41555633606245307,
+        "ps_sufficient_reduction": 0.15328431662449404,
+        "polynomial basis": PolyBasisType.CHEBYSHEV,
+        "lambda_min": 10
+        },  
+    "SAN-1": {
+        "subspace_dimension": 20,
+        "polynomial_degree": 3,
+        "subproblem_regularisation": 0.3672349090967656,
+        "ps_sufficient_reduction": 0.0,
+        "polynomial basis": PolyBasisType.CHEBYSHEV,
+        "lambda_min": 10
+    },  
+    "ROSENBROCK-1": {
+        "subspace_dimension": 13,
+        "polynomial_degree": 2,
+        "subproblem_regularisation": 0.31317227223216765,
+        "ps_sufficient_reduction": 0.28682048799461674,
+        "polynomial basis": PolyBasisType.CHEBYSHEV,
+        "lambda_min": 10
+    },  
+    "NETWORK-1": {
+        "subspace_dimension": 14,
+        "polynomial_degree": 4,
+        "subproblem_regularisation": 0.13066366948000724,
+        "ps_sufficient_reduction": 0.04598983542928581,
+        "polynomial basis": PolyBasisType.CHEBYSHEV,
+        "lambda_min": 10
+    },  
+    "PARAMESTI-1": {
+        "subspace_dimension": 2,
+        "polynomial_degree": 2,
+        "subproblem_regularisation": 0.2203918801750902,
+        "ps_sufficient_reduction": 0.7588175603433991,
+        "polynomial basis": PolyBasisType.CHEBYSHEV,
+        "lambda_min": 24
+    },  
 }
 
 cabs_factors = {
@@ -161,28 +194,28 @@ cabs_factors = {
         "delta_inc_cap": 10
       },
     "ROSENBROCK-1": {
-        "gamma": 0.9063311271815354,
-        "c_p": 0.2822516618558208,
-        "c_g": 0.20336157033204208,
-        "eps_n": 0.1826008507019749,
-        "eps_a": 0.06585786198277199,
-        "rho_max": 0.8086197817978706,
-        "w_safe": 28,
-        "eta_safe": 0.15908771092198087,
-        "c2_est": 1.6397546858971714,
-        "delta_inc_cap": 6
+        "gamma": 0.9098939586824685,
+        "c_p": 0.1973877885272195,
+        "c_g": 0.1,
+        "eps_n": 0.42220344679866095,
+        "eps_a": 0.32964509676267084,
+        "rho_max": 0.8666281515218087,
+        "w_safe": 22,
+        "eta_safe": 0.03338028903533324,
+        "c2_est": 1.9994552659144285,
+        "delta_inc_cap": 2
     },
     "PARAMESTI-1": {
-        "gamma": 0.9699167233004381,
-        "c_p": 0.3291961798936611,
-        "c_g": 0.2689741889666983,
-        "eps_n": 0.30441179989308964,
-        "eps_a": 0.06863955237379822,
-        "rho_max": 0.8021774211019107,
-        "w_safe": 18,
-        "eta_safe": 0.19913824979089106,
-        "c2_est": 2.430262228386464,
-        "delta_inc_cap": 10
+        "gamma": 0.9348946256587236,
+        "c_p": 0.40895574114002264,
+        "c_g": 0.43261934903127425,
+        "eps_n": 0.4522822310706563,
+        "eps_a": 0.2956122095548452,
+        "rho_max": 0.7653562957256419,
+        "w_safe": 29,
+        "eta_safe": 0.022466105434918077,
+        "c2_est": 3.0,
+        "delta_inc_cap": 8
      },
 }
 
@@ -194,7 +227,6 @@ SOLVER_FIXED_FACTORS: dict[str, dict[str, Any]] = {
         "gamma_1": 2.5,
         "gamma_2": 2.0,
         "gamma_3": 0.5,
-        "lambda_min": 5,
         },
     "ADAM": {"crn_across_solns": False,
              "r": 50, 
@@ -700,7 +732,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="SLURM-native SimOpt benchmark runner")
     parser.add_argument("--n-macroreps", type=int, default=20)
     parser.add_argument("--n-workers", type=int, default=1)
-    parser.add_argument("--budget", type=int, default=10_000)
+    parser.add_argument("--budget", type=int, default=10000)
     parser.add_argument("--output-dir", type=str, default="results")
     parser.add_argument("--slurm-mode", action="store_true")
     parser.add_argument("--profile", action="store_true")
