@@ -81,6 +81,10 @@ demo = ["SALib>=1.5.2"]
 ext = [
     "simopt-extensions",
 ]
+tuning = [
+    "optuna>=3.6",
+    "optuna-dashboard>=0.16",
+]
 
 [project.urls]
 "Homepage" = "https://github.com/simopt-admin/simopt"
