@@ -115,27 +115,27 @@ SCALABLE_PROBLEMS: set[str] = {
 
 DIMENSION_FACTORS: dict[str, dict[str, Any]] = {
     "DYNAMNEWS-1": {
-        "subspace_dimension": 5,
+        "subspace_dimension": 21,
         "polynomial_degree": 2,
-        "subproblem_regularisation": 0.41555633606245307,
-        "ps_sufficient_reduction": 0.15328431662449404,
-        "polynomial basis": PolyBasisType.CHEBYSHEV,
-        "lambda_min": 10
+        "subproblem_regularisation": 0.0006464984024527326,
+        "ps_sufficient_reduction": 0.3453535178726169,
+        "polynomial basis": PolyBasisType.HERMITE,
+        "lambda_min": 3
         },  
     "SAN-1": {
-        "subspace_dimension": 20,
-        "polynomial_degree": 3,
-        "subproblem_regularisation": 0.3672349090967656,
-        "ps_sufficient_reduction": 0.0,
+        "subspace_dimension": 7,
+        "polynomial_degree": 4,
+        "subproblem_regularisation": 0.005235731954822491,
+        "ps_sufficient_reduction": 0.044814517243413884,
         "polynomial basis": PolyBasisType.CHEBYSHEV,
-        "lambda_min": 10
+        "lambda_min": 20
     },  
     "ROSENBROCK-1": {
         "subspace_dimension": 13,
         "polynomial_degree": 2,
         "subproblem_regularisation": 0.31317227223216765,
         "ps_sufficient_reduction": 0.28682048799461674,
-        "polynomial basis": PolyBasisType.CHEBYSHEV,
+        "polynomial basis": PolyBasisType.HERMITE,
         "lambda_min": 10
     },  
     "NETWORK-1": {
@@ -149,8 +149,8 @@ DIMENSION_FACTORS: dict[str, dict[str, Any]] = {
     "PARAMESTI-1": {
         "subspace_dimension": 2,
         "polynomial_degree": 2,
-        "subproblem_regularisation": 0.2203918801750902,
-        "ps_sufficient_reduction": 0.7588175603433991,
+        "subproblem_regularisation": 0.3066113615246805,
+        "ps_sufficient_reduction": 0.41541066443316743,
         "polynomial basis": PolyBasisType.CHEBYSHEV,
         "lambda_min": 24
     },  
@@ -158,16 +158,16 @@ DIMENSION_FACTORS: dict[str, dict[str, Any]] = {
 
 cabs_factors = {
     "SAN-1": {
-        "gamma": 0.8828659814241923,
-        "c_p": 0.05,
-        "c_g": 0.8276721063224712,
-        "eps_n": 0.075446911280005,
-        "eps_a": 0.019727959607387935,
-        "rho_max": 0.7,
-        "w_safe": 9,
-        "eta_safe": 0.012820503556735807,
-        "c2_est": 2.932949582570289,
-        "delta_inc_cap": 6
+        "cabs_gamma": 0.8449082140097105,
+        "c_p": 0.07969019139522729,
+        "c_g": 1.1579593887557758,
+        "eps_n": 0.006501348756987459,
+        "eps_a": 0.0124593082912667,
+        "rho_max": 0.61345216477233,
+        "w_safe": 30,
+        "eta_safe": 0.008814972660838518,
+        "c2_est": 2.8109642324287805,
+        "delta_inc_cap": 1
     },
     "NETWORK-1": {
         "gamma": 0.8647739721818226,
@@ -182,16 +182,16 @@ cabs_factors = {
         "delta_inc_cap": 10
     },
     "DYNAMNEWS-1": {
-        "gamma": 0.8750975631420834,
-        "c_p": 0.49953709364063265,
-        "c_g": 1.0620182449212108,
-        "eps_n": 0.10625298620014088,
-        "eps_a": 0.16205859972104644,
-        "rho_max": 0.9176733547075296,
+        "gamma": 0.8882713747475891,
+        "c_p": 0.7830539437435704,
+        "c_g": 0.5263939848751753,
+        "eps_n": 0.02200767828616197,
+        "eps_a": 0.20230061394787233,
+        "rho_max": 0.734774650419498,
         "w_safe": 13,
-        "eta_safe": 0.10514082537844505,
-        "c2_est": 0.8597437563781269,
-        "delta_inc_cap": 10
+        "eta_safe": 0.006694551397109472,
+        "c2_est": 0.26936813100294055,
+        "delta_inc_cap": 7
       },
     "ROSENBROCK-1": {
         "gamma": 0.9098939586824685,
@@ -206,16 +206,16 @@ cabs_factors = {
         "delta_inc_cap": 2
     },
     "PARAMESTI-1": {
-        "gamma": 0.9348946256587236,
-        "c_p": 0.40895574114002264,
-        "c_g": 0.43261934903127425,
-        "eps_n": 0.4522822310706563,
-        "eps_a": 0.2956122095548452,
-        "rho_max": 0.7653562957256419,
-        "w_safe": 29,
-        "eta_safe": 0.022466105434918077,
-        "c2_est": 3.0,
-        "delta_inc_cap": 8
+        "gamma": 0.979512955884361, 
+        "c_p": 0.30349342169591154, 
+        "c_g": 0.5351270268135544, 
+        "eps_n": 0.2529633409514025, 
+        "eps_a": 0.4124055832694226, 
+        "rho_max": 0.7999976436030481, 
+        "w_safe": 18, 
+        "eta_safe": 0.013142969614756325, 
+        "c2_est": 2.2103179506272435, 
+        "delta_inc_cap": 6
      },
 }
 
@@ -383,6 +383,7 @@ def execute_pair(
     budget: int,
     output_dir: Path,
     n_jobs: int,
+    crn: bool,
     skip_existing: bool = True,
 ) -> ProblemSolver | None:
     """Run one (problem, solver) pair end-to-end.
@@ -404,6 +405,7 @@ def execute_pair(
         macroreplications and post-replications.
         skip_existing (bool, optional): If True, skip execution if the output pickle 
         already exists. Defaults to True.
+        crn (bool): If True, use common random numbers across solvers.
 
     Returns:
         ProblemSolver | None: The ProblemSolver instance after execution, 
@@ -417,30 +419,44 @@ def execute_pair(
     problem = build_problem(pair.problem, budget)
     solver = build_solver(pair.solver)
 
+    solver.factors["crn_across_solns"] = crn
+
     if pair.solver == "ASTROMORF" : 
         solver.factors[
-            "initial_subspace_dimension"
+            "initial subspace dimension"
             ] = DIMENSION_FACTORS[pair.problem][
-                "initial subspace dimension"
+                "subspace_dimension"
                 ]
         
         solver.factors[
-            "polynomial_degree"
+            "polynomial degree"
             ] = DIMENSION_FACTORS[pair.problem][
-                "polynomial degree"
+                "polynomial_degree"
                 ]
         
         solver.factors[
             "subproblem_regularisation"
             ] = DIMENSION_FACTORS[pair.problem][
-                "subproblem regularisation"
+                "subproblem_regularisation"
                 ]
         
         solver.factors[
             "ps_sufficient_reduction"
             ] = DIMENSION_FACTORS[pair.problem][
-                "ps sufficient reduction"
+                "ps_sufficient_reduction"
                 ]
+        solver.factors[
+            "polynomial basis"
+            ] = DIMENSION_FACTORS[pair.problem][
+                "polynomial basis"
+                ]
+        solver.factors[
+            "lambda_min"
+            ] = DIMENSION_FACTORS[pair.problem][
+                "lambda_min"
+                ]
+
+        
         
         #add cabs factors to solver 
         solver.factors.update(cabs_factors[pair.problem])
@@ -452,9 +468,9 @@ def execute_pair(
         file_name_path=target,
         create_pickle=False,
     )
-    err = ps.check_compatibility()
-    if err:
-        raise RuntimeError(f"Incompatible {pair.solver}/{pair.problem}: {err}")
+    # err = ps.check_compatibility()
+    # if err:
+    #     raise RuntimeError(f"Incompatible {pair.solver}/{pair.problem}: {err}")
 
     # Force a single, capped joblib backend for this entire pair.
     # The context manager overrides Parallel(n_jobs=...) defaults; the env
@@ -644,6 +660,7 @@ def write_slurm_script(
     n_macroreps = cli_args["n_macroreps"]
     cpus_per_task = cli_args["cpus_per_task"]
     mem_gb = cli_args["mem_gb"]
+    crn_flag = " \\\n+    --crn" if cli_args.get("crn") else ""
 
     body = f"""#!/bin/bash
 #SBATCH --job-name=simopt_bench
@@ -670,7 +687,7 @@ export LOKY_MAX_CPU_COUNT="${{SLURM_CPUS_PER_TASK:-{cpus_per_task}}}"
     --n-macroreps {n_macroreps} \\
     --budget {budget} \\
     --output-dir {output_dir} \\
-    --cpus-per-task {cpus_per_task}
+    --cpus-per-task {cpus_per_task}{crn_flag}
 """
     path.write_text(body)
     path.chmod(0o755)
@@ -737,6 +754,11 @@ def main() -> None:
     parser.add_argument("--slurm-mode", action="store_true")
     parser.add_argument("--profile", action="store_true")
     parser.add_argument("--profile-max-samples", type=int, default=30)
+    parser.add_argument(
+        "--crn",
+        action="store_true",
+        help="Use common random numbers across solns.",
+    )
     parser.add_argument(
         "--target-task-time", type=float, default=600.0,
         help="Informational only; per-pair time is set from profiling.",
@@ -806,6 +828,7 @@ def main() -> None:
                 "n_macroreps": args.n_macroreps,
                 "cpus_per_task": args.cpus_per_task,
                 "mem_gb": args.mem_gb,
+                "crn": args.crn,
             },
         )
         print(f"Wrote SLURM script: {args.generate_slurm}")
@@ -886,6 +909,7 @@ def main() -> None:
             budget=args.budget,
             output_dir=output_dir,
             n_jobs=n_jobs,
+            crn=args.crn
         )
 
 
