@@ -4,8 +4,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=4G
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=8G
 #SBATCH --time=04:00:00
 #SBATCH --output=slurm_logs/%x_%A_%a.out
 #SBATCH --error=slurm_logs/%x_%A_%a.err
@@ -19,8 +19,8 @@
 # To regenerate this script with profiling-tuned --time:
 #   python scripts/run_experiments.py \
 #       --profile --generate-slurm scripts/run_experiments.slurm \
-#       --n-macroreps 100 --budget 10000 \
-#       --output-dir results --cpus-per-task 4
+#       --n-macroreps 30 --budget 10000 \
+#       --output-dir results --cpus-per-task 10
 
 set -euo pipefail
 mkdir -p slurm_logs
@@ -32,16 +32,15 @@ export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
-export LOKY_MAX_CPU_COUNT="${SLURM_CPUS_PER_TASK:-1}"
+export LOKY_MAX_CPU_COUNT="${SLURM_CPUS_PER_TASK:-10}"
 
 # Activate environment (edit per cluster):
 # source ~/miniconda3/bin/activate simopt
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 
-python "${REPO_ROOT}/scripts/run_experiments.py" \
+python simopt/scripts/run_experiments.py \
     --slurm-mode \
-    --n-macroreps "${N_MACROREPS:-100}" \
+    --n-macroreps "${N_MACROREPS:-30}" \
     --budget "${BUDGET:-10000}" \
     --output-dir "${OUTPUT_DIR:-results}" \
-    --cpus-per-task "${SLURM_CPUS_PER_TASK:-1}"
+    --cpus-per-task "${SLURM_CPUS_PER_TASK:-10}"
