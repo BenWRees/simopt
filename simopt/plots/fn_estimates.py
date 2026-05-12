@@ -12,6 +12,7 @@ from mrg32k3a.mrg32k3a import MRG32k3a
 from simopt.curve import Curve
 from simopt.experiment import ProblemSolver
 from simopt.plot_type import PlotType
+from simopt.utils import make_nonzero
 
 from .utils import (
     plot_bootstrap_conf_ints,
@@ -96,6 +97,103 @@ def _get_postrep_fn_estimates(experiment: ProblemSolver) -> list[list[float]]:
             "Run post_replicate(...) before plotting function estimates."
         )
     return [list(np.asarray(seq, dtype=float)) for seq in all_est_objectives]
+
+
+def _objective_sign(experiment: ProblemSolver) -> float:
+    minmax = getattr(experiment.problem, "minmax", (1,))
+    if isinstance(minmax, tuple | list | np.ndarray):
+        sign = float(minmax[0]) if len(minmax) > 0 else 1.0
+    else:
+        sign = float(minmax)
+    return sign if sign != 0 else 1.0
+
+
+def _normalize_fn_curves_for_gap(
+    fn_curves: list[Curve],
+    experiment: ProblemSolver,
+    f0_override: float | None = None,
+    f_star_override: float | None = None,
+    sign_override: float | None = None,
+    clamp: bool = True,
+) -> list[Curve]:
+    f_star = f_star_override
+    if f_star is None:
+        xstar_postreps = getattr(experiment, "xstar_postreps", None)
+        if xstar_postreps is not None:
+            xstar_arr = np.asarray(xstar_postreps, dtype=float).reshape(-1)
+            if xstar_arr.size > 0:
+                f_star = float(np.mean(xstar_arr))
+    if f_star is None and getattr(experiment, "fstar", None) is not None:
+        f_star = float(experiment.fstar)
+    if f_star is None:
+        all_vals = [y for c in fn_curves for y in c.y_vals]
+        if all_vals:
+            sign = sign_override if sign_override is not None else _objective_sign(
+                experiment
+            )
+            f_star = max(all_vals) if sign > 0 else min(all_vals)
+        else:
+            f_star = 0.0
+
+    f0 = f0_override
+    if f0 is None:
+        x0_postreps = getattr(experiment, "x0_postreps", None)
+        if x0_postreps is not None:
+            x0_arr = np.asarray(x0_postreps, dtype=float).reshape(-1)
+            if x0_arr.size > 0:
+                f0 = float(np.mean(x0_arr))
+    if f0 is None:
+        first_vals = [c.y_vals[0] for c in fn_curves if len(c.y_vals) > 0]
+        f0 = float(np.mean(first_vals)) if first_vals else 1.0
+
+    sign = sign_override if sign_override is not None else _objective_sign(experiment)
+    denom = make_nonzero(
+        sign * (f_star - f0), "fn_estimates_normalization_denom"
+    )
+    transformed: list[Curve] = []
+    for c in fn_curves:
+        new_y = []
+        for y in c.y_vals:
+            frac = (sign * (f_star - y)) / denom
+            if clamp:
+                frac = min(1.0, max(0.0, frac))
+            new_y.append(frac)
+        transformed.append(Curve(x_vals=list(c.x_vals), y_vals=new_y))
+    return transformed
+
+
+def _first_postrep_estimate(experiment: ProblemSolver) -> float | None:
+    all_est_objectives = getattr(experiment, "all_est_objectives", None)
+    if not all_est_objectives:
+        return None
+    first_vals: list[float] = []
+    for seq in all_est_objectives:
+        arr = np.asarray(seq, dtype=float).reshape(-1)
+        arr = arr[np.isfinite(arr)]
+        if arr.size > 0:
+            first_vals.append(float(arr[0]))
+    if not first_vals:
+        return None
+    return float(np.mean(first_vals))
+
+
+def _best_postrep_estimate(
+    experiments: list[ProblemSolver],
+    sign: float,
+) -> float | None:
+    values: list[float] = []
+    for exp in experiments:
+        all_est_objectives = getattr(exp, "all_est_objectives", None)
+        if not all_est_objectives:
+            continue
+        for seq in all_est_objectives:
+            arr = np.asarray(seq, dtype=float).reshape(-1)
+            arr = arr[np.isfinite(arr)]
+            if arr.size > 0:
+                values.extend(arr.tolist())
+    if not values:
+        return None
+    return float(max(values) if sign > 0 else min(values))
 
 
 def _bootstrap_curves_conf_int(
@@ -203,8 +301,8 @@ def plot_fn_estimates(
         normalize (bool, optional): If True, normalize iterations to a 0-1 scale
             so that solvers with different iteration counts can be compared.
             Defaults to False.
-        y_normalize (bool, optional): If True, normalize function estimates to
-            fraction of initial optimality gap. Defaults to False.
+        y_normalize (bool, optional): If True, normalize function estimates using
+            the post-replication best solution and clamp to [0, 1]. Defaults to False.
         n_bootstraps (int, optional): Number of bootstrap samples. Defaults to 100.
         conf_level (float, optional): Confidence level for confidence intervals
             (must be in (0, 1)). Defaults to 0.95.
@@ -254,6 +352,14 @@ def plot_fn_estimates(
     file_list: list[Path] = []
 
     n_experiments = len(experiments)
+    common_sign = _objective_sign(experiments[0]) if experiments else 1.0
+    best_postrep = None
+    if y_normalize and experiments:
+        best_postrep = _best_postrep_estimate(experiments, common_sign)
+        if best_postrep is None:
+            raise ValueError(
+                "y_normalize requires post-rep estimates to compute a best solution."
+            )
 
     if all_in_one:
         ref_experiment = experiments[0]
@@ -275,34 +381,20 @@ def plot_fn_estimates(
                 _get_postrep_fn_estimates(experiment), normalize=normalize
             )
 
-            # Optionally normalize y-values to fraction of initial optimality gap
             if y_normalize:
-                # Determine reference optimal objective f* (prefer postreps mean)
-                try:
-                    f_star = float(np.mean(experiment.xstar_postreps))
-                except Exception:
-                    # Fallback: use minimum observed value across curves
-                    f_star = min(
-                        (min(c.y_vals) for c in fn_curves if len(c.y_vals) > 0),
-                        default=0.0,
+                f0_override = _first_postrep_estimate(experiment)
+                if f0_override is None:
+                    raise ValueError(
+                        "y_normalize requires post-rep estimates for f0."
                     )
-
-                # Determine initial value f0 as mean of first observations
-                first_vals = [c.y_vals[0] for c in fn_curves if len(c.y_vals) > 0]
-                f0 = float(np.mean(first_vals)) if first_vals else 1.0
-
-                denom = f0 - f_star
-                # Build new Curve objects with transformed y-values (Curve is immutable)
-                transformed_curves: list[Curve] = []
-                for c in fn_curves:
-                    if denom != 0:
-                        new_y = [(y - f_star) / denom for y in c.y_vals]
-                    else:
-                        new_y = [y - f_star for y in c.y_vals]
-                    transformed_curves.append(
-                        Curve(x_vals=list(c.x_vals), y_vals=new_y)
-                    )
-                fn_curves = transformed_curves
+                fn_curves = _normalize_fn_curves_for_gap(
+                    fn_curves,
+                    experiment,
+                    f0_override=f0_override,
+                    f_star_override=best_postrep,
+                    sign_override=common_sign,
+                    clamp=True,
+                )
 
             if plot_type == PlotType.FN_ESTIMATES_ALL:
                 # Plot all function estimate curves from all macroreps
@@ -399,6 +491,21 @@ def plot_fn_estimates(
             fn_curves = _fn_estimates_to_curves(
                 _get_postrep_fn_estimates(experiment), normalize=normalize
             )
+
+            if y_normalize:
+                f0_override = _first_postrep_estimate(experiment)
+                if f0_override is None:
+                    raise ValueError(
+                        "y_normalize requires post-rep estimates for f0."
+                    )
+                fn_curves = _normalize_fn_curves_for_gap(
+                    fn_curves,
+                    experiment,
+                    f0_override=f0_override,
+                    f_star_override=best_postrep,
+                    sign_override=common_sign,
+                    clamp=True,
+                )
 
             if plot_type == PlotType.FN_ESTIMATES_ALL:
                 # Plot all function estimate curves from all macroreps
