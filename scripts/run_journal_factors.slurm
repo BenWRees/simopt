@@ -27,11 +27,11 @@
 #       --output-dir experiments/journal/$s --aggregate-only
 #   done
 # =============================================================================
-#SBATCH --job-name=astromorf_journal
+#SBATCH --job-name=astromorf_journal_factors
 #SBATCH --partition=batch
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=10
 #SBATCH --mem-per-cpu=4G
 #SBATCH --time=06:00:00
 # Default array size assumes problem dim >= 8 and the default sweep levels:
@@ -43,8 +43,8 @@
 #   tail -n +2 /tmp/check/design_matrix_subspace_*.csv | wc -l
 # (repeat for --study basis and --study regularisation).
 #SBATCH --array=0-20
-#SBATCH --output=experiments/journal/logs/slurm_%A_%a.out
-#SBATCH --error=experiments/journal/logs/slurm_%A_%a.err
+#SBATCH --output=logs_factors/slurm_%A_%a.out
+#SBATCH --error=logs_factors/slurm_%A_%a.err
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=$USER@soton.ac.uk
 
@@ -75,8 +75,16 @@ source "$HOME/miniconda3/bin/activate" simopt
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-mkdir -p "$OUTPUT_ROOT/logs"
-mkdir -p "$OUTPUT_ROOT/subspace" "$OUTPUT_ROOT/basis" "$OUTPUT_ROOT/regularisation"
+mkdir -p logs_factors
+mkdir -p subspace basis regularisation
+
+# Cap thread/process oversubscription to match cpus-per-task.
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export VECLIB_MAXIMUM_THREADS=1
+export LOKY_MAX_CPU_COUNT="${SLURM_CPUS_PER_TASK:-1}"
 
 # ── Dispatch: SLURM_ARRAY_TASK_ID -> (study, local_task_id) ──────────────────
 TASK_ID=${SLURM_ARRAY_TASK_ID:-0}
