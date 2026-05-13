@@ -29,10 +29,10 @@ import optuna  # noqa: E402
 
 from scripts.tuning import results_root  # noqa: E402
 from scripts.tuning.evaluate import trial_params_to_solver_factors  # noqa: E402
+from scripts.tuning.storage import make_storage  # noqa: E402
 from scripts.tuning.tuner import (  # noqa: E402
-    storage_url_for,
+    all_trials_jsonl_paths,
     study_name,
-    trials_jsonl_path,
 )
 
 log = logging.getLogger("astromorf.tuning.collect")
@@ -47,26 +47,32 @@ def _ci95(values: list[float]) -> tuple[float, float]:
     return (mean - 1.96 * sem, mean + 1.96 * sem)
 
 
-def _load_jsonl_index(path: Path) -> dict[int, list[dict[str, Any]]]:
-    """Map trial_number -> list of per-rung records (latest rung last)."""
+def _load_jsonl_index(paths: list[Path]) -> dict[int, list[dict[str, Any]]]:
+    """Map trial_number -> list of per-rung records, concatenated across files.
+
+    Per-worker JSONL files are merged here; the worker_id field on each
+    record disambiguates which worker wrote it. Records are sorted by
+    rung_step so the final rung is always last.
+    """
     index: dict[int, list[dict[str, Any]]] = defaultdict(list)
-    if not path.exists():
-        return index
-    with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            tn = rec.get("trial_number")
-            if tn is None:
-                continue
-            index[int(tn)].append(rec)
+    for path in paths:
+        if not path.exists():
+            continue
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                tn = rec.get("trial_number")
+                if tn is None:
+                    continue
+                index[int(tn)].append(rec)
     for v in index.values():
-        v.sort(key=lambda r: r.get("rung_step", 0))
+        v.sort(key=lambda r: (r.get("rung_step", 0), r.get("ts", 0)))
     return index
 
 
@@ -86,9 +92,10 @@ def export_problem(
     out_dir: Path | None = None,
 ) -> dict[str, Path]:
     """Export trials.csv and top20.json for a single problem."""
-    storage = storage or storage_url_for(problem_name)
-    study = optuna.load_study(study_name=study_name(problem_name), storage=storage)
-    jsonl_index = _load_jsonl_index(trials_jsonl_path(problem_name))
+    storage_obj, spec = make_storage(problem_name, storage_url=storage)
+    log.info("Collect: storage backend=%s (%s)", spec.backend, spec.display)
+    study = optuna.load_study(study_name=study_name(problem_name), storage=storage_obj)
+    jsonl_index = _load_jsonl_index(all_trials_jsonl_paths(problem_name))
 
     out_dir = out_dir or (results_root() / "exports" / problem_name)
     out_dir.mkdir(parents=True, exist_ok=True)
