@@ -49,7 +49,8 @@ from scripts.tuning.evaluate import (  # noqa: E402
     trial_params_to_solver_factors,
 )
 from scripts.tuning.spaces import get_space  # noqa: E402
-from scripts.tuning.tuner import storage_url_for, study_name  # noqa: E402
+from scripts.tuning.storage import make_storage  # noqa: E402
+from scripts.tuning.tuner import study_name  # noqa: E402
 
 log = logging.getLogger("astromorf.tuning.confirm")
 
@@ -77,9 +78,12 @@ def _ci95(values: list[float]) -> tuple[float, float]:
 
 
 def get_top_k_trials(
-    storage: str, study_nm: str, *, k: int
+    storage: Any, study_nm: str, *, k: int
 ) -> list[optuna.trial.FrozenTrial]:
-    """Return the K best COMPLETE trials from the study, lower-objective first."""
+    """Return the K best COMPLETE trials from the study, lower-objective first.
+
+    *storage* may be a URL or an Optuna storage object.
+    """
     study = optuna.load_study(study_name=study_nm, storage=storage)
     completed = [
         t
@@ -105,9 +109,10 @@ def confirm_top_k(
     failure_penalty: float = 1e6,
 ) -> dict[str, Any]:
     """Re-evaluate the top-K trials with a disjoint seed stream."""
-    storage = storage or storage_url_for(problem_name)
+    storage_obj, spec = make_storage(problem_name, storage_url=storage)
+    log.info("Confirm: using storage backend=%s (%s)", spec.backend, spec.display)
     space = get_space(problem_name)
-    top = get_top_k_trials(storage, study_name(problem_name), k=k)
+    top = get_top_k_trials(storage_obj, study_name(problem_name), k=k)
     log.info("Confirming top-%d for %s (study has %d candidates)",
              k, problem_name, len(top))
 
@@ -185,9 +190,7 @@ def confirm_top_k(
         # Direction metadata so the user can read best_<problem>.json without
         # having to remember whether the problem is min or max.
         try:
-            import optuna  # local import to keep top-of-file clean
-
-            study = optuna.load_study(study_name=study_name(problem_name), storage=storage)
+            study = optuna.load_study(study_name=study_name(problem_name), storage=storage_obj)
             raw_direction = study.user_attrs.get("raw_direction")
             minmax_sign = study.user_attrs.get("raw_minmax_sign")
         except Exception:
