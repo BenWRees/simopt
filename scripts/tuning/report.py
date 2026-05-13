@@ -158,11 +158,13 @@ def _resolve_direction(problem_name: str) -> tuple[str, int]:
     # 1. study user_attrs
     try:
         import optuna  # local import to avoid a hard dep at report time
-        from scripts.tuning.tuner import storage_url_for, study_name
+        from scripts.tuning.storage import make_storage
+        from scripts.tuning.tuner import study_name
 
+        _storage_obj, _spec = make_storage(problem_name)
         study = optuna.load_study(
             study_name=study_name(problem_name),
-            storage=storage_url_for(problem_name),
+            storage=_storage_obj,
         )
         direction = study.user_attrs.get("raw_direction")
         sign = study.user_attrs.get("raw_minmax_sign")
@@ -202,11 +204,13 @@ def _warmstart_trial_aligned(problem_name: str) -> float | None:
     """
     try:
         import optuna
-        from scripts.tuning.tuner import storage_url_for, study_name
+        from scripts.tuning.storage import make_storage
+        from scripts.tuning.tuner import study_name
 
+        _storage_obj, _spec = make_storage(problem_name)
         study = optuna.load_study(
             study_name=study_name(problem_name),
-            storage=storage_url_for(problem_name),
+            storage=_storage_obj,
         )
         ws_params = study.user_attrs.get("warmstart_params")
         trials = [
