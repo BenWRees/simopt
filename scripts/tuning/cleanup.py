@@ -34,6 +34,7 @@ if str(REPO_ROOT) not in sys.path:
 
 import optuna  # noqa: E402
 
+from scripts.tuning.storage import make_storage  # noqa: E402
 from scripts.tuning.tuner import storage_url_for, study_name  # noqa: E402
 
 log = logging.getLogger("astromorf.tuning.cleanup")
@@ -69,16 +70,14 @@ def cleanup_problem(
 
     Returns a counts dict: ``{"running": N, "marked_fail": M, "kept": K}``.
     """
-    storage_url = storage or storage_url_for(problem_name)
+    storage_obj, spec = make_storage(problem_name, storage_url=storage)
     try:
         study = optuna.load_study(
-            study_name=study_name(problem_name), storage=storage_url
+            study_name=study_name(problem_name), storage=storage_obj
         )
     except KeyError:
-        log.warning("No study for %s at %s -- skipping.", problem_name, storage_url)
+        log.warning("No study for %s at %s -- skipping.", problem_name, spec.display)
         return {"running": 0, "marked_fail": 0, "kept": 0}
-
-    storage_obj = study._storage  # underlying RDBStorage
 
     running = [
         t
