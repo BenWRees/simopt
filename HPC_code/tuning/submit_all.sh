@@ -10,11 +10,11 @@ cd "$REPO_ROOT"
 # This is critical for accurate profiling and tuning, since the first run of 
 # each pair is much slower than subsequent
 source ~/miniconda3/bin/activate simopt
-python "$WORKER_PY" --problem SAN-1 --init-only
-python "$WORKER_PY" --problem DYNAMNEWS-1 --init-only
-python "$WORKER_PY" --problem NETWORK-1 --init-only
-python "$WORKER_PY" --problem ROSENBROCK-1 --init-only
-python "$WORKER_PY" --problem PARAMESTI-1 --init-only
+python "$WORKER_PY" --problem SAN-1 --init-only --max-trials 401
+python "$WORKER_PY" --problem DYNAMNEWS-1 --init-only --max-trials 401
+python "$WORKER_PY" --problem NETWORK-1 --init-only --max-trials 401
+python "$WORKER_PY" --problem ROSENBROCK-1 --init-only --max-trials 401
+python "$WORKER_PY" --problem PARAMESTI-1 --init-only --max-trials 161
 
 sbatch "$SCRIPT_DIR/tune_DYNAMNEWS-1.slurm"
 sbatch "$SCRIPT_DIR/tune_SAN-1.slurm"
