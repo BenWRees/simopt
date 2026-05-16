@@ -49,9 +49,12 @@ WALLTIME_S=14220
 
 cd "$REPO_ROOT"
 
+GLOBAL_TRIAL_LIMIT=161
+
 python -m scripts.tuning.worker \
     --problem PARAMESTI-1 \
     --n-trials 24 \
+    --max-trials "$GLOBAL_TRIAL_LIMIT" \
     --walltime-s "$WALLTIME_S" \
     --seed 20250428 \
     --seed-offset "$SLURM_ARRAY_TASK_ID" \
