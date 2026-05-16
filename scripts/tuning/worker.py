@@ -97,6 +97,13 @@ def _parse_args() -> argparse.Namespace:
         help="Trials this worker will attempt before exiting.",
     )
     p.add_argument(
+        "--max-trials", type=int, default=None,
+        help=(
+            "Global trial cap for the shared study. When set, workers stop "
+            "requesting new trials once the study reaches this total."
+        ),
+    )
+    p.add_argument(
         "--walltime-s", type=float, default=None,
         help=(
             "Soft walltime budget in seconds. Worker stops after the next "
@@ -175,7 +182,11 @@ def main() -> None:
             storage or "(env/default)",
         )
         study, spec = build_study(
-            args.problem, storage=storage, seed=args.seed, worker_id=0
+            args.problem,
+            storage=storage,
+            seed=args.seed,
+            worker_id=0,
+            max_trials=args.max_trials,
         )
         n_existing = len(study.get_trials(deepcopy=False))
         log.info(
@@ -200,6 +211,7 @@ def main() -> None:
         storage=storage,
         seed=args.seed,
         worker_id=worker_id,
+        max_trials=args.max_trials,
         budget=args.budget,
         rungs=DEFAULT_RUNGS,
         std_weight=args.std_weight,
