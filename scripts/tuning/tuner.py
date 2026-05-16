@@ -131,6 +131,133 @@ def study_name(problem_name: str) -> str:
     return f"astromorf_tune_{problem_name}_b{DEFAULT_BUDGET}"
 
 
+def _study_trial_count(study: optuna.Study) -> int:
+    return len(study.get_trials(deepcopy=False))
+
+
+def _safe_set_user_attr(trial: optuna.Trial, key: str, value: Any) -> None:
+    from optuna.exceptions import UpdateFinishedTrialError
+
+    try:
+        trial.set_user_attr(key, value)
+    except UpdateFinishedTrialError:
+        log.info(
+            "Trial %s already finished when setting user_attr %s; pruning.",
+            getattr(trial, "number", -1),
+            key,
+        )
+        raise optuna.TrialPruned()
+
+
+def _safe_report(trial: optuna.Trial, step: int, value: float) -> None:
+    from optuna.exceptions import UpdateFinishedTrialError
+
+    try:
+        trial.report(value, step=step)
+    except UpdateFinishedTrialError:
+        log.info(
+            "Trial %s already finished when reporting step %s; pruning.",
+            getattr(trial, "number", -1),
+            step,
+        )
+        raise optuna.TrialPruned()
+
+
+def _cleanup_zombie_running_trials(study: optuna.Study, worker_id: int) -> int:
+    """Mark any RUNNING trials as FAIL to recover from worker crashes.
+
+    When a worker crashes, times out, or is cancelled, its in-flight trials
+    remain in RUNNING state. This function detects and marks them as FAILED
+    so the next worker doesn't get stuck on zombie trials.
+
+    Returns the number of trials cleaned up.
+    """
+    running_trials = study.get_trials(
+        deepcopy=False, states=(optuna.trial.TrialState.RUNNING,)
+    )
+    if not running_trials:
+        return 0
+
+    storage = study._storage
+    cleaned = 0
+    for trial in running_trials:
+        try:
+            # Mark the trial as FAIL with no value (worker crashed before completion)
+            storage.set_trial_state_values(
+                trial_id=trial._trial_id, state=optuna.trial.TrialState.FAIL, values=None
+            )
+            log.warning(
+                "Worker %d: Marked zombie RUNNING trial %d as FAIL (previous worker crashed)",
+                worker_id,
+                trial.number,
+            )
+            cleaned += 1
+        except Exception as exc:
+            log.error(
+                "Worker %d: Failed to clean up zombie RUNNING trial %d: %s",
+                worker_id,
+                trial.number,
+                exc,
+            )
+    if cleaned > 0:
+        log.info(
+            "Worker %d: Cleaned up %d zombie RUNNING trial(s) from previous crashed worker(s)",
+            worker_id,
+            cleaned,
+        )
+    return cleaned
+
+
+def _resolve_global_trial_limit(
+    study: optuna.Study, max_trials: int | None
+) -> int | None:
+    limit = max_trials
+    if limit is None:
+        raw_limit = study.user_attrs.get("global_trial_limit")
+        if raw_limit is None:
+            return None
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            log.warning(
+                "Ignoring invalid global_trial_limit=%r on study %s.",
+                raw_limit,
+                study.study_name,
+            )
+            return None
+    if limit < 0:
+        raise ValueError("global trial limit must be non-negative")
+    return limit
+
+
+def _persist_global_trial_limit(
+    study: optuna.Study, max_trials: int | None
+) -> None:
+    if max_trials is None:
+        return
+    existing = study.user_attrs.get("global_trial_limit")
+    if existing is None:
+        study.set_user_attr("global_trial_limit", int(max_trials))
+        return
+    try:
+        existing_limit = int(existing)
+    except (TypeError, ValueError):
+        log.warning(
+            "Overwriting invalid global_trial_limit=%r on study %s.",
+            existing,
+            study.study_name,
+        )
+        study.set_user_attr("global_trial_limit", int(max_trials))
+        return
+    if existing_limit != int(max_trials):
+        log.warning(
+            "Study %s already has global_trial_limit=%d; keeping existing limit instead of requested %d.",
+            study.study_name,
+            existing_limit,
+            int(max_trials),
+        )
+
+
 def trials_jsonl_path(problem_name: str, worker_id: int | None = None) -> Path:
     """Per-worker JSONL diagnostics path.
 
@@ -215,23 +342,36 @@ def _suggest_param(
 ) -> Any:
     """Suggest a value for *param* via Optuna, applying narrowing."""
     explore = rng_state["rng"].random() < NARROW_EXPLORATION_PROB
-    if isinstance(param, FloatParam):
-        if not explore and param.name in narrowed.floats:
-            lo, hi = narrowed.floats[param.name]
-        else:
-            lo, hi = param.low, param.high
-        log_scale = param.scale == "log" and lo > 0
-        return trial.suggest_float(param.name, lo, hi, log=log_scale)
-    if isinstance(param, IntParam):
-        if not explore and param.name in narrowed.ints:
-            lo, hi = narrowed.ints[param.name]
-        else:
-            lo, hi = param.low, param.high
-        log_scale = param.scale == "log" and lo > 0
-        return trial.suggest_int(param.name, lo, hi, log=log_scale)
-    # Categorical: always use the original choice set (Optuna forbids
-    # dynamic categorical spaces).
-    return trial.suggest_categorical(param.name, list(param.choices))
+    try:
+        if isinstance(param, FloatParam):
+            if not explore and param.name in narrowed.floats:
+                lo, hi = narrowed.floats[param.name]
+            else:
+                lo, hi = param.low, param.high
+            log_scale = param.scale == "log" and lo > 0
+            return trial.suggest_float(param.name, lo, hi, log=log_scale)
+        if isinstance(param, IntParam):
+            if not explore and param.name in narrowed.ints:
+                lo, hi = narrowed.ints[param.name]
+            else:
+                lo, hi = param.low, param.high
+            log_scale = param.scale == "log" and lo > 0
+            return trial.suggest_int(param.name, lo, hi, log=log_scale)
+        # Categorical: always use the original choice set (Optuna forbids
+        # dynamic categorical spaces).
+        return trial.suggest_categorical(param.name, list(param.choices))
+    except Exception as exc:  # pragma: no cover - defensive
+        # Optuna's JournalStorage may raise UpdateFinishedTrialError when
+        # another process finishes the trial concurrently. Convert this
+        # situation into a graceful prune so the worker stops updating the
+        # finished trial and lets other workers continue.
+        from optuna.exceptions import UpdateFinishedTrialError, TrialPruned
+
+        if isinstance(exc, UpdateFinishedTrialError):
+            log.info("Trial %d already finished while suggesting %s; pruning.",
+                     getattr(trial, "number", -1), param.name)
+            raise TrialPruned()
+        raise
 
 
 def _sample_trial_params(
@@ -246,9 +386,9 @@ def _sample_trial_params(
     feasible, q = is_combinatorially_feasible(
         int(params["subspace_dim"]), int(params["polynomial_degree"])
     )
-    trial.set_user_attr("basis_terms", q)
+    _safe_set_user_attr(trial, "basis_terms", q)
     if not feasible:
-        trial.set_user_attr("rejected_combinatorial", True)
+        _safe_set_user_attr(trial, "rejected_combinatorial", True)
         log.info(
             "Trial %d pruned: q=%d > cap (subspace=%s degree=%s)",
             trial.number, q, params["subspace_dim"], params["polynomial_degree"],
@@ -323,11 +463,11 @@ def _build_objective(
 
     def objective(trial: optuna.Trial) -> float:
         narrowed = cache.get(trial)
-        trial.set_user_attr("narrowed_n_trials", narrowed.n_trials_used)
+        _safe_set_user_attr(trial, "narrowed_n_trials", narrowed.n_trials_used)
 
         params = _sample_trial_params(trial, space, narrowed)
-        trial.set_user_attr("hparams", params)
-        trial.set_user_attr("worker_id", worker_id)
+        _safe_set_user_attr(trial, "hparams", params)
+        _safe_set_user_attr(trial, "worker_id", worker_id)
 
         composite_history: list[float] = []
         last_result: EvalResult | None = None
@@ -369,21 +509,21 @@ def _build_objective(
                 }
             )
 
-            trial.report(score, step=rung.step)
+            _safe_report(trial, rung.step, score)
             if trial.should_prune() and rung.step < rungs_t[-1].step:
-                trial.set_user_attr("pruned_at_rung", rung.step)
-                trial.set_user_attr("scores_per_rung", composite_history)
+                _safe_set_user_attr(trial, "pruned_at_rung", rung.step)
+                _safe_set_user_attr(trial, "scores_per_rung", composite_history)
                 raise optuna.TrialPruned()
 
         if last_result is None:
             return float("inf")
-        trial.set_user_attr("scores_per_rung", composite_history)
-        trial.set_user_attr("final_mean_objective", last_result.mean_objective)
-        trial.set_user_attr("final_std_objective", last_result.std_objective)
-        trial.set_user_attr("final_mean_aligned", last_result.mean_aligned)
-        trial.set_user_attr("final_std_aligned", last_result.std_aligned)
-        trial.set_user_attr("failure_count", last_result.failure_count)
-        trial.set_user_attr("diagnostics", last_result.diagnostics_aggregate)
+        _safe_set_user_attr(trial, "scores_per_rung", composite_history)
+        _safe_set_user_attr(trial, "final_mean_objective", last_result.mean_objective)
+        _safe_set_user_attr(trial, "final_std_objective", last_result.std_objective)
+        _safe_set_user_attr(trial, "final_mean_aligned", last_result.mean_aligned)
+        _safe_set_user_attr(trial, "final_std_aligned", last_result.std_aligned)
+        _safe_set_user_attr(trial, "failure_count", last_result.failure_count)
+        _safe_set_user_attr(trial, "diagnostics", last_result.diagnostics_aggregate)
         return composite_history[-1]
 
     # Attach the writer to the closure so the caller can close it on
@@ -402,6 +542,7 @@ def build_study(
     storage: str | None = None,
     seed: int = 20250428,
     worker_id: int = 0,
+    max_trials: int | None = None,
     enqueue_warmstart: bool = True,
     n_startup_trials: int = 24,
 ) -> tuple[optuna.Study, StorageSpec]:
@@ -477,6 +618,8 @@ def build_study(
         except Exception as exc:
             log.warning("Warm-start enqueue raced or failed for %s: %s",
                         problem_name, exc)
+
+    _persist_global_trial_limit(study, max_trials)
     return study, spec
 
 
@@ -509,6 +652,7 @@ def run_worker(
     storage: str | None = None,
     seed: int = 20250428,
     worker_id: int = 0,
+    max_trials: int | None = None,
     budget: int = DEFAULT_BUDGET,
     rungs: Iterable[Rung] = DEFAULT_RUNGS,
     std_weight: float = 0.15,
@@ -531,10 +675,40 @@ def run_worker(
 
     space = get_space(problem_name)
     study, spec = build_study(
-        problem_name, storage=storage, seed=seed, worker_id=worker_id
+        problem_name,
+        storage=storage,
+        seed=seed,
+        worker_id=worker_id,
+        max_trials=max_trials,
     )
     log.info("Worker %d using storage backend=%s (%s) for study %s",
              worker_id, spec.backend, spec.display, study_name(problem_name))
+
+    # Clean up any zombie RUNNING trials from previously crashed workers
+    _cleanup_zombie_running_trials(study, worker_id)
+
+    global_trial_limit = _resolve_global_trial_limit(study, max_trials)
+    if global_trial_limit is not None:
+        current_trials = _study_trial_count(study)
+        if current_trials >= global_trial_limit:
+            log.info(
+                "Worker %d: global trial limit reached for %s (%d/%d); exiting.",
+                worker_id,
+                problem_name,
+                current_trials,
+                global_trial_limit,
+            )
+            return sum(
+                1
+                for t in study.get_trials(deepcopy=False)
+                if t.state
+                in (
+                    optuna.trial.TrialState.COMPLETE,
+                    optuna.trial.TrialState.PRUNED,
+                    optuna.trial.TrialState.FAIL,
+                )
+            )
+        n_trials = min(n_trials, global_trial_limit - current_trials)
 
     objective = _build_objective(
         problem_name=problem_name,
@@ -559,13 +733,60 @@ def run_worker(
 
     callbacks = [_stop_walltime] if deadline else []
     try:
-        study.optimize(
-            objective,
-            n_trials=n_trials,
-            callbacks=callbacks,
-            gc_after_trial=False,
-            catch=(Exception,),
-        )
+        if global_trial_limit is None:
+            try:
+                study.optimize(
+                    objective,
+                    n_trials=n_trials,
+                    callbacks=callbacks,
+                    gc_after_trial=False,
+                    catch=(Exception,),
+                )
+            except ValueError as exc:  # Optuna tell() may raise for raced/FAIL trials
+                msg = str(exc)
+                if "Cannot tell a FAIL trial" in msg:
+                    log.warning(
+                        "Worker %d: transient storage race - tell() failed: %s",
+                        worker_id,
+                        msg,
+                    )
+                else:
+                    raise
+        else:
+            for _ in range(n_trials):
+                if deadline is not None and time.time() >= deadline:
+                    log.info(
+                        "Worker %d: walltime budget exhausted for %s; stopping.",
+                        worker_id,
+                        problem_name,
+                    )
+                    break
+                if _study_trial_count(study) >= global_trial_limit:
+                    log.info(
+                        "Worker %d: global trial limit reached for %s; stopping.",
+                        worker_id,
+                        problem_name,
+                    )
+                    break
+                try:
+                    study.optimize(
+                        objective,
+                        n_trials=1,
+                        callbacks=callbacks,
+                        gc_after_trial=False,
+                        catch=(Exception,),
+                    )
+                except ValueError as exc:  # Optuna tell() may raise for raced/FAIL trials
+                    msg = str(exc)
+                    if "Cannot tell a FAIL trial" in msg:
+                        log.warning(
+                            "Worker %d: transient storage race during single-trial optimize: %s",
+                            worker_id,
+                            msg,
+                        )
+                        # continue the loop and try the next trial
+                        continue
+                    raise
     finally:
         # Close the JSONL handle so its buffer is flushed before exit.
         writer = getattr(objective, "_jsonl_writer", None)
