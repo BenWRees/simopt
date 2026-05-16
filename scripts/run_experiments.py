@@ -115,107 +115,107 @@ SCALABLE_PROBLEMS: set[str] = {
 
 DIMENSION_FACTORS: dict[str, dict[str, Any]] = {
     "DYNAMNEWS-1": {
-        "subspace_dimension": 21,
-        "polynomial_degree": 2,
-        "subproblem_regularisation": 0.0006464984024527326,
-        "ps_sufficient_reduction": 0.3453535178726169,
-        "polynomial basis": PolyBasisType.HERMITE,
-        "lambda_min": 3
+        "subspace_dimension": 5,
+        "polynomial_degree": 4,
+        "subproblem_regularisation": 9.3926741094426e-06,
+        "ps_sufficient_reduction": 0.2558336795133228,
+        "polynomial basis": PolyBasisType.NATURAL,
+        "lambda_min": 6
         },  
     "SAN-1": {
-        "subspace_dimension": 7,
-        "polynomial_degree": 4,
-        "subproblem_regularisation": 0.005235731954822491,
-        "ps_sufficient_reduction": 0.044814517243413884,
-        "polynomial basis": PolyBasisType.CHEBYSHEV,
-        "lambda_min": 20
+        "subspace_dimension": 5,
+        "polynomial_degree": 3,
+        "subproblem_regularisation": 0.16825491384130684,
+        "ps_sufficient_reduction": 0.0014138895951216063,
+        "polynomial basis": PolyBasisType.MONOMIAL,
+        "lambda_min": 3
     },  
     "ROSENBROCK-1": {
-        "subspace_dimension": 13,
-        "polynomial_degree": 2,
-        "subproblem_regularisation": 0.31317227223216765,
-        "ps_sufficient_reduction": 0.28682048799461674,
-        "polynomial basis": PolyBasisType.HERMITE,
-        "lambda_min": 10
+        "subspace_dimension": 4,
+        "polynomial_degree": 1,
+        "subproblem_regularisation": 0.0060325065242926345,
+        "ps_sufficient_reduction": 0.7442442345346906,
+        "polynomial basis": PolyBasisType.MONOMIAL,
+        "lambda_min": 3
     },  
     "NETWORK-1": {
-        "subspace_dimension": 14,
-        "polynomial_degree": 4,
-        "subproblem_regularisation": 0.13066366948000724,
-        "ps_sufficient_reduction": 0.04598983542928581,
-        "polynomial basis": PolyBasisType.CHEBYSHEV,
-        "lambda_min": 10
+        "subspace_dimension": 15,
+        "polynomial_degree": 3,
+        "subproblem_regularisation": 0.03084158653272337,
+        "ps_sufficient_reduction": 0.3290867932917176,
+        "polynomial basis": PolyBasisType.HERMITE,
+        "lambda_min": 5
     },  
     "PARAMESTI-1": {
         "subspace_dimension": 2,
         "polynomial_degree": 2,
-        "subproblem_regularisation": 0.3066113615246805,
-        "ps_sufficient_reduction": 0.41541066443316743,
+        "subproblem_regularisation": 1.8557102009866698e-05,
+        "ps_sufficient_reduction": 0.3489932689036348,
         "polynomial basis": PolyBasisType.CHEBYSHEV,
-        "lambda_min": 24
+        "lambda_min": 9
     },  
 }
 
 cabs_factors = {
     "SAN-1": {
-        "cabs_gamma": 0.8449082140097105,
-        "c_p": 0.07969019139522729,
-        "c_g": 1.1579593887557758,
-        "eps_n": 0.006501348756987459,
-        "eps_a": 0.0124593082912667,
-        "rho_max": 0.61345216477233,
-        "w_safe": 30,
-        "eta_safe": 0.008814972660838518,
-        "c2_est": 2.8109642324287805,
-        "delta_inc_cap": 1
+        "gamma": 0.8979138034117701,
+        "c_p": 0.03301456917974605,
+        "c_g": 0.16995201607841975,
+        "eps_n": 0.03179063701587841,
+        "eps_a": 0.4068921820898637,
+        "rho_max": 0.8800444663591878,
+        "w_safe": 18,
+        "eta_safe": 0.014634217178650853,
+        "c2_est": 1.7323493147599263,
+        "delta_inc_cap": 9
     },
     "NETWORK-1": {
-        "gamma": 0.8647739721818226,
-        "c_p": 0.5403447406081348,
-        "c_g": 0.6186382309199568,
-        "eps_n": 0.3569033022334193,
-        "eps_a": 0.28876757267132447,
-        "rho_max": 0.8396378178805266,
-        "w_safe": 27,
-        "eta_safe": 0.18097364726133436,
-        "c2_est": 1.6545417830400007,
-        "delta_inc_cap": 10
+        "gamma": 0.8418390078321105,
+        "c_p": 0.07087355092318823,
+        "c_g": 0.48689466577922774,
+        "eps_n": 0.22630487327885865,
+        "eps_a": 0.24519398298639256,
+        "rho_max": 0.819061782383329,
+        "w_safe": 18,
+        "eta_safe": 0.026726934654979863,
+        "c2_est": 0.5215160989415044,
+        "delta_inc_cap": 9
     },
     "DYNAMNEWS-1": {
-        "gamma": 0.8882713747475891,
-        "c_p": 0.7830539437435704,
-        "c_g": 0.5263939848751753,
-        "eps_n": 0.02200767828616197,
-        "eps_a": 0.20230061394787233,
-        "rho_max": 0.734774650419498,
-        "w_safe": 13,
-        "eta_safe": 0.006694551397109472,
-        "c2_est": 0.26936813100294055,
-        "delta_inc_cap": 7
+        "gamma": 0.8954811132667856,
+        "c_p": 0.13839900124832283,
+        "c_g": 0.7489076031913247,
+        "eps_n": 0.07123425583685324,
+        "eps_a": 0.061097120714973176,
+        "rho_max": 0.6718703848854164,
+        "w_safe": 15,
+        "eta_safe": 0.09026154430417822,
+        "c2_est": 0.5256829148159191,
+        "delta_inc_cap": 6
       },
     "ROSENBROCK-1": {
-        "gamma": 0.9098939586824685,
-        "c_p": 0.1973877885272195,
-        "c_g": 0.1,
-        "eps_n": 0.42220344679866095,
-        "eps_a": 0.32964509676267084,
-        "rho_max": 0.8666281515218087,
-        "w_safe": 22,
-        "eta_safe": 0.03338028903533324,
-        "c2_est": 1.9994552659144285,
-        "delta_inc_cap": 2
+        "gamma": 0.8025795189265601,
+        "c_p": 0.6499103358279078,
+        "c_g": 0.17461702543318225,
+        "eps_n": 0.34770197082788773,
+        "eps_a": 0.27399808406597553,
+        "rho_max": 0.790042323293872,
+        "w_safe": 28,
+        "eta_safe": 0.036547673050839516,
+        "c2_est": 1.639360264931268,
+        "delta_inc_cap": 6
     },
     "PARAMESTI-1": {
-        "gamma": 0.979512955884361, 
-        "c_p": 0.30349342169591154, 
-        "c_g": 0.5351270268135544, 
-        "eps_n": 0.2529633409514025, 
-        "eps_a": 0.4124055832694226, 
-        "rho_max": 0.7999976436030481, 
-        "w_safe": 18, 
-        "eta_safe": 0.013142969614756325, 
-        "c2_est": 2.2103179506272435, 
-        "delta_inc_cap": 6
+        "gamma": 0.9118442610588682,
+        "c_p": 0.29458464194799866,
+        "c_g": 0.17155413448959728,
+        "eps_n": 0.2783845948216283,
+        "eps_a": 0.07194107335227416,
+        "rho_max": 0.9094183864616052,
+        "w_safe": 18,
+        "eta_safe": 0.11550570058098267,
+        "c2_est": 0.5658615715072871,
+        "delta_inc_cap": 3
      },
 }
 
@@ -225,7 +225,7 @@ SOLVER_FIXED_FACTORS: dict[str, dict[str, Any]] = {
         "eta_1": 0.1,
         "eta_2": 0.8,
         "gamma_1": 2.5,
-        "gamma_2": 2.0,
+        "gamma_2": 1.2,
         "gamma_3": 0.5,
         },
     "ADAM": {"crn_across_solns": False,
@@ -246,13 +246,13 @@ SOLVER_FIXED_FACTORS: dict[str, dict[str, Any]] = {
                "eta_0": 0.1,
                "eta_1": 0.8,
                "gamma_1": 0.5, 
-               "gamma_2": 2.0, 
+               "gamma_2": 1.2, 
                "lambda_2": 1.65
                },
     "ASTRODF": {"crn_across_solns": False,
                 "eta_1": 0.1, 
                 "eta_2": 0.8,
-                "gamma_1": 2.0,
+                "gamma_1": 1.2,
                 "gamma_2": 0.5,
                 "lambda_min": 10, 
                 "ps_sufficient_reduction": 0.16
@@ -419,47 +419,31 @@ def execute_pair(
     problem = build_problem(pair.problem, budget)
     solver = build_solver(pair.solver)
 
-    solver.factors["crn_across_solns"] = crn
+    # Persist CRN flag via the solver's pydantic config
+    solver.config = solver.config.model_copy(update={"crn_across_solns": crn})
 
-    if pair.solver == "ASTROMORF" : 
-        solver.factors[
-            "initial subspace dimension"
-            ] = DIMENSION_FACTORS[pair.problem][
+    if pair.solver == "ASTROMoRF":
+        # Apply ASTROMoRF-specific configuration using model_copy(update=...)
+        update_dict = {
+            "initial subspace dimension": DIMENSION_FACTORS[pair.problem][
                 "subspace_dimension"
-                ]
-        
-        solver.factors[
-            "polynomial degree"
-            ] = DIMENSION_FACTORS[pair.problem][
+            ],
+            "polynomial degree": DIMENSION_FACTORS[pair.problem][
                 "polynomial_degree"
-                ]
-        
-        solver.factors[
-            "subproblem_regularisation"
-            ] = DIMENSION_FACTORS[pair.problem][
+            ],
+            "subproblem_regularisation": DIMENSION_FACTORS[pair.problem][
                 "subproblem_regularisation"
-                ]
-        
-        solver.factors[
-            "ps_sufficient_reduction"
-            ] = DIMENSION_FACTORS[pair.problem][
+            ],
+            "ps_sufficient_reduction": DIMENSION_FACTORS[pair.problem][
                 "ps_sufficient_reduction"
-                ]
-        solver.factors[
-            "polynomial basis"
-            ] = DIMENSION_FACTORS[pair.problem][
+            ],
+            "polynomial basis": DIMENSION_FACTORS[pair.problem][
                 "polynomial basis"
-                ]
-        solver.factors[
-            "lambda_min"
-            ] = DIMENSION_FACTORS[pair.problem][
-                "lambda_min"
-                ]
-
-        
-        
-        #add cabs factors to solver 
-        solver.factors.update(cabs_factors[pair.problem])
+            ],
+            "lambda_min": DIMENSION_FACTORS[pair.problem]["lambda_min"],
+            "CABS factors": cabs_factors.get(pair.problem, solver.config.cabs_factors),
+        }
+        solver.config = solver.config.model_copy(update=update_dict)
         
 
     ps = ProblemSolver(
@@ -481,7 +465,7 @@ def execute_pair(
         with joblib.parallel_backend("loky", n_jobs=max(1, n_jobs)):
             t0 = time.perf_counter()
             ps.run(n_macroreps=n_macroreps, n_jobs=max(1, n_jobs))
-            ps.post_replicate(n_postreps=n_postreps)
+            ps.post_replicate(n_postreps=n_postreps, crn_across_budget=False, crn_across_macroreps=False)
             elapsed = time.perf_counter() - t0
     finally:
         if prev_loky is None:
@@ -662,17 +646,19 @@ def write_slurm_script(
     mem_gb = cli_args["mem_gb"]
     crn_flag = " \\\n+    --crn" if cli_args.get("crn") else ""
 
+    home_logs = Path.home() / "slurm_logs"
+    home_logs_str = str(home_logs)
     body = f"""#!/bin/bash
 #SBATCH --job-name=simopt_bench
 #SBATCH --array=0-{k - 1}
 #SBATCH --cpus-per-task={cpus_per_task}
 #SBATCH --mem={mem_gb}G
 #SBATCH --time={time_str}
-#SBATCH --output=slurm_logs/%x_%A_%a.out
-#SBATCH --error=slurm_logs/%x_%A_%a.err
+#SBATCH --output={home_logs_str}/%x_%A_%a.out
+#SBATCH --error={home_logs_str}/%x_%A_%a.err
 
 set -euo pipefail
-mkdir -p slurm_logs
+mkdir -p {home_logs_str}
 
 # Cap oversubscription: one BLAS thread per joblib worker.
 export OMP_NUM_THREADS=1
@@ -859,35 +845,33 @@ def main() -> None:
         raise SystemExit("No pairs match the filters.")
 
     if args.slurm_mode:
-        all_ps = all_pairs()
         task_id = int(os.environ.get("SLURM_ARRAY_TASK_ID", "0"))
-        if not 0 <= task_id < len(all_ps):
+        if not 0 <= task_id < len(pairs):
             raise SystemExit(
-                f"SLURM_ARRAY_TASK_ID {task_id} out of range [0, {len(all_ps)})"
+                f"SLURM_ARRAY_TASK_ID {task_id} out of range [0, {len(pairs)})"
             )
-        my_pairs = [all_ps[task_id]]
+        my_pairs = [pairs[task_id]]
         print(f"[slurm] task {task_id}: {my_pairs[0].solver} on {my_pairs[0].problem}")
     else:
-        my_pairs = pairs
         # SAFETY: refuse to silently run all 30 pairs locally. Either filter,
         # or pass --dry-run, or set SIMOPT_ALLOW_FULL_LOCAL=1.
         if (
-            len(my_pairs) > 3
+            len(pairs) > 3
             and not args.dry_run
             and os.environ.get("SIMOPT_ALLOW_FULL_LOCAL") != "1"
         ):
             raise SystemExit(
-                f"Refusing to run {len(my_pairs)} pairs locally. "
+                f"Refusing to run {len(pairs)} pairs locally. "
                 "Use --slurm-mode on HPC, or --only-problem/--only-solver to "
                 "narrow, or set SIMOPT_ALLOW_FULL_LOCAL=1 to override. "
                 "Recommend running --dry-run first."
             )
 
     if args.dry_run:
-        print(f"[dry-run] {len(my_pairs)} pair(s) would run "
+        print(f"[dry-run] {len(pairs)} pair(s) would run "
               f"(n_macroreps={args.n_macroreps}, n_postreps={n_postreps}, "
               f"budget={args.budget}, n_jobs={args.cpus_per_task}):")
-        for pair in my_pairs:
+        for pair in pairs:
             target = pair_pickle_path(output_dir, pair)
             status = "skip (exists)" if target.exists() else "run"
             print(f"  [{status}] {pair.solver:12s} on {pair.problem:14s} -> {target}")
@@ -901,7 +885,7 @@ def main() -> None:
             "Consider n_jobs=1 unless you know your machine has the RAM."
         )
 
-    for pair in my_pairs:
+    for pair in pairs:
         execute_pair(
             pair,
             n_macroreps=args.n_macroreps,
