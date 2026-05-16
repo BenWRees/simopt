@@ -310,14 +310,14 @@ class CABSSelector:
         at accepted steps
 
     Decomposition:
-        rho(d) = A[d] / N[d]              (acceptance probability)
+        rho(d) = A[d] / max(N[d], eps_n)             (acceptance probability)
         g(d) = G[d] / max(A[d], eps_a)   (expected gain given acceptance)
 
     Decomposed UCB index per §4:
 
         I_k^{dec}(d) =
-            ( rho·g + rho beta_g + g beta_p ) / (2d + 1)
-          where beta_p = c_p  sqrt(log(sum N) / N[d]),
+            (p_hat * g_hat) / cost_pen + p_hat * beta_g + g_hat * beta_p
+          where beta_p = c_p  sqrt(log(sum N) / max(N[d], eps_n))
                 beta_g = c_g  sqrt(log(sum N) / max(A[d], eps_a))
 
     Uses a cold-arm optimistic-under-uncertainty prior.
