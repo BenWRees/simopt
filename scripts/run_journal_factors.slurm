@@ -33,7 +33,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=10
 #SBATCH --mem-per-cpu=4G
-#SBATCH --time=06:00:00
+#SBATCH --time=12:00:00
 # Default array size assumes problem dim >= 8 and the default sweep levels:
 #   N_SUBSPACE=8 (dims 1..8), N_BASIS=9 (all PolyBasisType), N_REG=4.
 # Total = 8 + 9 + 4 = 21.  Adjust the upper bound below if you change sweeps
@@ -43,8 +43,8 @@
 #   tail -n +2 /tmp/check/design_matrix_subspace_*.csv | wc -l
 # (repeat for --study basis and --study regularisation).
 #SBATCH --array=0-20
-#SBATCH --output=logs_factors/slurm_%A_%a.out
-#SBATCH --error=logs_factors/slurm_%A_%a.err
+#SBATCH --output=/home/br7g18/logs_factors/slurm_%A_%a.out
+#SBATCH --error=/home/br7g18/logs_factors/slurm_%A_%a.err
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=$USER@soton.ac.uk
 
@@ -53,30 +53,40 @@ set -euo pipefail
 # ── Experiment configuration ─────────────────────────────────────────────────
 # Override at submission time, e.g.:
 #   sbatch --export=ALL,PROBLEM=NETWORK-1,DIM=14,BUDGET=8000 scripts/run_journal_factors.slurm
-PROBLEM=${PROBLEM:-SAN-1}
-DIM=${DIM:-20}
-BUDGET=${BUDGET:-5000}
-N_MACROREPS=${N_MACROREPS:-10}
-N_POSTREPS=${N_POSTREPS:-100}
+PROBLEM=${PROBLEM:-SAN-1,ROSENBROCK-1,DYNAMNEWS-1,NETWORK-1}
+DIM=${DIM:-100}
+BUDGET=${BUDGET:-10000}
+N_MACROREPS=${N_MACROREPS:-30}
+N_POSTREPS=${N_POSTREPS:-600}
 
 # Per-study design-grid sizes.  These MUST match the SBATCH --array upper
 # bound above (sum - 1).  See the comment block on the array directive
 # for how to recompute them if you change sweeps.
-N_SUBSPACE=${N_SUBSPACE:-8}
-N_BASIS=${N_BASIS:-9}
-N_REG=${N_REG:-4}
+N_SUBSPACE=${N_SUBSPACE:-20}
+N_BASIS=${N_BASIS:-20}
+N_REG=${N_REG:-20}
 
-OUTPUT_ROOT=${OUTPUT_ROOT:-experiments/journal}
+OUTPUT_ROOT=${OUTPUT_ROOT:-$HOME/results/sensitivity}
 
 # ── Environment ──────────────────────────────────────────────────────────────
-source "$HOME/miniconda3/bin/activate" simopt
+# SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# # Compute REPO_ROOT: prefer the submit dir only if it's set and writable,
+# # otherwise fall back to the script's parent directory (repo root).
+# if [ -n "${SLURM_SUBMIT_DIR:-}" ] && [ -w "${SLURM_SUBMIT_DIR}" ]; then
+#     REPO_ROOT="$(cd "${SLURM_SUBMIT_DIR}/.." && pwd)"
+# else
+#     REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# fi
+# cd "$REPO_ROOT"
 
-# Resolve the repository root (scripts/ lives one level below it).
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$REPO_ROOT"
+# echo "SCRIPT_DIR=${SCRIPT_DIR}"
+# echo "SLURM_SUBMIT_DIR=${SLURM_SUBMIT_DIR:-<unset>}"
+# echo "REPO_ROOT=${REPO_ROOT}"
 
-mkdir -p logs_factors
-mkdir -p subspace basis regularisation
+source ~/miniconda3/bin/activate simopt
+
+mkdir -p "$HOME/logs_factors" || true
+mkdir -p "$HOME/results/sensitivity/subspace" "$HOME/results/sensitivity/basis" "$HOME/results/sensitivity/regularisation" || true
 
 # Cap thread/process oversubscription to match cpus-per-task.
 export OMP_NUM_THREADS=1
@@ -103,20 +113,21 @@ else
     exit 1
 fi
 
-OUT_DIR="$OUTPUT_ROOT/$STUDY"
+OUTPUT_DIR="${OUTPUT_DIR:-$HOME/results/sensitivity}"
+mkdir -p "$OUTPUT_DIR"
 
 echo "[$(date -u +%FT%TZ)] task=$TASK_ID study=$STUDY local_id=$LOCAL_ID problem=$PROBLEM dim=$DIM budget=$BUDGET"
 
 # `--no-aggregate` keeps each worker independent — aggregation happens once
 # after the whole array finishes (see the post-array commands at the top).
-python demo/journal_factors_test.py \
+python "$HOME/simopt/scripts/journal_factors_test.py" \
     --study "$STUDY" \
     --problem "$PROBLEM" \
     --dim "$DIM" \
     --budget "$BUDGET" \
     --n-macroreps "$N_MACROREPS" \
     --n-postreps "$N_POSTREPS" \
-    --output-dir "$OUT_DIR" \
+    --output-dir "$OUTPUT_DIR" \
     --task-id "$LOCAL_ID" \
     --no-aggregate
 
