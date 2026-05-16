@@ -133,6 +133,7 @@ cd "$REPO_ROOT"
 python -m scripts.tuning.worker \\
     --problem {problem} \\
     --n-trials {n_trials_per_worker} \\
+    --max-trials {global_trial_limit} \\
     --walltime-s "$WALLTIME_S" \\
     --seed 20250428 \\
     --worker-id "$SLURM_ARRAY_TASK_ID" \\
@@ -166,6 +167,7 @@ def _render(problem: str, args: argparse.Namespace) -> str:
     n_trials_per_worker = int(args.n_trials_per_worker or cfg["n_trials_per_worker"])
     cpus_per_task = int(args.cpus_per_task or cfg["cpus_per_task"])
     time_str = args.time or str(cfg["time"])
+    global_trial_limit = int(cfg["array_size"]) * n_trials_per_worker + 1
     walltime_s = max(60, _time_to_seconds(time_str) - 180)
     maxconcurrent = f"%{args.max_concurrent}" if args.max_concurrent else ""
 
@@ -193,6 +195,7 @@ def _render(problem: str, args: argparse.Namespace) -> str:
         walltime_s=walltime_s,
         n_trials_per_worker=n_trials_per_worker,
         cpus_per_task=cpus_per_task,
+        global_trial_limit=global_trial_limit,
     )
 
 
