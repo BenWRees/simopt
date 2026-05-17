@@ -1,94 +1,101 @@
 #!/bin/bash
 # =============================================================================
-# Journal sensitivity studies for ASTROMoRF — all three studies in one array.
+# Journal-grade sensitivity studies for ASTROMoRF — manifest-driven SLURM array.
 #
-# Each array task runs ONE design point for ONE study:
-#   * tasks [0, N_SUBSPACE)                                  -> subspace study
-#   * tasks [N_SUBSPACE, N_SUBSPACE + N_BASIS)               -> basis study
-#   * tasks [..., N_SUBSPACE + N_BASIS + N_REGULARISATION)   -> regularisation
+#   manifest.json   ──►   SLURM array task   ──►   $OUTPUT_ROOT/runs/.../
 #
-# - subspace study      = NON-adaptive ASTROMoRF (fixed subspace dim)
-# - basis study         = ADAPTIVE ASTROMoRF (CABS on, settings from registry)
-# - regularisation study = ADAPTIVE ASTROMoRF (CABS on, settings from registry)
+# This script is deliberately ignorant of study structure, factor levels, and
+# task counts.  It reads them all from the manifest produced beforehand by:
 #
-# Per-design-point pickles are written under
-#   $OUTPUT_ROOT/<study>/
-# These are everything you need to copy back locally for plotting:
-#   <study>/<design_point_id>.pickle               # raw experiment object
-#   <study>/<problem>_<study>_..._POSTREPS.pickle  # post-replicated curves
-#   <study>/<design_point_id>.txt                  # plain-text summary
+#     python scripts/journal_generate_manifest.py \
+#         --output-root $OUTPUT_ROOT --problems ... --dims ... \
+#         --budget ... --n-macroreps ... --n-postreps ...
 #
-# After the array completes, run the aggregation locally (or on the head node)
-# to produce CSV summaries:
+# Then submit the array sized exactly to the manifest:
 #
-#   for s in subspace basis regularisation; do
-#     python demo/journal_factors_test.py \
-#       --study $s --problem $PROBLEM --dim $DIM --budget $BUDGET \
-#       --output-dir experiments/journal/$s --aggregate-only
-#   done
+#     TOTAL=$(python scripts/journal_dispatch.py "$MANIFEST" 0 \
+#                | awk -F= '/^TOTAL_TASKS/{print $2}' | tr -d "'")
+#     sbatch --export=ALL,MANIFEST=$MANIFEST,OUTPUT_ROOT=$OUTPUT_ROOT \
+#            --array=0-$((TOTAL-1))%64 \
+#            scripts/run_journal_factors.slurm
+#
+# Required environment (exported via --export=ALL,...):
+#     MANIFEST       Absolute path to manifest.json
+#     OUTPUT_ROOT    Absolute path to the journal output root
+#     REPO_ROOT      Absolute path to the simopt git checkout  (optional;
+#                    defaults to $SLURM_SUBMIT_DIR)
+#     CONDA_ENV      Conda env name                            (default: simopt)
+#
+# Each array task is fully restart-safe:
+#   • work happens in $SLURM_TMPDIR/<dpid>
+#   • on success, the work dir is atomically rsync'd to OUTPUT_ROOT
+#   • a `.done` sentinel makes resubmission idempotent
+#   • SIGUSR1 (sent 120 s before the wall-clock limit) triggers a clean exit
+#     so SLURM can requeue the task; partial state is checkpointed by
+#     ProblemSolver.run_resumable
 # =============================================================================
-#SBATCH --job-name=astromorf_journal_factors
+#SBATCH --job-name=astromorf_journal
 #SBATCH --partition=batch
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=10
-#SBATCH --mem-per-cpu=4G
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=24G
 #SBATCH --time=12:00:00
-# Default array size assumes problem dim >= 8 and the default sweep levels:
-#   N_SUBSPACE=8 (dims 1..8), N_BASIS=9 (all PolyBasisType), N_REG=4.
-# Total = 8 + 9 + 4 = 21.  Adjust the upper bound below if you change sweeps
-# or the problem dimension is < 8.  To re-derive sizes for your configuration:
-#   python demo/journal_factors_test.py --study subspace --problem $PROBLEM \
-#     --dim $DIM --budget $BUDGET --generate-csv --output-dir /tmp/check
-#   tail -n +2 /tmp/check/design_matrix_subspace_*.csv | wc -l
-# (repeat for --study basis and --study regularisation).
-#SBATCH --array=0-20
-#SBATCH --output=/home/br7g18/logs_factors/slurm_%A_%a.out
-#SBATCH --error=/home/br7g18/logs_factors/slurm_%A_%a.err
-#SBATCH --mail-type=BEGIN,END,FAIL
-#SBATCH --mail-user=$USER@soton.ac.uk
+#SBATCH --output=logs/%x/%A/task_%a.out
+#SBATCH --error=logs/%x/%A/task_%a.err
+#SBATCH --mail-type=FAIL,ARRAY_TASKS
+#SBATCH --requeue
+#SBATCH --signal=B:USR1@120
 
-set -euo pipefail
+set -Eeuo pipefail
+shopt -s inherit_errexit
 
-# ── Experiment configuration ─────────────────────────────────────────────────
-# Override at submission time, e.g.:
-#   sbatch --export=ALL,PROBLEM=NETWORK-1,DIM=14,BUDGET=8000 scripts/run_journal_factors.slurm
-PROBLEM=${PROBLEM:-SAN-1,ROSENBROCK-1,DYNAMNEWS-1,NETWORK-1}
-DIM=${DIM:-100}
-BUDGET=${BUDGET:-10000}
-N_MACROREPS=${N_MACROREPS:-30}
-N_POSTREPS=${N_POSTREPS:-600}
+# ── Required environment ────────────────────────────────────────────────────
+: "${MANIFEST:?MANIFEST=<path to manifest.json> must be set via --export}"
+: "${OUTPUT_ROOT:?OUTPUT_ROOT=<absolute path> must be set via --export}"
+REPO_ROOT="${REPO_ROOT:-${SLURM_SUBMIT_DIR:-$PWD}}"
+CONDA_ENV="${CONDA_ENV:-simopt}"
 
-# Per-study design-grid sizes.  These MUST match the SBATCH --array upper
-# bound above (sum - 1).  See the comment block on the array directive
-# for how to recompute them if you change sweeps.
-N_SUBSPACE=${N_SUBSPACE:-20}
-N_BASIS=${N_BASIS:-20}
-N_REG=${N_REG:-20}
+if [ ! -f "$MANIFEST" ]; then
+    echo "FATAL: manifest not found: $MANIFEST" >&2
+    exit 64
+fi
 
-OUTPUT_ROOT=${OUTPUT_ROOT:-$HOME/results/sensitivity}
+# ── Decode this task from the manifest (no shell arithmetic, no constants) ──
+# journal_dispatch.py is dependency-light (stdlib only) so this is fast and
+# robust even if simopt has an import error.
+DISPATCH_OUT="$(python "$REPO_ROOT/scripts/journal_dispatch.py" \
+                  "$MANIFEST" "$SLURM_ARRAY_TASK_ID")"
+eval "$DISPATCH_OUT"
 
-# ── Environment ──────────────────────────────────────────────────────────────
-# SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# # Compute REPO_ROOT: prefer the submit dir only if it's set and writable,
-# # otherwise fall back to the script's parent directory (repo root).
-# if [ -n "${SLURM_SUBMIT_DIR:-}" ] && [ -w "${SLURM_SUBMIT_DIR}" ]; then
-#     REPO_ROOT="$(cd "${SLURM_SUBMIT_DIR}/.." && pwd)"
-# else
-#     REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-# fi
-# cd "$REPO_ROOT"
+echo "================================================================="
+echo "  task_id        : $TASK_ID / $TOTAL_TASKS"
+echo "  problem        : $PROBLEM (dim $PROBLEM_DIM)"
+echo "  study          : $STUDY"
+echo "  design point   : $DESIGN_POINT_ID"
+echo "  budget         : $BUDGET"
+echo "  n_macroreps    : $N_MACROREPS"
+echo "  n_postreps     : $N_POSTREPS"
+echo "  manifest sha   : $MANIFEST_SHA256"
+echo "  final output   : $OUTPUT_ROOT/$OUTPUT_SUBDIR"
+echo "================================================================="
 
-# echo "SCRIPT_DIR=${SCRIPT_DIR}"
-# echo "SLURM_SUBMIT_DIR=${SLURM_SUBMIT_DIR:-<unset>}"
-# echo "REPO_ROOT=${REPO_ROOT}"
+FINAL_DIR="$OUTPUT_ROOT/$OUTPUT_SUBDIR"
+mkdir -p "$FINAL_DIR"
 
-source ~/miniconda3/bin/activate simopt
+# ── Idempotency: skip if already completed ──────────────────────────────────
+if [ -f "$FINAL_DIR/.done" ]; then
+    echo "[$(date -u +%FT%TZ)] task already complete — skipping."
+    exit 0
+fi
 
-mkdir -p "$HOME/logs_factors" || true
-mkdir -p "$HOME/results/sensitivity/subspace" "$HOME/results/sensitivity/basis" "$HOME/results/sensitivity/regularisation" || true
+# ── Conda env ───────────────────────────────────────────────────────────────
+CONDA_BASE="$(conda info --base 2>/dev/null || echo "$HOME/miniconda3")"
+# shellcheck disable=SC1091
+source "$CONDA_BASE/etc/profile.d/conda.sh"
+conda activate "$CONDA_ENV"
 
-# Cap thread/process oversubscription to match cpus-per-task.
+# Pin thread counts so per-task multiprocessing does not oversubscribe cores.
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
@@ -96,39 +103,54 @@ export NUMEXPR_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 export LOKY_MAX_CPU_COUNT="${SLURM_CPUS_PER_TASK:-1}"
 
-# ── Dispatch: SLURM_ARRAY_TASK_ID -> (study, local_task_id) ──────────────────
-TASK_ID=${SLURM_ARRAY_TASK_ID:-0}
+# ── Scratch work directory + atomic rsync-back ──────────────────────────────
+TMP_ROOT="${SLURM_TMPDIR:-/tmp}"
+WORK_DIR="$TMP_ROOT/journal_${SLURM_JOB_ID:-na}_${SLURM_ARRAY_TASK_ID:-na}"
+mkdir -p "$WORK_DIR"
 
-if   [ "$TASK_ID" -lt "$N_SUBSPACE" ]; then
-    STUDY=subspace
-    LOCAL_ID=$TASK_ID
-elif [ "$TASK_ID" -lt "$((N_SUBSPACE + N_BASIS))" ]; then
-    STUDY=basis
-    LOCAL_ID=$((TASK_ID - N_SUBSPACE))
-elif [ "$TASK_ID" -lt "$((N_SUBSPACE + N_BASIS + N_REG))" ]; then
-    STUDY=regularisation
-    LOCAL_ID=$((TASK_ID - N_SUBSPACE - N_BASIS))
-else
-    echo "Task $TASK_ID exceeds total design points $((N_SUBSPACE + N_BASIS + N_REG))" >&2
-    exit 1
-fi
+cleanup() {
+    local exit_code=$?
+    # Always try to rsync whatever exists — even on partial failure we want
+    # the progress.json / provenance.json for the post-mortem.  --partial keeps
+    # half-written files visible; rsync's rename-then-replace gives us atomic
+    # publication for completed files.
+    if [ -d "$WORK_DIR" ]; then
+        rsync -a --partial --human-readable "$WORK_DIR"/ "$FINAL_DIR"/ || true
+    fi
+    rm -rf "$WORK_DIR" || true
+    exit "$exit_code"
+}
+trap cleanup EXIT
+# SIGUSR1: SLURM warns us 120 s before the wall-clock limit; exit 99 so the
+# job is requeued.  ProblemSolver.run_resumable installs its own SIGTERM
+# handler that checkpoints the partial run to result.resume.pickle.
+handle_usr1() {
+    echo "[$(date -u +%FT%TZ)] received SIGUSR1 — preparing requeue."
+    exit 99
+}
+trap handle_usr1 USR1
 
-OUTPUT_DIR="${OUTPUT_DIR:-$HOME/results/sensitivity}"
-mkdir -p "$OUTPUT_DIR"
+# ── Provenance (env snapshot for post-mortem) ───────────────────────────────
+env | sort > "$WORK_DIR/env.txt"
+{
+    echo "job_id=$SLURM_JOB_ID"
+    echo "array_job_id=$SLURM_ARRAY_JOB_ID"
+    echo "array_task_id=$SLURM_ARRAY_TASK_ID"
+    echo "node=$(hostname)"
+    echo "started_at=$(date -u +%FT%TZ)"
+    echo "manifest_sha256=$MANIFEST_SHA256"
+} > "$WORK_DIR/slurm.txt"
 
-echo "[$(date -u +%FT%TZ)] task=$TASK_ID study=$STUDY local_id=$LOCAL_ID problem=$PROBLEM dim=$DIM budget=$BUDGET"
+cd "$REPO_ROOT"
 
-# `--no-aggregate` keeps each worker independent — aggregation happens once
-# after the whole array finishes (see the post-array commands at the top).
-python "$HOME/simopt/scripts/journal_factors_test.py" \
-    --study "$STUDY" \
-    --problem "$PROBLEM" \
-    --dim "$DIM" \
-    --budget "$BUDGET" \
-    --n-macroreps "$N_MACROREPS" \
-    --n-postreps "$N_POSTREPS" \
-    --output-dir "$OUTPUT_DIR" \
-    --task-id "$LOCAL_ID" \
-    --no-aggregate
+# ── Execute exactly one design point ────────────────────────────────────────
+# `srun` gives us correct cgroup accounting on preemption/cancellation and
+# ensures the inner process inherits the task's CPU/memory limits.
+srun --kill-on-bad-exit=1 \
+    python -u "$REPO_ROOT/scripts/journal_factors_test.py" run-task \
+        --manifest "$MANIFEST" \
+        --task-id  "$SLURM_ARRAY_TASK_ID" \
+        --work-dir "$WORK_DIR" \
+        --n-jobs   "${SLURM_CPUS_PER_TASK:-1}"
 
-echo "[$(date -u +%FT%TZ)] task=$TASK_ID complete"
+echo "[$(date -u +%FT%TZ)] task $SLURM_ARRAY_TASK_ID completed cleanly."
