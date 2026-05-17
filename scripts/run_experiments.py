@@ -845,13 +845,24 @@ def main() -> None:
         raise SystemExit("No pairs match the filters.")
 
     if args.slurm_mode:
-        task_id = int(os.environ.get("SLURM_ARRAY_TASK_ID", "0"))
+        task_id_str = os.environ.get("SLURM_ARRAY_TASK_ID")
+        if task_id_str is None:
+            raise SystemExit(
+                "--slurm-mode requires SLURM_ARRAY_TASK_ID to be set."
+            )
+        task_id = int(task_id_str)
         if not 0 <= task_id < len(pairs):
             raise SystemExit(
                 f"SLURM_ARRAY_TASK_ID {task_id} out of range [0, {len(pairs)})"
             )
-        my_pairs = [pairs[task_id]]
-        print(f"[slurm] task {task_id}: {my_pairs[0].solver} on {my_pairs[0].problem}")
+        # One array task == one (problem, solver). Replace the full grid with
+        # just the assigned pair so the execution loop below runs exactly once
+        # and the process exits immediately after persistence.
+        pairs = [pairs[task_id]]
+        print(
+            f"[slurm] task {task_id}: {pairs[0].solver} on {pairs[0].problem}",
+            flush=True,
+        )
     else:
         # SAFETY: refuse to silently run all 30 pairs locally. Either filter,
         # or pass --dry-run, or set SIMOPT_ALLOW_FULL_LOCAL=1.
@@ -894,6 +905,15 @@ def main() -> None:
             output_dir=output_dir,
             n_jobs=n_jobs,
             crn=args.crn
+        )
+
+    if args.slurm_mode:
+        task_id = int(os.environ.get("SLURM_ARRAY_TASK_ID", "-1"))
+        pair = pairs[0]
+        print(
+            f"[slurm] task {task_id}: finished {pair.solver} on {pair.problem}; "
+            "exiting.",
+            flush=True,
         )
 
 
