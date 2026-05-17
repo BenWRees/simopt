@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=10
+#SBATCH --cpus-per-task=30
 #SBATCH --mem=8G
 #SBATCH --time=04:00:00
 #SBATCH --output=/home/br7g18/slurm_logs_crn/%x_%A_%a.out
@@ -43,7 +43,7 @@ export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
-export LOKY_MAX_CPU_COUNT="${SLURM_CPUS_PER_TASK:-10}"
+export LOKY_MAX_CPU_COUNT="${SLURM_CPUS_PER_TASK:-30}"
 
 # Activate environment (edit per cluster):
 source ~/miniconda3/bin/activate simopt
@@ -56,6 +56,6 @@ python "$HOME/simopt/scripts/run_experiments.py" \
     --n-macroreps "${N_MACROREPS:-30}" \
     --budget "${BUDGET:-10000}" \
     --output-dir "$OUTPUT_DIR" \
-    --cpus-per-task "${SLURM_CPUS_PER_TASK:-10}" \
+    --cpus-per-task "${SLURM_CPUS_PER_TASK:-30}" \
     --crn \
     --only-solver "ASTROMORF" 
