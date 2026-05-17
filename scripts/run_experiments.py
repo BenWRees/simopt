@@ -751,7 +751,7 @@ def main() -> None:
     )
     parser.add_argument("--generate-slurm", type=str, default="")
     parser.add_argument(
-        "--cpus-per-task", type=int, default=1,
+        "--cpus-per-task", type=int, default=int(os.environ.get("SLURM_CPUS_PER_TASK", "1")),
         help="Cap on joblib parallelism inside a task. Default 1 (SAFE). "
         "Raise on HPC nodes only; multi-process + dim=100 problems can OOM.",
     )
