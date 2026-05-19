@@ -5,14 +5,12 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.ticker import MaxNLocator
 
 import simopt.curve_utils as curve_utils
 from mrg32k3a.mrg32k3a import MRG32k3a
 from simopt.curve import Curve
 from simopt.experiment import ProblemSolver
 from simopt.plot_type import PlotType
-from simopt.utils import make_nonzero
 
 from .utils import (
     plot_bootstrap_conf_ints,
@@ -57,143 +55,119 @@ def _print_max_halfwidth_caption(
     )
 
 
+def _iteration_fraction_for_budgets(
+    recommendation_budgets: list[float],
+    budget_history: list[float],
+    iterations: list[float],
+) -> list[float]:
+    """Map each recommendation budget to a fraction-of-iterations x value.
+
+    For every recommendation budget ``B``, we look up the iteration of the
+    algorithm at which the cumulative simulation budget first reached ``B``.
+    The resulting iteration numbers are then rescaled to ``[0, 1]`` using
+
+        ``frac = (iteration - min_iter) / (max_iter - min_iter)``
+
+    so the first logged iteration maps to ``0`` and the last to ``1``. This
+    is the iteration-grid analogue of ``budget / total_budget`` used by
+    ``plot_progress_curves``.
+    """
+    from bisect import bisect_left
+
+    if not iterations:
+        return [0.0 for _ in recommendation_budgets]
+    bh = list(budget_history)
+    iters = list(iterations)
+    n = len(bh)
+    i_min = min(iters)
+    i_max = max(iters)
+    span = i_max - i_min
+
+    iter_xs: list[float] = []
+    for b in recommendation_budgets:
+        idx = bisect_left(bh, b)
+        if idx >= n:
+            idx = n - 1
+        iter_xs.append(float(iters[idx]))
+    if span <= 0:
+        return [0.0 for _ in iter_xs]
+    return [(i - i_min) / span for i in iter_xs]
+
+
 def _fn_estimates_to_curves(
-    fn_estimates_list: list[list[float]],
-    normalize: bool = False,
+    experiment: ProblemSolver, *, normalize: bool
 ) -> list[Curve]:
-    """Convert function estimates lists to Curve objects.
+    """Build per-macroreplication curves for `plot_fn_estimates`.
 
-    Args:
-        fn_estimates_list: List of function estimate lists from each macroreplication.
-        normalize: If True, normalize iterations to 0-1 scale.
+    Y-data is taken from the same source as ``plot_progress_curves``:
 
-    Returns:
-        List of Curve objects.
+    * ``experiment.objective_curves[mrep].y_vals`` when ``normalize=False``
+      (post-replicated objective estimates at each recommendation, with
+      ``x0``/``x*`` substitutions handled in ``post_normalize``).
+    * ``experiment.progress_curves[mrep].y_vals`` when ``normalize=True``
+      (the same values normalized to optimality-gap fractions, exactly the
+      formula used by ``plot_progress_curves``).
+
+    The x-axis is converted from "fraction of budget" to "fraction of the run
+    based on iteration numbers" by looking up, for each recommendation, the
+    iteration at which its cumulative simulation budget was reached. This
+    requires the solver's iteration log (``all_iterations`` /
+    ``all_budget_history``).
     """
-    curves = []
-    for fn_estimates in fn_estimates_list:
-        n_iters = len(fn_estimates)
-        x_vals = list(np.linspace(0, 1, n_iters)) if normalize else list(range(n_iters))
-        curves.append(Curve(x_vals=x_vals, y_vals=fn_estimates))
-    return curves
-
-
-def _get_postrep_fn_estimates(experiment: ProblemSolver) -> list[list[float]]:
-    """Get post-replicated objective estimates by macrorep and iteration.
-
-    Args:
-        experiment: Problem-solver experiment.
-
-    Returns:
-        Post-replicated objective estimates, one sequence per macroreplication.
-
-    Raises:
-        ValueError: If post-replication estimates are unavailable.
-    """
-    all_est_objectives = getattr(experiment, "all_est_objectives", None)
-    if not all_est_objectives:
+    source_attr = "progress_curves" if normalize else "objective_curves"
+    src_curves = getattr(experiment, source_attr, None)
+    if not src_curves:
         raise ValueError(
-            "plot_fn_estimates requires post-replication data. "
-            "Run post_replicate(...) before plotting function estimates."
+            "plot_fn_estimates requires the experiment to have been "
+            f"post-normalized (`{source_attr}` is empty). Call "
+            "`post_normalize(...)` before plotting."
         )
-    return [list(np.asarray(seq, dtype=float)) for seq in all_est_objectives]
 
-
-def _objective_sign(experiment: ProblemSolver) -> float:
-    minmax = getattr(experiment.problem, "minmax", (1,))
-    if isinstance(minmax, tuple | list | np.ndarray):
-        sign = float(minmax[0]) if len(minmax) > 0 else 1.0
-    else:
-        sign = float(minmax)
-    return sign if sign != 0 else 1.0
-
-
-def _normalize_fn_curves_for_gap(
-    fn_curves: list[Curve],
-    experiment: ProblemSolver,
-    f0_override: float | None = None,
-    f_star_override: float | None = None,
-    sign_override: float | None = None,
-    clamp: bool = True,
-) -> list[Curve]:
-    f_star = f_star_override
-    if f_star is None:
-        xstar_postreps = getattr(experiment, "xstar_postreps", None)
-        if xstar_postreps is not None:
-            xstar_arr = np.asarray(xstar_postreps, dtype=float).reshape(-1)
-            if xstar_arr.size > 0:
-                f_star = float(np.mean(xstar_arr))
-    if f_star is None and getattr(experiment, "fstar", None) is not None:
-        f_star = float(experiment.fstar)
-    if f_star is None:
-        all_vals = [y for c in fn_curves for y in c.y_vals]
-        if all_vals:
-            sign = sign_override if sign_override is not None else _objective_sign(
-                experiment
-            )
-            f_star = max(all_vals) if sign > 0 else min(all_vals)
-        else:
-            f_star = 0.0
-
-    f0 = f0_override
-    if f0 is None:
-        x0_postreps = getattr(experiment, "x0_postreps", None)
-        if x0_postreps is not None:
-            x0_arr = np.asarray(x0_postreps, dtype=float).reshape(-1)
-            if x0_arr.size > 0:
-                f0 = float(np.mean(x0_arr))
-    if f0 is None:
-        first_vals = [c.y_vals[0] for c in fn_curves if len(c.y_vals) > 0]
-        f0 = float(np.mean(first_vals)) if first_vals else 1.0
-
-    sign = sign_override if sign_override is not None else _objective_sign(experiment)
-    denom = make_nonzero(
-        sign * (f_star - f0), "fn_estimates_normalization_denom"
+    all_intermediate_budgets = getattr(
+        experiment, "all_intermediate_budgets", None
     )
-    transformed: list[Curve] = []
-    for c in fn_curves:
-        new_y = []
-        for y in c.y_vals:
-            frac = (sign * (f_star - y)) / denom
-            if clamp:
-                frac = min(1.0, max(0.0, frac))
-            new_y.append(frac)
-        transformed.append(Curve(x_vals=list(c.x_vals), y_vals=new_y))
-    return transformed
+    all_budget_history = getattr(experiment, "all_budget_history", None)
+    all_iterations = getattr(experiment, "all_iterations", None)
+    if (
+        all_intermediate_budgets is None
+        or all_budget_history is None
+        or all_iterations is None
+    ):
+        raise ValueError(
+            "plot_fn_estimates requires iteration-level data "
+            "(`all_iterations` and `all_budget_history` from `iteration_df`) "
+            "in addition to recommendation data. Re-run the solver so that "
+            "iteration-level logging is captured."
+        )
+
+    n_mreps = len(src_curves)
+    if (
+        len(all_intermediate_budgets) != n_mreps
+        or len(all_budget_history) != n_mreps
+        or len(all_iterations) != n_mreps
+    ):
+        raise ValueError(
+            "Macroreplication counts disagree across "
+            "`objective_curves`/`progress_curves`, `all_intermediate_budgets`, "
+            "`all_budget_history`, and `all_iterations`."
+        )
+
+    out: list[Curve] = []
+    for mrep in range(n_mreps):
+        y_vals = list(src_curves[mrep].y_vals)
+        rec_budgets = [float(b) for b in all_intermediate_budgets[mrep]]
+        bh = [float(b) for b in all_budget_history[mrep]]
+        iters = [float(i) for i in all_iterations[mrep]]
+        x_vals = _iteration_fraction_for_budgets(rec_budgets, bh, iters)
+        if len(x_vals) != len(y_vals):
+            raise ValueError(
+                "Iteration-fraction x-values and y-values have mismatched "
+                f"lengths ({len(x_vals)} vs {len(y_vals)}) for macrorep {mrep}."
+            )
+        out.append(Curve(x_vals=x_vals, y_vals=y_vals))
+    return out
 
 
-def _first_postrep_estimate(experiment: ProblemSolver) -> float | None:
-    all_est_objectives = getattr(experiment, "all_est_objectives", None)
-    if not all_est_objectives:
-        return None
-    first_vals: list[float] = []
-    for seq in all_est_objectives:
-        arr = np.asarray(seq, dtype=float).reshape(-1)
-        arr = arr[np.isfinite(arr)]
-        if arr.size > 0:
-            first_vals.append(float(arr[0]))
-    if not first_vals:
-        return None
-    return float(np.mean(first_vals))
-
-
-def _best_postrep_estimate(
-    experiments: list[ProblemSolver],
-    sign: float,
-) -> float | None:
-    values: list[float] = []
-    for exp in experiments:
-        all_est_objectives = getattr(exp, "all_est_objectives", None)
-        if not all_est_objectives:
-            continue
-        for seq in all_est_objectives:
-            arr = np.asarray(seq, dtype=float).reshape(-1)
-            arr = arr[np.isfinite(arr)]
-            if arr.size > 0:
-                values.extend(arr.tolist())
-    if not values:
-        return None
-    return float(max(values) if sign > 0 else min(values))
 
 
 def _bootstrap_curves_conf_int(
@@ -287,7 +261,17 @@ def plot_fn_estimates(
     save_as_pickle: bool = False,
     solver_set_name: str = "SOLVER_SET",
 ) -> list[Path]:
-    """Plots post-replicated function estimates against iteration number.
+    """Plot per-iteration function estimates against fraction-of-run.
+
+    This is the iteration-based analogue of :func:`plot_progress_curves`:
+
+    * x-axis is always the **fraction of the run based on iteration numbers**
+      (each macrorep's iteration number divided by its own maximum iteration).
+    * y-axis is the **function-value estimate** the solver reported at that
+      iteration (``experiment.all_fn_estimates``, taken from ``iteration_df``).
+    * When ``normalize=True`` the y-axis is replaced with the **optimality gap**
+      normalized to ``[0, 1]`` using the post-replicated optimum and the
+      initial fn_estimate.
 
     Args:
         experiments (list[ProblemSolver]): Problem-solver pairs for different solvers
@@ -298,11 +282,12 @@ def plot_fn_estimates(
             Defaults to FN_ESTIMATES_ALL.
         all_in_one (bool, optional): If True, plot all curves in one figure.
             Defaults to True.
-        normalize (bool, optional): If True, normalize iterations to a 0-1 scale
-            so that solvers with different iteration counts can be compared.
-            Defaults to False.
-        y_normalize (bool, optional): If True, normalize function estimates using
-            the post-replication best solution and clamp to [0, 1]. Defaults to False.
+        normalize (bool, optional): If True, plot the optimality gap normalized
+            to ``[0, 1]`` on the y-axis instead of the raw function estimate.
+            The x-axis is always fraction-of-iterations regardless. Defaults
+            to False.
+        y_normalize (bool, optional): Deprecated alias for ``normalize``; kept
+            for backward compatibility. Defaults to False.
         n_bootstraps (int, optional): Number of bootstrap samples. Defaults to 100.
         conf_level (float, optional): Confidence level for confidence intervals
             (must be in (0, 1)). Defaults to 0.95.
@@ -347,19 +332,15 @@ def plot_fn_estimates(
     if legend_loc is None:
         legend_loc = "best"
 
+    # `y_normalize` is a deprecated alias for `normalize`: either turns on the
+    # optimality-gap y-transformation. The x-axis is always fraction-of-run.
+    normalize_y = bool(normalize or y_normalize)
+
     # Check if problems are the same with the same x0 and x*.
     # check_common_problem_and_reference(experiments)
     file_list: list[Path] = []
 
     n_experiments = len(experiments)
-    common_sign = _objective_sign(experiments[0]) if experiments else 1.0
-    best_postrep = None
-    if y_normalize and experiments:
-        best_postrep = _best_postrep_estimate(experiments, common_sign)
-        if best_postrep is None:
-            raise ValueError(
-                "y_normalize requires post-rep estimates to compute a best solution."
-            )
 
     if all_in_one:
         ref_experiment = experiments[0]
@@ -376,25 +357,12 @@ def plot_fn_estimates(
         for exp_idx in range(n_experiments):
             experiment = experiments[exp_idx]
             color_str = "C" + str(exp_idx)
-            # Convert post-replication estimates to Curve objects
+            # Use the same y-data as `plot_progress_curves` (post-replicated,
+            # with x0/x* substitution and the standard gap normalization when
+            # requested), but with x re-expressed as fraction-of-iterations.
             fn_curves = _fn_estimates_to_curves(
-                _get_postrep_fn_estimates(experiment), normalize=normalize
+                experiment, normalize=normalize_y
             )
-
-            if y_normalize:
-                f0_override = _first_postrep_estimate(experiment)
-                if f0_override is None:
-                    raise ValueError(
-                        "y_normalize requires post-rep estimates for f0."
-                    )
-                fn_curves = _normalize_fn_curves_for_gap(
-                    fn_curves,
-                    experiment,
-                    f0_override=f0_override,
-                    f_star_override=best_postrep,
-                    sign_override=common_sign,
-                    clamp=True,
-                )
 
             if plot_type == PlotType.FN_ESTIMATES_ALL:
                 # Plot all function estimate curves from all macroreps
@@ -438,14 +406,11 @@ def plot_fn_estimates(
                 leg.get_frame().set_alpha(0.4)
             except Exception:
                 contextlib.suppress(Exception)
-        # X-axis label
-        if normalize:
-            plt.xlabel("Percentage of the run")
-        else:
-            plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
+        # X-axis is always fraction-of-run based on iteration numbers.
+        plt.xlabel("Fraction of the run")
 
-        # Y-axis label: use more descriptive label when normalized
-        if y_normalize:
+        # Y-axis label switches with the optimality-gap transformation.
+        if normalize_y:
             plt.ylabel("Fraction from optimal solution")
         else:
             plt.ylabel("Function estimate")
@@ -487,25 +452,12 @@ def plot_fn_estimates(
                 problem_name=experiment.problem.name,
                 budget=experiment.problem.factors["budget"],
             )
-            # Convert post-replication estimates to Curve objects
+            # Use the same y-data as `plot_progress_curves` (post-replicated,
+            # with x0/x* substitution and the standard gap normalization when
+            # requested), but with x re-expressed as fraction-of-iterations.
             fn_curves = _fn_estimates_to_curves(
-                _get_postrep_fn_estimates(experiment), normalize=normalize
+                experiment, normalize=normalize_y
             )
-
-            if y_normalize:
-                f0_override = _first_postrep_estimate(experiment)
-                if f0_override is None:
-                    raise ValueError(
-                        "y_normalize requires post-rep estimates for f0."
-                    )
-                fn_curves = _normalize_fn_curves_for_gap(
-                    fn_curves,
-                    experiment,
-                    f0_override=f0_override,
-                    f_star_override=best_postrep,
-                    sign_override=common_sign,
-                    clamp=True,
-                )
 
             if plot_type == PlotType.FN_ESTIMATES_ALL:
                 # Plot all function estimate curves from all macroreps
@@ -541,13 +493,10 @@ def plot_fn_estimates(
                         # Adjust bottom margin to fit the max halfwidth text snugly
                         plt.gcf().subplots_adjust(bottom=0.18)
 
-            if normalize:
-                plt.xlabel("Percentage of the run")
-            else:
-                plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
+            plt.xlabel("Fraction of the run")
 
             # Y-axis label for individual plots
-            if y_normalize:
+            if normalize_y:
                 plt.ylabel("Fraction from optimal solution")
             else:
                 plt.ylabel("Function estimate")
