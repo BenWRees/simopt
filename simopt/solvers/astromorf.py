@@ -1832,8 +1832,7 @@ class ASTROMORF(Solver):
                 pilot_run (int): The number of initial pilot runs.
                 delta (float): The current trust-region radius.
                 compute_kappa (bool): Whether or not to compute kappa dynamically
-                (needed in
-                        the first iteration).
+                (needed in the first iteration).
         """
         sample_size = solution.n_reps if solution.n_reps > 0 else pilot_run
         lambda_max = self.budget.remaining
