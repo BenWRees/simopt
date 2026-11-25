@@ -82,6 +82,11 @@ PHASE1_JOBID=$(sbatch --parsable \
     --signal=SIGUSR1@90 \
     --wrap="
 source /home/br7g18/miniconda3/bin/activate simopt
+# Pin BLAS/OpenMP to 1 thread per process: macroreplications are parallelised
+# across \$N_JOBS loky workers, and the ADP solver fits sklearn GPs (BLAS-heavy).
+# Without this, each worker would spawn its own BLAS thread pool and oversubscribe
+# the allocated cores.
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
 echo \"Phase 1 task \$SLURM_ARRAY_TASK_ID / $N_TASKS starting on \$(date)\"
 python $EXPERIMENT_PY run-solver ${SHARED_ARGS[*]} \
     --task-index \$SLURM_ARRAY_TASK_ID \
@@ -100,13 +105,17 @@ PHASE2_JOBID=$(sbatch --parsable \
     --cpus-per-task=4 \
     --mem=16G \
     --nodes=1 \
-    --dependency="afterok:$PHASE1_JOBID" \
+    --dependency="afterany:$PHASE1_JOBID" \
     --mail-type=END,FAIL \
     --mail-user=B.Rees@soton.ac.uk \
     --wrap="
 source /home/br7g18/miniconda3/bin/activate simopt
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
 echo \"Phase 2 (collect-results) starting on \$(date)\"
-python $EXPERIMENT_PY collect-results ${SHARED_ARGS[*]}
+# afterany + --allow-partial: still collect CSVs/group pickles from the tasks
+# that succeeded even if one array task failed.  The per-ProblemSolver pickles
+# from Phase 1 are written independently and are unaffected either way.
+python $EXPERIMENT_PY collect-results ${SHARED_ARGS[*]} --allow-partial
 echo \"Phase 2 finished on \$(date)\"
 ")
 
