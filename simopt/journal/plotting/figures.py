@@ -43,9 +43,10 @@ from .style import (
     apply_journal_style,
     colour_for_index,
     colour_for_level,
+    figsize_for_categories,
+    place_legend,
     save_journal_plot,
     setup_journal_plot,
-    style_legend,
 )
 
 
@@ -67,6 +68,17 @@ def _level_xlabel(study: str) -> str:
         return "Subspace Dimension"
     if study == "regularisation":
         return "Subproblem Regularisation"
+    return "Level"
+
+
+def _legend_title(study: str) -> str:
+    """Human-readable title shown above the legend for each study type."""
+    if study == "subspace":
+        return "Subspace Dim."
+    if study == "regularisation":
+        return "Regularisation"
+    if study == "basis":
+        return "Basis, Degree"
     return "Level"
 
 
@@ -158,7 +170,7 @@ def convergence_curves(
         setup_journal_plot(
             title=f"{study.upper()} on {problem}\nConvergence Curves",
             xlabel="Budget",
-            ylabel="Post-Replicated Mean Objective",
+            ylabel="Mean Objective",
         )
         handles = []
         labels = []
@@ -186,8 +198,14 @@ def convergence_curves(
             plt.xscale(xscale)
         if yscale != "linear":
             plt.yscale(yscale)
-        leg = plt.legend(handles=handles, labels=labels, loc=legend_loc)
-        style_legend(leg)
+        # Legend below the plot keeps the full data x-range visible and
+        # is far more readable for the 9-27 entries common in basis /
+        # regularisation studies than a side-anchored or inline legend.
+        place_legend(
+            handles, labels,
+            loc=legend_loc, title=_legend_title(study),
+            placement="below",
+        )
         if output_dir is not None:
             written += save_journal_plot(
                 _stem(study, "convergence_curves", problem),
@@ -254,17 +272,15 @@ def final_objective_summary_plot(
             ax = plt.gca()
             im = ax.imshow(mat, **imshow_kwargs)
             ax.set_xticks(range(len(degrees)))
-            ax.set_xticklabels([str(d) for d in degrees])
+            ax.set_xticklabels([str(d) for d in degrees], fontsize=TICK_SIZE)
             ax.set_yticks(range(len(bases)))
-            ax.set_yticklabels(bases)
-            cbar = plt.colorbar(
-                im, ax=ax, shrink=0.85,
-                label="Mean Final Obj" + (" (clipped)" if robust_quantiles else ""),
+            ax.set_yticklabels(bases, fontsize=TICK_SIZE)
+            cbar_label = (
+                "Mean Final Obj" + (" (clipped)" if robust_quantiles else "")
             )
+            cbar = plt.colorbar(im, ax=ax, shrink=0.85)
+            cbar.set_label(cbar_label, size=LABEL_SIZE)
             cbar.ax.tick_params(labelsize=TICK_SIZE)
-            cbar.set_label(
-                cbar.ax.get_ylabel(), size=LABEL_SIZE,
-            )
             if output_dir is not None:
                 written += save_journal_plot(
                     _stem(study, "final_objective_summary", problem),
@@ -366,14 +382,12 @@ def paired_effect_plot(
                             edgecolor="black", linewidth=0,
                         ))
             ax.set_xticks(range(len(degrees)))
-            ax.set_xticklabels([str(d) for d in degrees])
+            ax.set_xticklabels([str(d) for d in degrees], fontsize=TICK_SIZE)
             ax.set_yticks(range(len(bases)))
-            ax.set_yticklabels(bases)
-            cbar = plt.colorbar(
-                im, ax=ax, shrink=0.85, label="Mean Diff vs. Baseline",
-            )
+            ax.set_yticklabels(bases, fontsize=TICK_SIZE)
+            cbar = plt.colorbar(im, ax=ax, shrink=0.85)
+            cbar.set_label("Mean Diff vs. Baseline", size=LABEL_SIZE)
             cbar.ax.tick_params(labelsize=TICK_SIZE)
-            cbar.set_label(cbar.ax.get_ylabel(), size=LABEL_SIZE)
             if output_dir is not None:
                 written += save_journal_plot(
                     _stem(study, "paired_effect", problem),
@@ -453,10 +467,14 @@ def final_objective_distribution(
             title=f"{study.upper()} on {problem}\nFinal-Objective Distribution",
             xlabel=_level_xlabel(study) if study != "basis" else "Level",
             ylabel="Final Objective",
+            figsize=figsize_for_categories(len(data), orientation="x"),
         )
         positions = np.arange(1, len(data) + 1)
         plt.violinplot(data, positions=positions, showmeans=True, showextrema=False)
-        plt.xticks(positions, labels, rotation=45, ha="right")
+        # Larger tick font for legibility, even with many categories.  The
+        # figure was widened by ``figsize_for_categories`` so labels do
+        # not overlap horizontally.
+        plt.xticks(positions, labels, rotation=45, ha="right", fontsize=TICK_SIZE)
         if output_dir is not None:
             written += save_journal_plot(
                 _stem(study, "final_objective_distribution", problem),
@@ -504,23 +522,34 @@ def ranking_plot(
         if rdf.empty:
             continue
         labels = [
-            "(" + ",".join(str(rdf.iloc[i][c]) for c in level_cols) + ")"
+            ", ".join(str(rdf.iloc[i][c]) for c in level_cols)
             for i in range(len(rdf))
         ]
         values = rdf["mean_diff"].abs().to_numpy()
         # Canonical C-cycle colours: red-ish (C3) for worse than baseline,
-        # blue (C0) for better.
+        # blue (C0) for better.  Add a small legend so reviewers can decode
+        # the colour mapping without reading the caption.
         colours = ["C3" if d > 0 else "C0" for d in rdf["mean_diff"]]
         setup_journal_plot(
             title=f"{study.upper()} on {problem}\nSensitivity Ranking",
             xlabel="|Mean Diff vs. Baseline|",
-            ylabel="Level",
+            ylabel=_legend_title(study),
+            figsize=figsize_for_categories(len(rdf), orientation="y"),
         )
         y_positions = np.arange(len(rdf))[::-1]
         plt.barh(y_positions, values, color=colours)
-        plt.yticks(y_positions, labels)
+        plt.yticks(y_positions, labels, fontsize=TICK_SIZE)
         if xscale != "linear":
             plt.xscale(xscale)
+        # Colour legend (small, inside) — keeps the figure self-documenting.
+        from matplotlib.patches import Patch  # local import: small dep
+        worse_patch = Patch(facecolor="C3", label="Worse than baseline")
+        better_patch = Patch(facecolor="C0", label="Better than baseline")
+        place_legend(
+            [worse_patch, better_patch],
+            ["Worse than baseline", "Better than baseline"],
+            loc="lower right",
+        )
         if output_dir is not None:
             written += save_journal_plot(
                 _stem(study, "ranking", problem),
