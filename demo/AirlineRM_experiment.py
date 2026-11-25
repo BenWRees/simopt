@@ -118,9 +118,8 @@ def _recommended_adp_solver_factors(
         "wrapped_solver": wrapped_solver,
         "wrapped_solver_factors": wrapped_solver_factors or {},
         "n_training_pts": int(n_training_pts),
-        "n_verification_macroreps": 8,
         "forward_pass_budget_fraction": forward_pass_budget_fraction,
-        "refinement_buffer_max": 0.8 * int(n_training_pts),
+        "refinement_buffer_max": int(0.8 * n_training_pts),
         "n_macroreps_forward": 20,
         "n_mc_replicates": 20,
     }
@@ -392,36 +391,8 @@ def extract_metrics_row(
 
 
 def _build_experiment_one_specs(budget: int) -> list[SolverSpec]:
+    """Experiment 1: ADP (wrapped ASTROMORF) vs DAVN vs SGD (finite-difference and IPA)."""
     return [
-        # SolverSpec(
-        # 	solver_name="VANRYZIN_SGD",
-        # 	solver_label="SGD with IPA Gradients",
-        # 	solver_factors={
-        # 		"use_direct_gradients": True,
-        # 		"r": 10,
-        # 		"not_use_adp_solver": True,
-        # 		"alpha": 0.9,
-        #         "gradient_clipping_enabled": True,
-        #         "gradient_clipping_value": 20.0,
-        #         "spsa_gradient": False,
-        # 	},
-        # ),
-        # SolverSpec(
-        # 	solver_name="ADP_SOLVER",
-        # 	solver_label="ADP_SGD",
-        # 	solver_factors=_recommended_adp_solver_factors(
-        # 		wrapped_solver="SGD",
-        # 		budget=budget,
-        # 		wrapped_solver_factors={
-        # 			"r": 10,
-        # 			"alpha": 0.9,
-        # 			"gradient_clipping_enabled": True,
-        # 			"gradient_clipping_value": 20.0,
-        # 			"spsa_gradient": False,
-        # 			"not_use_adp_solver": False,
-        # 		},
-        # 	),
-        # ),
         SolverSpec(
             solver_name="ADP_SOLVER",
             solver_label="ADP_ASTROMoRF",
@@ -433,24 +404,36 @@ def _build_experiment_one_specs(budget: int) -> list[SolverSpec]:
                     "polynomial degree": 4,
                 },
             ),
-        )
-        # SolverSpec(
-        # 	solver_name="DAVN",
-        # 	solver_label="DAVN",
-        # 	solver_factors={},
-        # ),
-        # SolverSpec(
-        # 	solver_name="SGD",
-        # 	solver_label="SGD (FD)",
-        # 	solver_factors={
-        # 		"r": 10,
-        #         "alpha": 0.9,
-        #         "gradient_clipping_enabled": True,
-        #         "gradient_clipping_value": 20.0,
-        #         "spsa_gradient": False,
-        # 		"not_use_adp_solver": True,
-        # 	},
-        # ),
+        ),
+        SolverSpec(
+            solver_name="DAVN",
+            solver_label="DAVN",
+            solver_factors={},
+        ),
+        SolverSpec(
+            solver_name="SGD",
+            solver_label="SGD (FD)",
+            solver_factors={
+                "r": 10,
+                "alpha": 0.9,
+                "gradient_clipping_enabled": True,
+                "gradient_clipping_value": 20.0,
+                "spsa_gradient": False,
+            },
+        ),
+        SolverSpec(
+            solver_name="VANRYZIN_SGD",
+            solver_label="SGD with IPA Gradients",
+            solver_factors={
+                "use_direct_gradients": True,
+                "not_use_adp_solver": True,
+                "r": 10,
+                "alpha": 0.9,
+                "gradient_clipping_enabled": True,
+                "gradient_clipping_value": 20.0,
+                "spsa_gradient": False,
+            },
+        ),
     ]
 
 
