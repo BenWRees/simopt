@@ -57,10 +57,15 @@ PROBLEM_MARKER: dict[str, str] = {
 TITLE_SIZE = 14
 LABEL_SIZE = 14
 TICK_SIZE = 12
+LEGEND_FONT_SIZE = 11
+LEGEND_TITLE_SIZE = 12
 DATA_LINEWIDTH = 2
 CI_LINEWIDTH = 1
 CI_ALPHA = 0.2
 LEGEND_FRAME_ALPHA = 0.4
+# A legend wider than this is moved outside the data axes to keep curves
+# unobstructed and entries readable.
+LEGEND_INLINE_MAX_ENTRIES = 6
 
 
 def apply_journal_style() -> None:
@@ -111,20 +116,131 @@ def style_legend(leg: Legend | None) -> None:
         leg.get_frame().set_alpha(LEGEND_FRAME_ALPHA)
 
 
+def place_legend(
+    handles: Sequence,
+    labels: Sequence[str],
+    *,
+    loc: str | None = None,
+    title: str | None = None,
+    placement: str = "auto",
+) -> Legend | None:
+    """Draw a legend that stays readable regardless of entry count.
+
+    Placement modes:
+
+    * ``"inline"`` — always inside the axes at ``loc``.
+    * ``"right"`` — outside the axes to the right, single block,
+      ``ncol`` chosen so each column holds at most ~12 entries.
+    * ``"below"`` — outside the axes below the x-axis, multi-column so
+      labels stay one-line.  Used by convergence-curve figures where
+      keeping the full data x-range visible is important.
+    * ``"auto"`` (default) — inline when entries
+      ≤ :data:`LEGEND_INLINE_MAX_ENTRIES`, otherwise right.
+
+    ``bbox_inches="tight"`` at save time expands the canvas to fit
+    legends placed outside the axes.  Frame alpha matches the canonical
+    ``simopt.plots`` style.
+    """
+    import matplotlib.pyplot as plt
+
+    n = len(handles)
+    if n == 0:
+        return None
+
+    if placement == "auto":
+        placement = "inline" if n <= LEGEND_INLINE_MAX_ENTRIES else "right"
+
+    common = {
+        "handles": list(handles),
+        "labels": list(labels),
+        "fontsize": LEGEND_FONT_SIZE,
+        "title": title,
+        "title_fontsize": LEGEND_TITLE_SIZE,
+    }
+
+    if placement == "inline":
+        leg = plt.legend(loc=loc or "best", **common)
+    elif placement == "right":
+        # Up to ~12 entries per column; multiple columns for very large legends.
+        ncol = max(1, (n + 11) // 12)
+        leg = plt.legend(
+            loc="upper left",
+            bbox_to_anchor=(1.02, 1.0),
+            borderaxespad=0.0,
+            ncol=ncol,
+            **common,
+        )
+    elif placement == "below":
+        # Aim for roughly square legend block: rows ≈ cols.  Cap at 5
+        # columns so labels stay comfortably wide.  ``bbox_to_anchor``
+        # pins the top of the legend block just under the x-axis label.
+        import math
+
+        ncol = max(1, min(5, math.ceil(math.sqrt(n))))
+        leg = plt.legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.18),
+            borderaxespad=0.0,
+            ncol=ncol,
+            **common,
+        )
+    else:
+        raise ValueError(
+            f"unknown legend placement {placement!r}; "
+            f"valid: 'inline', 'right', 'below', 'auto'"
+        )
+    style_legend(leg)
+    return leg
+
+
+def figsize_for_categories(
+    n: int,
+    *,
+    orientation: str = "x",
+    base: tuple[float, float] = (6.4, 4.8),
+    per_cat: float = 0.6,
+    cap: float = 22.0,
+) -> tuple[float, float]:
+    """Pick a figsize that scales with the number of categorical labels.
+
+    ``orientation="x"`` widens the figure as more x-tick labels are
+    needed (violin plots).  ``orientation="y"`` lengthens the figure as
+    more y-tick labels are needed (horizontal bar / ranking plots).
+    Always at least ``base``; never larger than ``cap`` along the
+    growing axis.
+
+    The defaults grow ~0.6 inch per extra category past 6 and cap at 22
+    inches, which keeps a 27-level basis-study violin plot wide enough
+    that no two adjacent rotated x-tick labels touch.
+    """
+    w, h = base
+    if orientation == "x":
+        w = min(cap, max(w, base[0] + per_cat * max(0, n - 6)))
+    else:
+        h = min(cap, max(h, base[1] + per_cat * max(0, n - 6)))
+    return (w, h)
+
+
 def setup_journal_plot(
     *,
     title: str,
     xlabel: str,
     ylabel: str,
+    figsize: tuple[float, float] | None = None,
 ) -> None:
     """Create a new figure and apply canonical axis / title formatting.
 
     This is the journal-side analogue of
     ``simopt.plots.utils.setup_plot`` — same call order, same font sizes,
     same default figsize.  Plot content (lines, fills, scatter, ...) is
-    added by the caller after this returns.
+    added by the caller after this returns.  ``figsize`` is provided as
+    an escape hatch for categorical plots that need extra room for
+    tick labels (see :func:`figsize_for_categories`).
     """
-    plt.figure()
+    if figsize is None:
+        plt.figure()
+    else:
+        plt.figure(figsize=figsize)
     plt.title(title, size=TITLE_SIZE)
     plt.xlabel(xlabel, size=LABEL_SIZE)
     plt.ylabel(ylabel, size=LABEL_SIZE)
@@ -168,13 +284,18 @@ __all__ = [
     "CI_LINEWIDTH",
     "DATA_LINEWIDTH",
     "LABEL_SIZE",
+    "LEGEND_FONT_SIZE",
     "LEGEND_FRAME_ALPHA",
+    "LEGEND_INLINE_MAX_ENTRIES",
+    "LEGEND_TITLE_SIZE",
     "PROBLEM_MARKER",
     "TICK_SIZE",
     "TITLE_SIZE",
     "apply_journal_style",
     "colour_for_index",
     "colour_for_level",
+    "figsize_for_categories",
+    "place_legend",
     "save_journal_plot",
     "setup_journal_plot",
     "style_legend",
