@@ -291,7 +291,8 @@ def plot_optimality_gap_curves(
 
         ax.set_title(variant.replace("_", " ").title(), size=12)
         ax.set_xlabel("Fraction of Budget", size=11)
-        ax.set_ylabel("Fraction of Optimality Gap", size=11)
+        # ax.set_ylabel("Fraction of Optimality Gap", size=11)
+        ax.set_ylabel("Distance from Best-Found Solution", size=11)
         ax.set_xlim(0, 1)
         ax.set_ylim(bottom=0.0)
         ax.tick_params(axis="both", which="major", labelsize=10)
