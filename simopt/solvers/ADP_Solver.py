@@ -855,7 +855,7 @@ class ADPSolver(Solver):
 
         iter_idx = 0
         no_improve_count = 0
-        plateau_threshold = 2  # consecutive non-improving iters before adapting
+        plateau_threshold = 3  # consecutive non-improving iters before adapting
         try:
             while self.forward_budget.remaining > 0 and self.budget.remaining > 0:
                 # ── Adaptive budget: boost later iterations on plateau ────────
@@ -874,6 +874,9 @@ class ADPSolver(Solver):
                         f"  [Adaptive] Plateau detected after {no_improve_count} stale iters -- "  # noqa: E501
                         f"boosted iter budget to {boosted_budget}, enabled deep MC (5 reps)"  # noqa: E501
                     )
+                    # Reset so the next doubling requires another full run of
+                    # `plateau_threshold` consecutive no-improvement iterations.
+                    no_improve_count = 0
 
                 if nelder_mead_floor:
                     required_iteration_budget = (
@@ -904,13 +907,64 @@ class ADPSolver(Solver):
                 if iter_cost > 0:
                     self.forward_budget.request(iter_cost)
 
-                # Accept based on the surrogate objective (r_0 + GP_V_1),
-                # which is the Bellman equation.  The greedy rollout is too noisy
-                # with few reps to distinguish close candidates.
-                if (
-                    problem.minmax[0] * surrogate_rev
-                    > problem.minmax[0] * best_surrogate
-                ):
+                # Accept based on the surrogate objective (r_0 + GP_V_1), which is
+                # the Bellman equation.  A candidate counts as an improvement only
+                # if its sample-mean surrogate revenue exceeds the running best by
+                # more than one standard error (S.E.); otherwise the iteration is a
+                # no-improvement iteration.
+                #
+                # The S.E. is computed under Common Random Numbers when
+                # ``use_crn`` is set: the candidate and the incumbent are
+                # re-evaluated against the *current* GP-V_1 on shared random-number
+                # streams (seeds [0, i, 0]), and the S.E. of the paired per-rep
+                # difference d_i = g_cand(w_i) - g_best(w_i) is used.  The induced
+                # positive correlation shrinks Var(d_i), giving a tighter test.
+                # When ``use_crn`` is False (or no incumbent/model is available) we
+                # fall back to the marginal S.E. of the candidate alone.
+                n_se_reps = max(self.config.n_macroreps_forward, 5)
+                gp_v1_now = getattr(self, "_gp_v_objects", {}).get(1)
+                cand_vals = self._surrogate_rep_values(
+                    problem, cand_sol, gp_v1_now, n_se_reps
+                )
+                if cand_vals.size > 0:
+                    surrogate_rev = float(np.mean(cand_vals))
+
+                use_crn_test = (
+                    self.config.use_crn
+                    and gp_v1_now is not None
+                    and gp_v1_now.is_fitted
+                    and best_sol is not None
+                    and cand_vals.size > 1
+                )
+                if use_crn_test:
+                    inc_vals = self._surrogate_rep_values(
+                        problem, best_sol, gp_v1_now, n_se_reps
+                    )
+                    n_pair = min(cand_vals.size, inc_vals.size)
+                    if n_pair > 1:
+                        diffs = problem.minmax[0] * (
+                            cand_vals[:n_pair] - inc_vals[:n_pair]
+                        )
+                        surrogate_se = float(np.std(diffs, ddof=1) / math.sqrt(n_pair))
+                        improved = float(np.mean(diffs)) > surrogate_se
+                    else:
+                        surrogate_se = 0.0
+                        improved = (
+                            problem.minmax[0] * surrogate_rev
+                            > problem.minmax[0] * best_surrogate
+                        )
+                else:
+                    surrogate_se = (
+                        float(np.std(cand_vals, ddof=1) / math.sqrt(cand_vals.size))
+                        if cand_vals.size > 1
+                        else 0.0
+                    )
+                    improved = (
+                        problem.minmax[0] * surrogate_rev
+                        > problem.minmax[0] * best_surrogate + surrogate_se
+                    )
+
+                if improved:
                     best_surrogate = surrogate_rev
                     best_sol = cand_sol
                     self.recommended_solns.append(Solution(tuple(best_sol), problem))
@@ -1505,6 +1559,90 @@ class ADPSolver(Solver):
         )
 
         return best_decision_float, surrogate_rev, total_revenue
+
+    # ---------------------------------------------------------------------------
+    # Helper: per-replication surrogate values (for CRN acceptance test)
+    # ---------------------------------------------------------------------------
+    def _surrogate_rep_values(
+        self,
+        problem: MultistageProblem,
+        decision: list | tuple,
+        gp_v1: _GaussianProcessValueModel | None,
+        n_reps: int,
+    ) -> np.ndarray:
+        """Return the per-replication surrogate values r_0 + GP_V_1(s_1).
+
+        Unlike :meth:`_approximate_replication`, which collapses the ``n_reps``
+        samples into a single averaged ``RepResult`` (so its standard error is
+        identically zero), this returns the *individual* per-replication values
+        so a genuine standard error can be formed.
+
+        Each replication uses the deterministic seed set ``[0, i, 0]`` so that
+        two different decisions evaluated through this method are driven by the
+        *same* random-number streams -- Common Random Numbers.  Evaluation uses
+        the current GP-V_1 with no UCB inflation (kappa = 0), matching the
+        acceptance-time surrogate objective.
+
+        Like the sibling surrogate evaluations (initial-solution eval and the
+        kappa=0 candidate re-evaluation) this verification step is not charged
+        against the simulation budget, preserving the forward-pass budget
+        accounting.
+
+        Returns a 1-D array of length <= ``n_reps`` (non-finite samples dropped).
+        """
+        eval_problem = problem._clone_problem()
+        eval_problem.current_stage = 0
+        dec = tuple(float(v) for v in decision)
+
+        eval_sol = Solution(dec, eval_problem)
+        eval_sol.attach_rngs(
+            [
+                MRG32k3a(s_ss_sss_index=[0, i, 0])
+                for i in range(eval_problem.model.n_rngs)
+            ],
+            copy=False,
+        )
+
+        if gp_v1 is not None and gp_v1.is_fitted:
+            query: Callable[[np.ndarray], float] = lambda s: gp_v1.predict(s)
+        else:
+            query = self.value_models.get(1, lambda s: 0.0)  # noqa: ARG005
+
+        model = eval_problem.model
+        vals: list[float] = []
+        for _ in range(n_reps):
+            if hasattr(model, "before_replication"):
+                model.before_replication(eval_sol.rng_list)  # type: ignore[attr-defined]
+            else:
+                model.before_replicate(eval_sol.rng_list)  # type: ignore[attr-defined]
+            if eval_problem.before_replicate_override is not None:
+                eval_problem.before_replicate_override(model, eval_sol.rng_list)
+
+            responses, next_state = model.replicate_stage(
+                eval_problem.current_state,
+                eval_sol.x,
+                eval_problem.current_stage,
+                eval_sol.rng_list,
+            )
+
+            key = "revenue" if "revenue" in responses else next(iter(responses), None)
+            r_0 = float(responses.get(key, 0.0)) if key else 0.0
+
+            rem = next_state.get("remaining_capacity", None)
+            if rem is None:
+                rem = model.factors.get("capacity", [])
+            elif isinstance(rem, dict):
+                rem = [float(rem[k]) for k in sorted(rem)]
+            s1 = np.asarray([float(v) for v in rem], dtype=float).reshape(1, -1)
+
+            for rng in eval_sol.rng_list:
+                rng.advance_subsubstream()
+
+            sample = r_0 + float(query(s1))
+            if math.isfinite(sample):
+                vals.append(sample)
+
+        return np.asarray(vals, dtype=float)
 
     # ---------------------------------------------------------------------------
     # Helper: observe mean next state after stage-0 transition
